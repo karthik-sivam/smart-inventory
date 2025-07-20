@@ -10,6 +10,8 @@ struct ItemListView: View {
     @State private var selectedStorage: Storage?
     @State private var showingAddItem = false
     @State private var showingExport = false
+    @State private var showingEditItem: InventoryItem?
+    @State private var showingDeleteAlert: InventoryItem?
     
     var filteredItems: [InventoryItem] {
         var result = items
@@ -118,10 +120,37 @@ struct ItemListView: View {
                             .padding(.vertical, 60)
                         } else {
                             ForEach(filteredItems.sorted(by: { $0.name < $1.name }), id: \.id) { item in
+                                                            HStack {
                                 NavigationLink(destination: ItemDetailView(item: item)) {
                                     ItemRowView(item: item)
                                 }
                                 .buttonStyle(PlainButtonStyle())
+                                
+                                VStack(spacing: 8) {
+                                    Button(action: {
+                                        showingEditItem = item
+                                    }) {
+                                        Image(systemName: "pencil.circle.fill")
+                                            .font(.title2)
+                                            .foregroundColor(.blue)
+                                            .background(Color.white)
+                                            .clipShape(Circle())
+                                            .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                                    }
+                                    
+                                    Button(action: {
+                                        showingDeleteAlert = item
+                                    }) {
+                                        Image(systemName: "trash.circle.fill")
+                                            .font(.title2)
+                                            .foregroundColor(.red)
+                                            .background(Color.white)
+                                            .clipShape(Circle())
+                                            .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                                    }
+                                }
+                                .padding(.leading, 8)
+                            }
                             }
                         }
                     }
@@ -138,6 +167,38 @@ struct ItemListView: View {
         .sheet(isPresented: $showingExport) {
             ExportView()
         }
+        .sheet(item: $showingEditItem) { item in
+            EditItemView(item: item)
+        }
+        .alert("Delete Item", isPresented: Binding(
+            get: { showingDeleteAlert != nil },
+            set: { if !$0 { showingDeleteAlert = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                showingDeleteAlert = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let item = showingDeleteAlert {
+                    deleteItem(item)
+                }
+                showingDeleteAlert = nil
+            }
+        } message: {
+            if let item = showingDeleteAlert {
+                Text("Are you sure you want to delete '\(item.name)'? This action cannot be undone.")
+            }
+        }
+    }
+    
+    private func deleteItem(_ item: InventoryItem) {
+        // Delete the item
+        modelContext.delete(item)
+        
+        // Save changes
+        try? modelContext.save()
+        
+        // Track completion for ad system
+        AdManager.shared.recordCompletion(event: .itemUpdated)
     }
 }
 

@@ -4,9 +4,11 @@ import SwiftData
 struct StorageDetailView: View {
     let storage: Storage
     
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var searchText = ""
     @State private var showingAddItem = false
+    @State private var showingEditStorage = false
     
     var filteredItems: [InventoryItem] {
         if searchText.isEmpty {
@@ -22,7 +24,23 @@ struct StorageDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                Button(action: {
+                    dismiss()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                        Text("Back")
+                            .font(.body)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(.blue)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .center, spacing: 4) {
                     Text(storage.name)
                         .font(.title2)
                         .fontWeight(.bold)
@@ -36,10 +54,18 @@ struct StorageDetailView: View {
                 
                 Spacer()
                 
-                Button(action: { showingAddItem = true }) {
-                    Image(systemName: "plus")
-                        .font(.title2)
-                        .foregroundColor(.blue)
+                HStack(spacing: 16) {
+                    Button(action: { showingEditStorage = true }) {
+                        Image(systemName: "pencil")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                    }
+                    
+                    Button(action: { showingAddItem = true }) {
+                        Image(systemName: "plus")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                    }
                 }
             }
             .padding(.horizontal)
@@ -91,6 +117,9 @@ struct StorageDetailView: View {
         .navigationBarHidden(true)
         .sheet(isPresented: $showingAddItem) {
             AddItemView(storage: storage)
+        }
+        .sheet(isPresented: $showingEditStorage) {
+            EditStorageView(storage: storage)
         }
     }
     
@@ -303,14 +332,33 @@ struct AddItemView: View {
 struct ItemDetailView: View {
     let item: InventoryItem
     
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var showingCountModal = false
+    @State private var showingEditItem = false
+    @State private var showingDeleteAlert: InventoryItem?
     
     var body: some View {
-        VStack(spacing: 0) {
+                VStack(spacing: 0) {
             // Header
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                Button(action: {
+                    dismiss()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                        Text("Back")
+                            .font(.body)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(.blue)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .center, spacing: 4) {
                     Text(item.name)
                         .font(.title2)
                         .fontWeight(.bold)
@@ -322,10 +370,24 @@ struct ItemDetailView: View {
                 
                 Spacer()
                 
-                Button(action: { showingCountModal = true }) {
-                    Image(systemName: "list.clipboard")
-                        .font(.title2)
-                        .foregroundColor(.blue)
+                HStack(spacing: 16) {
+                    Button(action: { showingEditItem = true }) {
+                        Image(systemName: "pencil")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                    }
+                    
+                    Button(action: { showingCountModal = true }) {
+                        Image(systemName: "list.clipboard")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                    }
+                    
+                    Button(action: { showingDeleteAlert = item }) {
+                        Image(systemName: "trash")
+                            .font(.title2)
+                            .foregroundColor(.red)
+                    }
                 }
             }
             .padding(.horizontal)
@@ -440,6 +502,38 @@ struct ItemDetailView: View {
         .sheet(isPresented: $showingCountModal) {
             CountItemView(item: item)
         }
+        .sheet(isPresented: $showingEditItem) {
+            EditItemView(item: item)
+        }
+        .alert("Delete Item", isPresented: Binding(
+            get: { showingDeleteAlert != nil },
+            set: { if !$0 { showingDeleteAlert = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                showingDeleteAlert = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let item = showingDeleteAlert {
+                    deleteItem(item)
+                }
+                showingDeleteAlert = nil
+            }
+        } message: {
+            if let item = showingDeleteAlert {
+                Text("Are you sure you want to delete '\(item.name)'? This action cannot be undone.")
+            }
+        }
+    }
+    
+    private func deleteItem(_ item: InventoryItem) {
+        // Delete the item
+        modelContext.delete(item)
+        
+        // Save changes
+        try? modelContext.save()
+        
+        // Track completion for ad system
+        AdManager.shared.recordCompletion(event: .itemUpdated)
     }
 }
 
@@ -547,6 +641,7 @@ struct CountItemView: View {
                     .disabled(countedQuantity.isEmpty || adjustmentReason.isEmpty)
                 }
             }
+            .navigationBarBackButtonHidden(true)
         }
     }
     

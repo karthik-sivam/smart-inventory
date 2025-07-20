@@ -9,6 +9,11 @@ struct DashboardView: View {
     @StateObject private var currencyManager = CurrencyManager()
     @State private var showingSettings = false
     @State private var showingExport = false
+    @State private var selectedTab = 0
+    @State private var showingStorages = false
+    @State private var showingAllItems = false
+    @State private var showingLowStockItems = false
+    @State private var showingOutOfStockItems = false
     
 
     
@@ -51,35 +56,40 @@ struct DashboardView: View {
                                 title: "Total Storages",
                                 value: "\(storages.count)",
                                 icon: "archivebox",
-                                color: .blue
+                                color: .blue,
+                                action: { showingStorages = true }
                             )
                             
                             DashboardCard(
                                 title: "Total Items",
                                 value: "\(items.count)",
                                 icon: "cube.box",
-                                color: .green
+                                color: .green,
+                                action: { showingAllItems = true }
                             )
                             
                             DashboardCard(
                                 title: "Low Stock Items",
                                 value: "\(lowStockItems.count)",
                                 icon: "exclamationmark.triangle",
-                                color: .orange
+                                color: .orange,
+                                action: { showingLowStockItems = true }
                             )
                             
                             DashboardCard(
                                 title: "Out of Stock",
                                 value: "\(outOfStockItems.count)",
                                 icon: "xmark.circle",
-                                color: .red
+                                color: .red,
+                                action: { showingOutOfStockItems = true }
                             )
                             
                             DashboardCard(
                                 title: "Total Value",
                                 value: currencyManager.formatPrice(totalInventoryValue),
                                 icon: "dollarsign.circle",
-                                color: .purple
+                                color: .purple,
+                                action: nil
                             )
                         }
                         .padding(.horizontal)
@@ -134,6 +144,30 @@ struct DashboardView: View {
         .sheet(isPresented: $showingExport) {
             ExportView()
         }
+        .sheet(isPresented: $showingStorages) {
+            StorageListView()
+                .environmentObject(currencyManager)
+        }
+        .sheet(isPresented: $showingAllItems) {
+            ItemListView()
+                .environmentObject(currencyManager)
+        }
+        .sheet(isPresented: $showingLowStockItems) {
+            FilteredItemListView(
+                title: "Low Stock Items",
+                items: lowStockItems,
+                filterType: .lowStock
+            )
+            .environmentObject(currencyManager)
+        }
+        .sheet(isPresented: $showingOutOfStockItems) {
+            FilteredItemListView(
+                title: "Out of Stock Items",
+                items: outOfStockItems,
+                filterType: .outOfStock
+            )
+            .environmentObject(currencyManager)
+        }
     }
     
     private var lowStockItems: [InventoryItem] {
@@ -163,6 +197,7 @@ struct DashboardCard: View {
     let value: String
     let icon: String
     let color: Color
+    let action: (() -> Void)?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -171,6 +206,12 @@ struct DashboardCard: View {
                     .font(.title2)
                     .foregroundColor(color)
                 Spacer()
+                
+                if action != nil {
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
             }
             
             Text(value)
@@ -185,6 +226,11 @@ struct DashboardCard: View {
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .onTapGesture {
+            action?()
+        }
+        .scaleEffect(action != nil ? 1.0 : 1.0)
+        .animation(.easeInOut(duration: 0.1), value: action != nil)
     }
 }
 

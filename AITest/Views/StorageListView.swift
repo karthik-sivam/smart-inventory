@@ -7,6 +7,8 @@ struct StorageListView: View {
     
     @State private var searchText = ""
     @State private var showingAddStorage = false
+    @State private var showingEditStorage: Storage?
+    @State private var showingDeleteAlert: Storage?
     
     var filteredStorages: [Storage] {
         if searchText.isEmpty {
@@ -61,10 +63,37 @@ struct StorageListView: View {
                             .padding(.vertical, 60)
                         } else {
                             ForEach(filteredStorages, id: \.id) { storage in
-                                NavigationLink(destination: StorageDetailView(storage: storage)) {
-                                    StorageCard(storage: storage)
+                                                        HStack {
+                            NavigationLink(destination: StorageDetailView(storage: storage)) {
+                                StorageCard(storage: storage)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            VStack(spacing: 8) {
+                                Button(action: {
+                                    showingEditStorage = storage
+                                }) {
+                                    Image(systemName: "pencil.circle.fill")
+                                        .font(.title2)
+                                        .foregroundColor(.blue)
+                                        .background(Color.white)
+                                        .clipShape(Circle())
+                                        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
                                 }
-                                .buttonStyle(PlainButtonStyle())
+                                
+                                Button(action: {
+                                    showingDeleteAlert = storage
+                                }) {
+                                    Image(systemName: "trash.circle.fill")
+                                        .font(.title2)
+                                        .foregroundColor(.red)
+                                        .background(Color.white)
+                                        .clipShape(Circle())
+                                        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                                }
+                            }
+                            .padding(.leading, 8)
+                        }
                             }
                         }
                     }
@@ -77,6 +106,43 @@ struct StorageListView: View {
         .sheet(isPresented: $showingAddStorage) {
             AddStorageView()
         }
+        .sheet(item: $showingEditStorage) { storage in
+            EditStorageView(storage: storage)
+        }
+        .alert("Delete Storage", isPresented: Binding(
+            get: { showingDeleteAlert != nil },
+            set: { if !$0 { showingDeleteAlert = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                showingDeleteAlert = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let storage = showingDeleteAlert {
+                    deleteStorage(storage)
+                }
+                showingDeleteAlert = nil
+            }
+        } message: {
+            if let storage = showingDeleteAlert {
+                Text("Are you sure you want to delete '\(storage.name)'? This will also delete all items in this storage.")
+            }
+        }
+    }
+    
+    private func deleteStorage(_ storage: Storage) {
+        // Delete all items in the storage first
+        for item in storage.items {
+            modelContext.delete(item)
+        }
+        
+        // Delete the storage
+        modelContext.delete(storage)
+        
+        // Save changes
+        try? modelContext.save()
+        
+        // Track completion for ad system
+        AdManager.shared.recordCompletion(event: .storageUpdated)
     }
 }
 
@@ -196,6 +262,7 @@ struct AddStorageView: View {
                     .disabled(name.isEmpty)
                 }
             }
+            .navigationBarBackButtonHidden(true)
         }
     }
     

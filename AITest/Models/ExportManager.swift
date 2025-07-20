@@ -1,6 +1,9 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import PDFKit
+import UIKit
+import WebKit
 
 class ExportManager: ObservableObject {
     @Published var isExporting = false
@@ -71,12 +74,19 @@ class ExportManager: ObservableObject {
     private func exportToPDF(_ data: ExportData) async -> URL? {
         await MainActor.run { exportProgress = 0.2 }
         
-        let pdfContent = generatePDFContent(data)
+        let htmlContent = generatePDFContent(data)
         
-        await MainActor.run { exportProgress = 0.6 }
+        await MainActor.run { exportProgress = 0.4 }
+        
+        // Convert HTML to PDF using WebKit
+        guard let pdfData = await convertHTMLToPDF(htmlContent) else {
+            return nil
+        }
+        
+        await MainActor.run { exportProgress = 0.8 }
         
         let fileName = generateFileName(data.exportType, format: "pdf")
-        return saveToFile(content: pdfContent, fileName: fileName)
+        return savePDFData(pdfData, fileName: fileName)
     }
     
     private func generateInventorySummaryCSV(_ items: [InventoryItem], storages: [Storage]) -> String {
@@ -168,18 +178,71 @@ class ExportManager: ObservableObject {
         <html>
         <head>
             <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Inventory Report</title>
             <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .header { text-align: center; margin-bottom: 30px; }
-                .title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
-                .subtitle { font-size: 16px; color: #666; }
-                table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #f2f2f2; font-weight: bold; }
-                .summary { background-color: #f9f9f9; padding: 15px; margin: 20px 0; border-radius: 5px; }
-                .urgent { color: #d32f2f; font-weight: bold; }
-                .warning { color: #f57c00; font-weight: bold; }
+                @page { margin: 1in; }
+                body { 
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; 
+                    margin: 0; 
+                    padding: 20px; 
+                    font-size: 12px;
+                    line-height: 1.4;
+                }
+                .header { 
+                    text-align: center; 
+                    margin-bottom: 30px; 
+                    border-bottom: 2px solid #007AFF;
+                    padding-bottom: 20px;
+                }
+                .title { 
+                    font-size: 28px; 
+                    font-weight: bold; 
+                    margin-bottom: 10px; 
+                    color: #007AFF;
+                }
+                .subtitle { 
+                    font-size: 14px; 
+                    color: #666; 
+                }
+                table { 
+                    width: 100%; 
+                    border-collapse: collapse; 
+                    margin: 20px 0; 
+                    font-size: 11px;
+                }
+                th, td { 
+                    border: 1px solid #ddd; 
+                    padding: 6px 8px; 
+                    text-align: left; 
+                    vertical-align: top;
+                }
+                th { 
+                    background-color: #f8f9fa; 
+                    font-weight: bold; 
+                    color: #333;
+                }
+                .summary { 
+                    background-color: #f8f9fa; 
+                    padding: 15px; 
+                    margin: 20px 0; 
+                    border-radius: 5px; 
+                    border-left: 4px solid #007AFF;
+                }
+                .urgent { 
+                    color: #d32f2f; 
+                    font-weight: bold; 
+                }
+                .warning { 
+                    color: #f57c00; 
+                    font-weight: bold; 
+                }
+                h2 {
+                    color: #333;
+                    border-bottom: 1px solid #eee;
+                    padding-bottom: 8px;
+                    margin-top: 30px;
+                }
             </style>
         </head>
         <body>
@@ -381,5 +444,92 @@ class ExportManager: ObservableObject {
             print("Error saving file: \(error)")
             return nil
         }
+    }
+    
+    private func savePDFData(_ pdfData: Data, fileName: String) -> URL? {
+        guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        
+        let fileURL = documentsPath.appendingPathComponent(fileName)
+        
+        do {
+            try pdfData.write(to: fileURL)
+            return fileURL
+        } catch {
+            print("Error saving PDF file: \(error)")
+            return nil
+        }
+    }
+    
+    private func convertHTMLToPDF(_ htmlContent: String) async -> Data? {
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                let webView = WKWebView()
+                webView.loadHTMLString(htmlContent, baseURL: nil)
+                
+                webView.evaluateJavaScript("document.readyState") { result, error in
+                    if error != nil {
+                        // Fallback to simple text-based PDF
+                        continuation.resume(returning: self.createSimplePDF(htmlContent))
+                        return
+                    }
+                    
+                    // Wait a bit for content to load
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        let pdfConfiguration = WKPDFConfiguration()
+                        pdfConfiguration.rect = CGRect(x: 0, y: 0, width: 612, height: 792) // US Letter size
+                        webView.createPDF(configuration: pdfConfiguration) { result in
+                            switch result {
+                            case .success(let pdfData):
+                                continuation.resume(returning: pdfData)
+                            case .failure(let error):
+                                print("PDF creation failed: \(error)")
+                                // Fallback to simple text-based PDF
+                                continuation.resume(returning: self.createSimplePDF(htmlContent))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func createSimplePDF(_ htmlContent: String) -> Data? {
+        // Create a simple text-based PDF as fallback
+        let pdfData = NSMutableData()
+        UIGraphicsBeginPDFContextToData(pdfData, CGRect(x: 0, y: 0, width: 612, height: 792), nil)
+        
+        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792)
+        UIGraphicsBeginPDFPage()
+        
+        let context = UIGraphicsGetCurrentContext()
+        context?.setFillColor(UIColor.white.cgColor)
+        context?.fill(pageRect)
+        
+        // Extract text content from HTML (simple approach)
+        let textContent = htmlContent.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+        
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 6
+        
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 12),
+            .foregroundColor: UIColor.black,
+            .paragraphStyle: paragraphStyle
+        ]
+        
+        let attributedString = NSAttributedString(string: textContent, attributes: attributes)
+        let textRect = CGRect(x: 50, y: 50, width: 512, height: 692)
+        
+        attributedString.draw(in: textRect)
+        
+        UIGraphicsEndPDFContext()
+        
+        return pdfData as Data
     }
 } 

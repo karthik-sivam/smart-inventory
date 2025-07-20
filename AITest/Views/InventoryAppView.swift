@@ -2,36 +2,57 @@ import SwiftUI
 import SwiftData
 
 struct InventoryAppView: View {
+    @StateObject private var authManager = AuthManager.shared
     @State private var selectedTab = 0
     @StateObject private var currencyManager = CurrencyManager()
     
     var body: some View {
-        AdIntegrationView {
+        Group {
+            if authManager.isAuthenticated {
+                // Main app content
+                RealAdIntegrationView {
+                    MainAppContent(selectedTab: $selectedTab, currencyManager: currencyManager)
+                }
+            } else {
+                // Authentication screen
+                AuthView()
+            }
+        }
+    }
+}
+
+struct MainAppContent: View {
+    @Binding var selectedTab: Int
+    @StateObject var currencyManager: CurrencyManager
+    
+    var body: some View {
             ZStack {
             // Background
             Color(.systemGroupedBackground)
                 .ignoresSafeArea()
             
-            // Content based on selected tab
-            Group {
-                switch selectedTab {
-                case 0:
-                    DashboardView()
-                        .environmentObject(currencyManager)
-                case 1:
-                    StorageListView()
-                        .environmentObject(currencyManager)
-                case 2:
-                    ItemListView()
-                        .environmentObject(currencyManager)
-                case 3:
-                    CountView()
-                        .environmentObject(currencyManager)
-                default:
-                    DashboardView()
-                        .environmentObject(currencyManager)
+                            // Content based on selected tab
+                Group {
+                    switch selectedTab {
+                    case 0:
+                        DashboardView()
+                            .environmentObject(currencyManager)
+                    case 1:
+                        StorageListView()
+                            .environmentObject(currencyManager)
+                    case 2:
+                        ItemListView()
+                            .environmentObject(currencyManager)
+                    case 3:
+                        CountView()
+                            .environmentObject(currencyManager)
+                    case 4:
+                        ProfileView()
+                    default:
+                        DashboardView()
+                            .environmentObject(currencyManager)
+                    }
                 }
-            }
             
             // Custom Bottom Tab Bar
             VStack {
@@ -69,6 +90,14 @@ struct InventoryAppView: View {
                     ) {
                         selectedTab = 3
                     }
+                    
+                    TabBarButton(
+                        icon: "person.circle.fill",
+                        title: "Profile",
+                        isSelected: selectedTab == 4
+                    ) {
+                        selectedTab = 4
+                    }
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 8)
@@ -78,7 +107,6 @@ struct InventoryAppView: View {
                 .padding(.horizontal)
                 .padding(.bottom, 20)
             }
-        }
         }
     }
 }

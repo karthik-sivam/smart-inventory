@@ -47,6 +47,9 @@ struct SettingsView: View {
                         }
                     }
                     
+                    // TODO: PREMIUM FEATURE - Reward ads for premium features
+                    // Temporarily disabled until premium features are ready
+                    /*
                     Button(action: {
                         AdManager.shared.showTestAd(type: .reward)
                     }) {
@@ -57,6 +60,17 @@ struct SettingsView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
+                    }
+                    */
+                    
+                    // Placeholder for future premium features
+                    HStack {
+                        Label("Premium Features (Coming Soon)", systemImage: "star.fill")
+                            .foregroundColor(.orange)
+                        Spacer()
+                        Text("Soon")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
 #endif
@@ -76,6 +90,18 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+                
+                Section(header: Text("Account")) {
+                    Button(action: {
+                        AuthManager.shared.signOut()
+                    }) {
+                        HStack {
+                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                            Spacer()
+                        }
+                        .foregroundColor(.red)
+                    }
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -86,6 +112,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .navigationBarBackButtonHidden(true)
         }
     }
 }
