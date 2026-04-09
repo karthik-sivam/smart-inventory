@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Support — Smart Inventory</title>
+  <meta name="description" content="Get help with Smart Inventory. FAQ, contact support, and feature requests." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.7;
+      color: #1c1c1e;
+      background: #f2f2f7;
+    }
+
+    a { color: #007aff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    nav {
+      position: sticky; top: 0;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid #e5e5ea;
+      z-index: 100; padding: 0 24px;
+    }
+
+    .nav-inner {
+      max-width: 960px; margin: 0 auto;
+      display: flex; align-items: center;
+      justify-content: space-between; height: 56px;
+    }
+
+    .nav-logo { font-size: 18px; font-weight: 700; color: #1c1c1e; }
+    .nav-back { font-size: 14px; font-weight: 500; color: #007aff; }
+
+    .hero {
+      background: linear-gradient(135deg, #1c1c2e, #2c2c4e);
+      padding: 60px 24px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 42px);
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .hero p { color: rgba(255,255,255,.6); font-size: 17px; }
+
+    .content {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 60px 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 18px;
+      padding: 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+    }
+
+    .card h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #f2f2f7;
+    }
+
+    .faq-item { margin-bottom: 20px; }
+    .faq-item:last-child { margin-bottom: 0; }
+
+    .faq-item h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #1c1c1e;
+    }
+
+    .faq-item p { font-size: 14px; color: #3a3a3c; }
+
+    .contact-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 500px) {
+      .contact-options { grid-template-columns: 1fr; }
+    }
+
+    .contact-option {
+      background: #f2f2f7;
+      border-radius: 14px;
+      padding: 20px;
+      text-align: center;
+      transition: background .15s;
+    }
+
+    .contact-option:hover { background: #e5e5ea; text-decoration: none; }
+
+    .contact-option .icon { font-size: 32px; margin-bottom: 10px; }
+
+    .contact-option h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1c1c1e;
+      margin-bottom: 4px;
+    }
+
+    .contact-option p { font-size: 13px; color: #8e8e93; }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #f2f2f7;
+      font-size: 14px;
+    }
+
+    .info-row:last-child { border-bottom: none; }
+    .info-row span:first-child { color: #8e8e93; }
+    .info-row span:last-child { font-weight: 500; }
+
+    footer {
+      background: #1c1c1e;
+      padding: 24px;
+      text-align: center;
+    }
+
+    footer p { font-size: 13px; color: rgba(255,255,255,.4); }
+    footer a { color: rgba(255,255,255,.4); margin: 0 10px; }
+    footer a:hover { color: rgba(255,255,255,.7); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="nav-inner">
+      <span class="nav-logo">Smart Inventory</span>
+      <a href="index.html" class="nav-back">← Vishuddhi</a>
+    </div>
+  </nav>
+
+  <div class="hero">
+    <h1>Support</h1>
+    <p>We're here to help. Usually respond within 24 hours.</p>
+  </div>
+
+  <div class="content">
+
+    <!-- Contact -->
+    <div class="card">
+      <h2>Contact Us</h2>
+      <div class="contact-options">
+        <a href="mailto:karthik@vishuddhi.in?subject=Smart%20Inventory%20Support" class="contact-option">
+          <div class="icon">✉️</div>
+          <h3>Email Support</h3>
+          <p>karthik@vishuddhi.in</p>
+        </a>
+        <a href="mailto:karthik@vishuddhi.in?subject=Smart%20Inventory%20Feature%20Request" class="contact-option">
+          <div class="icon">💡</div>
+          <h3>Feature Request</h3>
+          <p>Tell us what you need</p>
+        </a>
+      </div>
+    </div>
+
+    <!-- FAQ -->
+    <div class="card">
+      <h2>Frequently Asked Questions</h2>
+
+      <div class="faq-item">
+        <h3>My data isn't syncing across devices. What should I do?</h3>
+        <p>Make sure you're signed in to the same account on both devices. Go to Profile → Sync Now to trigger a manual sync. If the issue persists, sign out and sign back in.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>I reinstalled the app and my data is gone. Can I recover it?</h3>
+        <p>Yes — if you had cloud sync enabled, your data is safe. Sign in with the same account you used before and your inventory will be restored automatically on launch.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>How do I take a quick inventory count?</h3>
+        <p>Open any storage and tap the clipboard icon next to an item. Enter the new quantity and tap Save — no navigation needed. For more options (changing count type or UOM), tap "Change UOM or count type" inside the quick count screen.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>What's the difference between Free and Pro?</h3>
+        <p>Free includes cloud sync, up to 5 storage areas, 50 items per storage, 30-day analytics, PDF export, and push notifications. Pro gives you unlimited storages and items, full analytics history, barcode scanner pro, and no ads.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>How do I cancel my Pro subscription?</h3>
+        <p>Go to iPhone Settings → Apple ID → Subscriptions → Smart Inventory Pro → Cancel Subscription. Or tap "Manage Subscription" inside the app's Profile tab.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>I purchased Remove Ads but ads are still showing.</h3>
+        <p>Go to Settings → Restore Purchases inside the app. If the issue continues, sign out and back in, then tap Restore Purchases again.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>How do I delete my account and all my data?</h3>
+        <p>Go to Profile → Delete Account inside the app. This permanently deletes your account and all cloud data within 30 days. You can also email us at karthik@vishuddhi.in with the subject "Delete My Account".</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>The barcode scanner isn't working.</h3>
+        <p>Make sure camera access is granted: iPhone Settings → Smart Inventory → Camera → toggle on. The scanner supports EAN-8, EAN-13, UPC, QR, Code128, and more.</p>
+      </div>
+    </div>
+
+    <!-- App Info -->
+    <div class="card">
+      <h2>App Information</h2>
+      <div class="info-row">
+        <span>App Name</span>
+        <span>Smart Inventory</span>
+      </div>
+      <div class="info-row">
+        <span>Platform</span>
+        <span>iOS 17+</span>
+      </div>
+      <div class="info-row">
+        <span>Developer</span>
+        <span>Vishuddhi / Karthik</span>
+      </div>
+      <div class="info-row">
+        <span>Version</span>
+        <span>1.0</span>
+      </div>
+      <div class="info-row">
+        <span>Support Email</span>
+        <span><a href="mailto:karthik@vishuddhi.in">karthik@vishuddhi.in</a></span>
+      </div>
+      <div class="info-row">
+        <span>Privacy Policy</span>
+        <span><a href="privacy.html">View Policy</a></span>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <p>
+      <a href="index.html">Home</a>
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="mailto:karthik@vishuddhi.in">Contact</a>
+    </p>
+    <p style="margin-top:10px;">&copy; 2026 Vishuddhi. All rights reserved.</p>
+  </footer>
+
+</body>
+</html>
