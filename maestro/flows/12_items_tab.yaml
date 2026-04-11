@@ -1,0 +1,18 @@
+# Flow 12 — Items Tab
+# Tests browsing items across all storages and search
+appId: com.vishuddhi.smartinventory
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Items"
+- assertVisible: "Items"
+- assertVisible: "All Storages"
+
+# Search for existing item
+- tapOn: "Search items..."
+- inputText: "Test Product"
+- assertVisible: "Test Product"
+
+# Clear search
+- tapOn: "Search items..."
+- eraseText: 20
+- assertVisible: "All Storages"

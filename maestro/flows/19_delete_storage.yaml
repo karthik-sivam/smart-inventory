@@ -1,0 +1,22 @@
+# Flow 19 — Delete Storage
+# Tests the delete storage confirmation and removal
+appId: com.vishuddhi.smartinventory
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Storages"
+
+# Swipe left on storage to reveal delete
+- swipe:
+    direction: LEFT
+    element:
+      text: "Test Warehouse"
+
+- tapOn: "Delete"
+
+# Confirm deletion in alert
+- assertVisible: "Delete Storage"
+- assertVisible: "This will also delete all items"
+- tapOn: "Delete"
+
+# Storage should be gone
+- assertNotVisible: "Test Warehouse"

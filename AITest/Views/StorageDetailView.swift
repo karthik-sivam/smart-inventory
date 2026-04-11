@@ -6,9 +6,14 @@ struct StorageDetailView: View {
     
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @StateObject private var viewModel = StorageDetailViewModel()
     @State private var searchText = ""
     @State private var showingAddItem = false
     @State private var showingEditStorage = false
+    @State private var showingQuickCount: InventoryItem? = nil
+    @State private var showingFullCount: InventoryItem? = nil
+    @State private var pendingFullCountItem: InventoryItem? = nil
+    @State private var showingItemLimitPaywall = false
     
     var filteredItems: [InventoryItem] {
         if searchText.isEmpty {
@@ -61,11 +66,18 @@ struct StorageDetailView: View {
                             .foregroundColor(.blue)
                     }
                     
-                    Button(action: { showingAddItem = true }) {
+                    Button(action: {
+                        if SubscriptionManager.shared.canAddItem(currentItemCount: storage.items.count) {
+                            showingAddItem = true
+                        } else {
+                            showingItemLimitPaywall = true
+                        }
+                    }) {
                         Image(systemName: "plus")
                             .font(.title2)
                             .foregroundColor(.blue)
                     }
+                    .accessibilityLabel("Add Item")
                 }
             }
             .padding(.horizontal)
@@ -74,7 +86,7 @@ struct StorageDetailView: View {
             HStack(spacing: 20) {
                 StatCard(title: "Total Items", value: "\(storage.itemCount)", color: .blue)
                 StatCard(title: "Total Quantity", value: String(format: "%.1f", storage.totalQuantity), color: .green)
-                StatCard(title: "Low Stock", value: "\(lowStockCount)", color: .orange)
+                StatCard(title: "Low Stock", value: "\(viewModel.lowStockCount(for: storage))", color: .orange)
             }
             .padding(.horizontal)
             
@@ -102,10 +114,28 @@ struct StorageDetailView: View {
                         .padding(.vertical, 60)
                     } else {
                         ForEach(filteredItems, id: \.id) { item in
-                            NavigationLink(destination: ItemDetailView(item: item)) {
-                                ItemCard(item: item)
+                            HStack(alignment: .center, spacing: 0) {
+                                NavigationLink(destination: ItemDetailView(item: item)) {
+                                    ItemCard(item: item)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+
+                                Button(action: { showingQuickCount = item }) {
+                                    VStack(spacing: 3) {
+                                        Image(systemName: "list.clipboard.fill")
+                                            .font(.system(size: 18))
+                                            .foregroundColor(.blue)
+                                        Text("Count")
+                                            .font(.system(size: 9, weight: .medium))
+                                            .foregroundColor(.blue)
+                                    }
+                                    .frame(width: 44, height: 56)
+                                    .background(Color(.systemBackground))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+                                }
+                                .padding(.leading, 8)
                             }
-                            .buttonStyle(PlainButtonStyle())
                         }
                     }
                 }
@@ -121,11 +151,27 @@ struct StorageDetailView: View {
         .sheet(isPresented: $showingEditStorage) {
             EditStorageView(storage: storage)
         }
+        .sheet(isPresented: $showingItemLimitPaywall) {
+            PaywallView()
+        }
+        .sheet(item: $showingQuickCount, onDismiss: {
+            // If user tapped "Advanced options" inside QuickCountView,
+            // open the full count screen after the quick sheet fully dismisses.
+            if let pending = pendingFullCountItem {
+                pendingFullCountItem = nil
+                showingFullCount = pending
+            }
+        }) { item in
+            QuickCountView(item: item, onOpenFullCount: {
+                pendingFullCountItem = item
+            })
+        }
+        .sheet(item: $showingFullCount) { item in
+            CountItemView(item: item)
+        }
     }
     
-    private var lowStockCount: Int {
-        storage.items.filter { $0.isLowStock }.count
-    }
+    
 }
 
 struct StatCard: View {
@@ -334,6 +380,7 @@ struct ItemDetailView: View {
     
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @StateObject private var detailVM = ItemDetailViewModel()
     @State private var showingCountModal = false
     @State private var showingEditItem = false
     @State private var showingDeleteAlert: InventoryItem?
@@ -452,12 +499,7 @@ struct ItemDetailView: View {
                         Toggle("", isOn: Binding(
                             get: { item.isOutOfStock },
                             set: { newValue in
-                                item.isOutOfStock = newValue
-                                item.updatedAt = Date()
-                                try? modelContext.save()
-                                
-                                // Track completion for ad system
-                                AdManager.shared.recordCompletion(event: .itemUpdated)
+                                detailVM.toggleOutOfStock(for: item, to: newValue)
                             }
                         ))
                         .toggleStyle(SwitchToggleStyle(tint: .red))
@@ -514,7 +556,7 @@ struct ItemDetailView: View {
             }
             Button("Delete", role: .destructive) {
                 if let item = showingDeleteAlert {
-                    deleteItem(item)
+                    detailVM.delete(item)
                 }
                 showingDeleteAlert = nil
             }
@@ -523,17 +565,9 @@ struct ItemDetailView: View {
                 Text("Are you sure you want to delete '\(item.name)'? This action cannot be undone.")
             }
         }
-    }
-    
-    private func deleteItem(_ item: InventoryItem) {
-        // Delete the item
-        modelContext.delete(item)
-        
-        // Save changes
-        try? modelContext.save()
-        
-        // Track completion for ad system
-        AdManager.shared.recordCompletion(event: .itemUpdated)
+        .onAppear {
+            detailVM.bind(modelContext: modelContext)
+        }
     }
 }
 
@@ -561,6 +595,7 @@ struct CountItemView: View {
     
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @StateObject private var countVM = CountItemViewModel()
     
     @State private var countedQuantity = ""
     @State private var adjustmentReason = ""
@@ -586,10 +621,10 @@ struct CountItemView: View {
                 }
                 
                 Section(header: Text("New Count")) {
-                    TextField("Counted Quantity", text: $countedQuantity)
+                    TextField("Counted Quantity", text: $countVM.countedQuantity)
                         .keyboardType(.decimalPad)
                     
-                    Picker("Adjustment Reason", selection: $adjustmentReason) {
+                    Picker("Adjustment Reason", selection: $countVM.adjustmentReason) {
                         Text("Select reason").tag("")
                         Text("Physical Count").tag("Physical Count")
                         Text("Damaged").tag("Damaged")
@@ -601,11 +636,11 @@ struct CountItemView: View {
                     }
                     .pickerStyle(MenuPickerStyle())
                     
-                    TextField("Notes (Optional)", text: $notes, axis: .vertical)
+                    TextField("Notes (Optional)", text: $countVM.notes, axis: .vertical)
                         .lineLimit(3)
                 }
                 
-                if let newQuantity = Double(countedQuantity) {
+                if let newQuantity = Double(countVM.countedQuantity) {
                     Section(header: Text("Adjustment Preview")) {
                         HStack {
                             Text("Variance:")
@@ -636,37 +671,151 @@ struct CountItemView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
-                        saveCount()
+                        countVM.saveCount(for: item)
+                        dismiss()
                     }
-                    .disabled(countedQuantity.isEmpty || adjustmentReason.isEmpty)
+                    .disabled(countVM.countedQuantity.isEmpty || countVM.adjustmentReason.isEmpty)
                 }
             }
             .navigationBarBackButtonHidden(true)
         }
+        .onAppear {
+            countVM.bind(modelContext: modelContext)
+        }
     }
-    
-    private func saveCount() {
-        guard let newQuantity = Double(countedQuantity) else { return }
-        
-        let count = InventoryCount(
-            previousQuantity: item.currentQuantity,
-            countedQuantity: newQuantity,
-            adjustmentReason: adjustmentReason,
-            notes: notes,
-            item: item
-        )
-        
-        // Update item quantity
-        item.currentQuantity = newQuantity
-        item.updatedAt = Date()
-        
-        modelContext.insert(count)
-        try? modelContext.save()
-        
-        // Track completion for ad system (reward ad for major task)
-        AdManager.shared.recordCompletion(event: .inventoryCountCompleted)
-        
-        dismiss()
+}
+
+// MARK: - Quick Count Sheet
+
+struct QuickCountView: View {
+    let item: InventoryItem
+    /// Called when user wants the full count screen (to change UOM/reason).
+    /// The parent dismisses this sheet first, then opens CountItemView.
+    let onOpenFullCount: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @StateObject private var countVM = CountItemViewModel()
+    @FocusState private var quantityFocused: Bool
+
+    private var parsedQty: Double? { Double(countVM.countedQuantity) }
+    private var variance: Double? {
+        guard let q = parsedQty else { return nil }
+        return q - item.currentQuantity
+    }
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 24) {
+
+                    // ── Item header ──────────────────────────────────────
+                    VStack(spacing: 6) {
+                        Text(item.name)
+                            .font(.title3).fontWeight(.semibold)
+                            .multilineTextAlignment(.center)
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(item.isOutOfStock ? Color.red : item.isLowStock ? Color.orange : Color.green)
+                                .frame(width: 8, height: 8)
+                            Text("Current: \(String(format: "%.1f", item.currentQuantity)) \(item.uom?.symbol ?? "units")")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.top, 8)
+
+                    // ── Big quantity input ───────────────────────────────
+                    VStack(spacing: 10) {
+                        Text("New Quantity")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        HStack(alignment: .lastTextBaseline, spacing: 6) {
+                            TextField("0", text: $countVM.countedQuantity)
+                                .font(.system(size: 52, weight: .bold, design: .rounded))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.center)
+                                .focused($quantityFocused)
+                                .frame(maxWidth: 200)
+
+                            Text(item.uom?.symbol ?? "")
+                                .font(.title2)
+                                .foregroundColor(.secondary)
+                        }
+
+                        // Live variance pill
+                        if let v = variance {
+                            Text(v == 0 ? "No change" : "\(v > 0 ? "+" : "")\(String(format: "%.1f", v)) from current")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(
+                                    v == 0 ? Color(.systemGray5) :
+                                    v > 0 ? Color.green.opacity(0.15) :
+                                    Color.red.opacity(0.15)
+                                )
+                                .foregroundColor(v == 0 ? .secondary : v > 0 ? .green : .red)
+                                .cornerRadius(20)
+                        }
+                    }
+                    .padding(.vertical, 20)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(16)
+                    .padding(.horizontal)
+
+                    // ── Notes ────────────────────────────────────────────
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Notes (optional)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("Add a note about this count…", text: $countVM.notes, axis: .vertical)
+                            .lineLimit(2...4)
+                            .padding(12)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(10)
+                    }
+                    .padding(.horizontal)
+
+                    // ── Advanced link ─────────────────────────────────────
+                    Button(action: {
+                        onOpenFullCount()
+                        dismiss()
+                    }) {
+                        Label("Change UOM or count type", systemImage: "slider.horizontal.3")
+                            .font(.subheadline)
+                            .foregroundColor(.blue)
+                    }
+
+                    Spacer(minLength: 20)
+                }
+            }
+            .navigationTitle("Quick Count")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        countVM.adjustmentReason = "Physical Count"
+                        countVM.saveCount(for: item)
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(countVM.countedQuantity.isEmpty)
+                }
+            }
+        }
+        .onAppear {
+            countVM.bind(modelContext: modelContext)
+            countVM.adjustmentReason = "Physical Count"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                quantityFocused = true
+            }
+        }
     }
 }
 

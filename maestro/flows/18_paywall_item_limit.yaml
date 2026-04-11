@@ -1,0 +1,17 @@
+# Flow 18 — Paywall: Item Limit
+# Tests that paywall appears when free user tries to add a 51st item
+# Prerequisite: A storage already has 50 items
+appId: com.vishuddhi.smartinventory
+---
+- launchApp
+- tapOn: "Storages"
+
+# Open the storage that has 50 items
+- tapOn: "Test Warehouse"
+
+# Try to add item
+- tapOn: "+"
+
+# Paywall should appear instead of the add item form
+- assertVisible: "Pro"
+- assertNotVisible: "Item Name"

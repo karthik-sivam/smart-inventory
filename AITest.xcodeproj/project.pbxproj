@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D218DEF32E2CABBA00EB13A0 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = D218DEF22E2CABBA00EB13A0 /* GoogleService-Info.plist */; };
+		5AC623BF2F828DE900AC4937 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5AC623BE2F828DE900AC4937 /* StoreKit.framework */; };
 		D218DEF62E2CAE0400EB13A0 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = D218DEF52E2CAE0400EB13A0 /* GoogleSignIn */; };
 		D257B53D2E2C0DE600D46682 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = D257B53C2E2C0DE600D46682 /* FirebaseAnalytics */; };
 		D257B53F2E2C0DE600D46682 /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = D257B53E2E2C0DE600D46682 /* FirebaseAnalyticsCore */; };
@@ -37,16 +37,31 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		D218DEF22E2CABBA00EB13A0 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		5AAC39482E92DFFC001F3906 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		5AC623B92F8258BF00AC4937 /* SmartInventory.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = SmartInventory.storekit; sourceTree = "<group>"; };
+		5AC623BE2F828DE900AC4937 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		D218DEF92E2D0DF800EB13A0 /* privacy.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = privacy.html; sourceTree = "<group>"; };
 		D2776A0E2E1DAA5D00C580F6 /* AITest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AITest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D2776A1D2E1DAA5F00C580F6 /* AITestTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AITestTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D2776A272E1DAA5F00C580F6 /* AITestUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AITestUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5AC623BC2F828B5400AC4937 /* Exceptions for "AITest" folder in "AITest" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D2776A0D2E1DAA5D00C580F6 /* AITest */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D2776A102E1DAA5D00C580F6 /* AITest */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5AC623BC2F828B5400AC4937 /* Exceptions for "AITest" folder in "AITest" target */,
+			);
 			path = AITest;
 			sourceTree = "<group>";
 		};
@@ -74,6 +89,7 @@
 				D257B5492E2C0DE600D46682 /* FirebaseStorage in Frameworks */,
 				D257B5452E2C0DE600D46682 /* FirebaseFirestore in Frameworks */,
 				D257B53F2E2C0DE600D46682 /* FirebaseAnalyticsCore in Frameworks */,
+				5AC623BF2F828DE900AC4937 /* StoreKit.framework in Frameworks */,
 				D257B54B2E2C0DE600D46682 /* GoogleMobileAds in Frameworks */,
 				D218DEF62E2CAE0400EB13A0 /* GoogleSignIn in Frameworks */,
 			);
@@ -96,14 +112,24 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		5AAC39472E92DFFB001F3906 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				5AC623BE2F828DE900AC4937 /* StoreKit.framework */,
+				5AAC39482E92DFFC001F3906 /* WebKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		D2776A052E1DAA5D00C580F6 = {
 			isa = PBXGroup;
 			children = (
+				5AC623B92F8258BF00AC4937 /* SmartInventory.storekit */,
 				D218DEF92E2D0DF800EB13A0 /* privacy.html */,
-				D218DEF22E2CABBA00EB13A0 /* GoogleService-Info.plist */,
 				D2776A102E1DAA5D00C580F6 /* AITest */,
 				D2776A202E1DAA5F00C580F6 /* AITestTests */,
 				D2776A2A2E1DAA5F00C580F6 /* AITestUITests */,
+				5AAC39472E92DFFB001F3906 /* Frameworks */,
 				D2776A0F2E1DAA5D00C580F6 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -128,6 +154,7 @@
 				D2776A0A2E1DAA5D00C580F6 /* Sources */,
 				D2776A0B2E1DAA5D00C580F6 /* Frameworks */,
 				D2776A0C2E1DAA5D00C580F6 /* Resources */,
+				5AC623BD2F828CEF00AC4937 /* Firebase Crashlytics */,
 			);
 			buildRules = (
 			);
@@ -252,7 +279,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D218DEF32E2CABBA00EB13A0 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -271,6 +297,30 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		5AC623BD2F828CEF00AC4937 /* Firebase Crashlytics */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}",
+				"$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)",
+				"$(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/GoogleService-Info.plist",
+			);
+			name = "Firebase Crashlytics";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${BUILD_DIR%Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\" -gsp \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/GoogleService-Info.plist\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		D2776A0A2E1DAA5D00C580F6 /* Sources */ = {
@@ -313,6 +363,7 @@
 		D2776A2F2E1DAA5F00C580F6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -377,6 +428,7 @@
 		D2776A302E1DAA5F00C580F6 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -436,27 +488,34 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AITest/AITest.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 773C9JD4U2;
+				DEVELOPMENT_TEAM = V5987KNH55;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_GADApplicationIdentifier = "ca-app-pub-9489340523484530~5027045442";
+				INFOPLIST_FILE = AITest/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Smart Inventory";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Smart Inventory uses your camera to scan product barcodes for quick inventory entry.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Smart Inventory uses your advertising ID to show you relevant ads that support the free version of this app.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.shambhavi.smartinventory;
+				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
+				PRODUCT_BUNDLE_IDENTIFIER = com.vishuddhi.smartinventory;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -466,28 +525,34 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AITest/AITest.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 773C9JD4U2;
+				DEVELOPMENT_TEAM = V5987KNH55;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_GADApplicationIdentifier = "ca-app-pub-9489340523484530~5027045442";
+				INFOPLIST_FILE = AITest/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Smart Inventory";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSUserTrackingUsageDescription = "This identifier will be used to deliver personalized ads to you.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Smart Inventory uses your camera to scan product barcodes for quick inventory entry.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Smart Inventory uses your advertising ID to show you relevant ads that support the free version of this app.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.shambhavi.smartinventory;
+				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
+				PRODUCT_BUNDLE_IDENTIFIER = com.vishuddhi.smartinventory;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -495,6 +560,7 @@
 		D2776A352E1DAA5F00C580F6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -502,10 +568,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MARKETING_VERSION = 1.0;
+				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
 				PRODUCT_BUNDLE_IDENTIFIER = com.karthik.AITestTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AITest.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AITest";
 			};
@@ -514,6 +582,7 @@
 		D2776A362E1DAA5F00C580F6 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -521,10 +590,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MARKETING_VERSION = 1.0;
+				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
 				PRODUCT_BUNDLE_IDENTIFIER = com.karthik.AITestTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AITest.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AITest";
 			};
@@ -533,15 +604,18 @@
 		D2776A382E1DAA5F00C580F6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 773C9JD4U2;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
+				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
 				PRODUCT_BUNDLE_IDENTIFIER = com.karthik.AITestUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = AITest;
 			};
@@ -550,15 +624,18 @@
 		D2776A392E1DAA5F00C580F6 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 773C9JD4U2;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
+				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
 				PRODUCT_BUNDLE_IDENTIFIER = com.karthik.AITestUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = AITest;
 			};

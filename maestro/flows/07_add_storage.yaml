@@ -1,0 +1,28 @@
+# Flow 07 — Add Storage
+# Tests creating a new storage area
+# Prerequisite: Signed in
+appId: com.vishuddhi.smartinventory
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Storages"
+- assertVisible: "Storages"
+
+# Open add storage sheet — + is a nav bar icon
+- tapOn:
+    point: "93%,7%"
+- waitForAnimationToEnd
+
+# Fill storage form
+- tapOn: "Storage Name"
+- inputText: "Test Warehouse"
+
+- tapOn: "Location (Optional)"
+- inputText: "Ground Floor"
+
+- tapOn: "Description (Optional)"
+- inputText: "Main test storage area"
+
+- tapOn: "Save"
+
+# Storage should appear in list
+- assertVisible: "Test Warehouse"

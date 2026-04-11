@@ -176,21 +176,33 @@ struct WebView: UIViewRepresentable {
 
 struct PrivacyPolicyView: View {
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         NavigationView {
-            WebView(htmlFileName: "privacy")
+            SafariWebView(url: URL(string: "https://vishuddhi.in/privacy.html")!)
                 .navigationTitle("Privacy Policy")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Done") {
-                            dismiss()
-                        }
+                        Button("Done") { dismiss() }
                     }
                 }
         }
     }
+}
+
+import SafariServices
+
+struct SafariWebView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let config = SFSafariViewController.Configuration()
+        config.entersReaderIfAvailable = false
+        return SFSafariViewController(url: url, configuration: config)
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
 #Preview {

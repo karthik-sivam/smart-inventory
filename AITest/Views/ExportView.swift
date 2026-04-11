@@ -192,6 +192,7 @@ struct ExportView: View {
                     exportedFileURL = fileURL
                     alertMessage = "Your \(selectedFormat == .csv ? "Excel" : "PDF") file has been created successfully!"
                     showingAlert = true
+                    AdManager.shared.recordCompletion(event: .exportCompleted)
                 }
             } else {
                 await MainActor.run {

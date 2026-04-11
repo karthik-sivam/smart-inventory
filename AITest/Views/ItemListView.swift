@@ -5,30 +5,14 @@ struct ItemListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var items: [InventoryItem]
     @Query private var storages: [Storage]
-    
-    @State private var searchText = ""
-    @State private var selectedStorage: Storage?
+    @StateObject private var viewModel = ItemListViewModel()
     @State private var showingAddItem = false
     @State private var showingExport = false
     @State private var showingEditItem: InventoryItem?
     @State private var showingDeleteAlert: InventoryItem?
-    
-    var filteredItems: [InventoryItem] {
-        var result = items
-        
-        if let selectedStorage = selectedStorage {
-            result = result.filter { $0.storage?.id == selectedStorage.id }
-        }
-        
-        if !searchText.isEmpty {
-            result = result.filter { 
-                $0.name.localizedCaseInsensitiveContains(searchText) || 
-                $0.sku.localizedCaseInsensitiveContains(searchText)
-            }
-        }
-        
-        return result
-    }
+    @State private var showingQuickCount: InventoryItem? = nil
+    @State private var showingFullCount: InventoryItem? = nil
+    @State private var pendingFullCountItem: InventoryItem? = nil
     
     var body: some View {
         NavigationView {
@@ -46,6 +30,7 @@ struct ItemListView: View {
                                 .font(.title2)
                                 .foregroundColor(.blue)
                         }
+                        .accessibilityLabel("Export Data")
                         
                         Button(action: { showingAddItem = true }) {
                             Image(systemName: "plus")
@@ -60,19 +45,19 @@ struct ItemListView: View {
                 VStack(spacing: 12) {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            Button(action: { selectedStorage = nil }) {
+                            Button(action: { viewModel.setSelectedStorage(nil) }) {
                                 Text("All Storages")
                                     .font(.caption)
                                     .fontWeight(.medium)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
-                                    .background(selectedStorage == nil ? Color.blue : Color(.systemGray5))
-                                    .foregroundColor(selectedStorage == nil ? .white : .primary)
+                                    .background(viewModel.selectedStorage == nil ? Color.blue : Color(.systemGray5))
+                                    .foregroundColor(viewModel.selectedStorage == nil ? .white : .primary)
                                     .cornerRadius(16)
                             }
                             
                             ForEach(storages, id: \.id) { storage in
-                                Button(action: { selectedStorage = storage }) {
+                                Button(action: { viewModel.setSelectedStorage(storage) }) {
                                     HStack(spacing: 6) {
                                         Circle()
                                             .fill(Color(hex: storage.color) ?? .blue)
@@ -84,8 +69,8 @@ struct ItemListView: View {
                                     .fontWeight(.medium)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
-                                    .background(selectedStorage?.id == storage.id ? Color.blue : Color(.systemGray5))
-                                    .foregroundColor(selectedStorage?.id == storage.id ? .white : .primary)
+                                    .background(viewModel.selectedStorage?.id == storage.id ? Color.blue : Color(.systemGray5))
+                                    .foregroundColor(viewModel.selectedStorage?.id == storage.id ? .white : .primary)
                                     .cornerRadius(16)
                                 }
                             }
@@ -93,23 +78,26 @@ struct ItemListView: View {
                         .padding(.horizontal)
                     }
                     
-                    SearchBar(text: $searchText, placeholder: "Search items...")
+                    SearchBar(text: $viewModel.searchText, placeholder: "Search items...")
+                        .onChange(of: viewModel.searchText) { newValue in
+                            viewModel.setSearchText(newValue)
+                        }
                         .padding(.horizontal)
                 }
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        if filteredItems.isEmpty {
+                        if viewModel.filteredItems.isEmpty {
                             VStack(spacing: 16) {
                                 Image(systemName: "cube.box")
                                     .font(.system(size: 48))
                                     .foregroundColor(.gray)
                                 
-                                Text(searchText.isEmpty ? "No items found" : "No items match your search")
+                                Text(viewModel.searchText.isEmpty ? "No items found" : "No items match your search")
                                     .font(.title3)
                                     .fontWeight(.medium)
                                     .foregroundColor(.secondary)
                                 
-                                if searchText.isEmpty && selectedStorage == nil {
+                                if viewModel.searchText.isEmpty && viewModel.selectedStorage == nil {
                                     Text("Add items to your storages to get started")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
@@ -119,7 +107,7 @@ struct ItemListView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 60)
                         } else {
-                            ForEach(filteredItems.sorted(by: { $0.name < $1.name }), id: \.id) { item in
+                            ForEach(viewModel.filteredItems.sorted(by: { $0.name < $1.name }), id: \.id) { item in
                                                             HStack {
                                 NavigationLink(destination: ItemDetailView(item: item)) {
                                     ItemRowView(item: item)
@@ -137,7 +125,18 @@ struct ItemListView: View {
                                             .clipShape(Circle())
                                             .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
                                     }
-                                    
+
+                                    Button(action: {
+                                        showingQuickCount = item
+                                    }) {
+                                        Image(systemName: "list.clipboard.fill")
+                                            .font(.title2)
+                                            .foregroundColor(.green)
+                                            .background(Color.white)
+                                            .clipShape(Circle())
+                                            .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                                    }
+
                                     Button(action: {
                                         showingDeleteAlert = item
                                     }) {
@@ -170,6 +169,19 @@ struct ItemListView: View {
         .sheet(item: $showingEditItem) { item in
             EditItemView(item: item)
         }
+        .sheet(item: $showingQuickCount, onDismiss: {
+            if let pending = pendingFullCountItem {
+                pendingFullCountItem = nil
+                showingFullCount = pending
+            }
+        }) { item in
+            QuickCountView(item: item, onOpenFullCount: {
+                pendingFullCountItem = item
+            })
+        }
+        .sheet(item: $showingFullCount) { item in
+            CountItemView(item: item)
+        }
         .alert("Delete Item", isPresented: Binding(
             get: { showingDeleteAlert != nil },
             set: { if !$0 { showingDeleteAlert = nil } }
@@ -179,7 +191,7 @@ struct ItemListView: View {
             }
             Button("Delete", role: .destructive) {
                 if let item = showingDeleteAlert {
-                    deleteItem(item)
+                    viewModel.deleteItem(item)
                 }
                 showingDeleteAlert = nil
             }
@@ -188,17 +200,15 @@ struct ItemListView: View {
                 Text("Are you sure you want to delete '\(item.name)'? This action cannot be undone.")
             }
         }
-    }
-    
-    private func deleteItem(_ item: InventoryItem) {
-        // Delete the item
-        modelContext.delete(item)
-        
-        // Save changes
-        try? modelContext.save()
-        
-        // Track completion for ad system
-        AdManager.shared.recordCompletion(event: .itemUpdated)
+        .onAppear {
+            viewModel.bind(modelContext: modelContext, items: items, storages: storages)
+        }
+        .onChange(of: items) { newItems in
+            viewModel.updateItems(newItems)
+        }
+        .onChange(of: storages) { newStorages in
+            viewModel.updateStorages(newStorages)
+        }
     }
 }
 
@@ -273,31 +283,26 @@ struct AddItemToStorageView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var storages: [Storage]
     @Query private var uoms: [UOM]
-    
-    @State private var name = ""
-    @State private var description = ""
-    @State private var sku = ""
-    @State private var barcode = ""
-    @State private var currentQuantity = ""
-    @State private var minQuantity = ""
-    @State private var maxQuantity = ""
-    @State private var unitCost = ""
-    @State private var selectedStorage: Storage?
-    @State private var selectedUOM: UOM?
+    @StateObject private var formVM = ItemFormViewModel()
+    @State private var showingItemLimitPaywall = false
+
+    private var selectedStorageItemCount: Int {
+        formVM.selectedStorage?.items.count ?? 0
+    }
     
     var body: some View {
         NavigationView {
             Form {
                 Section(header: Text("Item Information")) {
-                    TextField("Item Name", text: $name)
-                    TextField("Description (Optional)", text: $description, axis: .vertical)
+                    TextField("Item Name", text: $formVM.name)
+                    TextField("Description (Optional)", text: $formVM.description, axis: .vertical)
                         .lineLimit(3)
-                    TextField("SKU (Optional)", text: $sku)
-                    TextField("Barcode (Optional)", text: $barcode)
+                    TextField("SKU (Optional)", text: $formVM.sku)
+                    TextField("Barcode (Optional)", text: $formVM.barcode)
                 }
                 
                 Section(header: Text("Storage & UOM")) {
-                    Picker("Storage", selection: $selectedStorage) {
+                    Picker("Storage", selection: $formVM.selectedStorage) {
                         Text("Select Storage").tag(nil as Storage?)
                         ForEach(storages, id: \.id) { storage in
                             HStack {
@@ -311,7 +316,7 @@ struct AddItemToStorageView: View {
                     }
                     .pickerStyle(MenuPickerStyle())
                     
-                    Picker("Unit of Measure", selection: $selectedUOM) {
+                    Picker("Unit of Measure", selection: $formVM.selectedUOM) {
                         Text("Select UOM").tag(nil as UOM?)
                         ForEach(uoms, id: \.id) { uom in
                             Text("\(uom.name) (\(uom.symbol))").tag(uom as UOM?)
@@ -321,16 +326,16 @@ struct AddItemToStorageView: View {
                 }
                 
                 Section(header: Text("Quantity & Pricing")) {
-                    TextField("Current Quantity", text: $currentQuantity)
+                    TextField("Current Quantity", text: $formVM.currentQuantity)
                         .keyboardType(.decimalPad)
                     
-                    TextField("Min Quantity", text: $minQuantity)
+                    TextField("Min Quantity", text: $formVM.minQuantity)
                         .keyboardType(.decimalPad)
                     
-                    TextField("Max Quantity", text: $maxQuantity)
+                    TextField("Max Quantity", text: $formVM.maxQuantity)
                         .keyboardType(.decimalPad)
                     
-                    TextField("Unit Cost", text: $unitCost)
+                    TextField("Unit Cost", text: $formVM.unitCost)
                         .keyboardType(.decimalPad)
                 }
             }
@@ -346,40 +351,26 @@ struct AddItemToStorageView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
-                        saveItem()
+                        if SubscriptionManager.shared.canAddItem(currentItemCount: selectedStorageItemCount) {
+                            formVM.saveNew()
+                            dismiss()
+                        } else {
+                            showingItemLimitPaywall = true
+                        }
                     }
-                    .disabled(name.isEmpty || selectedStorage == nil || selectedUOM == nil)
+                    .disabled(!formVM.canSaveNew)
                 }
             }
         }
+        .sheet(isPresented: $showingItemLimitPaywall) {
+            PaywallView()
+        }
         .onAppear {
-            if let defaultUOM = uoms.first(where: { $0.isDefault }) {
-                selectedUOM = defaultUOM
+            formVM.bind(modelContext: modelContext)
+            if formVM.selectedUOM == nil, let defaultUOM = uoms.first(where: { $0.isDefault }) {
+                formVM.selectedUOM = defaultUOM
             }
         }
-    }
-    
-    private func saveItem() {
-        let item = InventoryItem(
-            name: name,
-            description: description,
-            sku: sku,
-            barcode: barcode,
-            currentQuantity: Double(currentQuantity) ?? 0,
-            minQuantity: Double(minQuantity) ?? 0,
-            maxQuantity: Double(maxQuantity) ?? 0,
-            unitCost: Double(unitCost) ?? 0,
-            storage: selectedStorage,
-            uom: selectedUOM
-        )
-        
-        modelContext.insert(item)
-        try? modelContext.save()
-        
-        // Track completion for ad system
-        AdManager.shared.recordCompletion(event: .itemAdded)
-        
-        dismiss()
     }
 }
 

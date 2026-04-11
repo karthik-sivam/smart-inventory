@@ -1,0 +1,29 @@
+# Flow 13 — Export CSV
+# Tests exporting inventory as a CSV file
+appId: com.vishuddhi.smartinventory
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Items"
+
+# Open export
+- tapOn: "Export Data"
+- assertVisible: "What to Export"
+
+# Select Inventory Summary (default)
+- assertVisible: "Inventory Summary"
+
+# Select CSV format
+- tapOn: "Excel (CSV)"
+
+# Check preview section
+- assertVisible: "Preview"
+- assertVisible: "Items to export"
+
+- tapOn:
+    text: "Export Data"
+    index: 1
+- waitForAnimationToEnd
+
+# Success alert
+- assertVisible: "Export Complete"
+- tapOn: "OK"

@@ -1,0 +1,21 @@
+# Flow 15 — Settings Screen
+# Tests settings screen renders correctly and currency picker works
+appId: com.vishuddhi.smartinventory
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Profile"
+- tapOn: "Settings"
+- assertVisible: "Settings"
+
+# Subscription section
+- assertVisible: "Free Plan"
+- assertVisible: "Restore Purchases"
+
+# Currency section
+- assertVisible: "Currency"
+
+# Privacy section
+- assertVisible: "Privacy & Ads"
+
+# Navigate back
+- tapOn: "Profile"

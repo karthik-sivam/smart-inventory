@@ -6,9 +6,9 @@
 //
 
 import Foundation
-import FirebaseAuth
+@preconcurrency import FirebaseAuth
 import SwiftUI
-import GoogleSignIn
+@preconcurrency import GoogleSignIn
 
 @MainActor
 class AuthManager: ObservableObject {
@@ -26,7 +26,7 @@ class AuthManager: ObservableObject {
     
     private func setupAuthStateListener() {
         Auth.auth().addStateDidChangeListener { [weak self] _, user in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 self?.currentUser = user
                 self?.isAuthenticated = user != nil
             }

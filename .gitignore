@@ -61,3 +61,6 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 AITest.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+# Maestro test credentials
+maestro/config.yaml

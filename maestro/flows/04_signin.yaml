@@ -1,0 +1,27 @@
+# Flow 04 — Sign In
+# Tests signing in with existing credentials
+# Prerequisite: Account exists in Firebase with TEST_EMAIL / TEST_PASSWORD
+appId: com.vishuddhi.smartinventory
+---
+- runFlow: 00_signout_helper.yaml
+# After signout, app is on auth screen already — no Skip needed
+
+# Switch to Sign In mode
+- tapOn: "Sign In"
+- assertVisible: "Welcome back"
+
+# Fill credentials
+- tapOn:
+    text: "Email"
+    index: 0
+- inputText: ${TEST_EMAIL}
+
+- tapOn: "Password"
+- inputText: ${TEST_PASSWORD}
+
+- tapOn: "Sign In"
+
+# Should reach dashboard
+- assertVisible: "Smart Inventory"
+- assertVisible: "Total Storages"
+- assertVisible: "Total Items"

@@ -8,47 +8,25 @@ struct EditItemView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var storages: [Storage]
     @Query private var uoms: [UOM]
-    
-    @State private var name: String
-    @State private var description: String
-    @State private var sku: String
-    @State private var barcode: String
-    @State private var currentQuantity: String
-    @State private var minQuantity: String
-    @State private var maxQuantity: String
-    @State private var unitCost: String
-    @State private var selectedStorage: Storage?
-    @State private var selectedUOM: UOM?
-    @State private var isOutOfStock: Bool
+    @StateObject private var formVM = ItemFormViewModel()
     
     init(item: InventoryItem) {
         self.item = item
-        self._name = State(initialValue: item.name)
-        self._description = State(initialValue: item.itemDescription)
-        self._sku = State(initialValue: item.sku)
-        self._barcode = State(initialValue: item.barcode)
-        self._currentQuantity = State(initialValue: String(format: "%.2f", item.currentQuantity))
-        self._minQuantity = State(initialValue: String(format: "%.2f", item.minQuantity))
-        self._maxQuantity = State(initialValue: String(format: "%.2f", item.maxQuantity))
-        self._unitCost = State(initialValue: String(format: "%.2f", item.unitCost))
-        self._selectedStorage = State(initialValue: item.storage)
-        self._selectedUOM = State(initialValue: item.uom)
-        self._isOutOfStock = State(initialValue: item.isOutOfStock)
     }
     
     var body: some View {
         NavigationView {
             Form {
                 Section(header: Text("Item Information")) {
-                    TextField("Item Name", text: $name)
-                    TextField("Description (Optional)", text: $description, axis: .vertical)
+                    TextField("Item Name", text: $formVM.name)
+                    TextField("Description (Optional)", text: $formVM.description, axis: .vertical)
                         .lineLimit(3)
-                    TextField("SKU", text: $sku)
-                    TextField("Barcode (Optional)", text: $barcode)
+                    TextField("SKU", text: $formVM.sku)
+                    TextField("Barcode (Optional)", text: $formVM.barcode)
                 }
                 
                 Section(header: Text("Storage & UOM")) {
-                    Picker("Storage", selection: $selectedStorage) {
+                    Picker("Storage", selection: $formVM.selectedStorage) {
                         Text("Select Storage").tag(nil as Storage?)
                         ForEach(storages, id: \.id) { storage in
                             HStack {
@@ -62,7 +40,7 @@ struct EditItemView: View {
                     }
                     .pickerStyle(MenuPickerStyle())
                     
-                    Picker("Unit of Measure", selection: $selectedUOM) {
+                    Picker("Unit of Measure", selection: $formVM.selectedUOM) {
                         Text("Select UOM").tag(nil as UOM?)
                         ForEach(uoms, id: \.id) { uom in
                             Text("\(uom.name) (\(uom.symbol))").tag(uom as UOM?)
@@ -75,7 +53,7 @@ struct EditItemView: View {
                     HStack {
                         Text("Current Quantity")
                         Spacer()
-                        TextField("0.0", text: $currentQuantity)
+                        TextField("0.0", text: $formVM.currentQuantity)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                     }
@@ -83,7 +61,7 @@ struct EditItemView: View {
                     HStack {
                         Text("Minimum Quantity")
                         Spacer()
-                        TextField("0.0", text: $minQuantity)
+                        TextField("0.0", text: $formVM.minQuantity)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                     }
@@ -91,7 +69,7 @@ struct EditItemView: View {
                     HStack {
                         Text("Maximum Quantity")
                         Spacer()
-                        TextField("0.0", text: $maxQuantity)
+                        TextField("0.0", text: $formVM.maxQuantity)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                     }
@@ -101,16 +79,16 @@ struct EditItemView: View {
                     HStack {
                         Text("Unit Cost")
                         Spacer()
-                        TextField("0.00", text: $unitCost)
+                        TextField("0.00", text: $formVM.unitCost)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                     }
                 }
                 
                 Section(header: Text("Stock Status")) {
-                    Toggle("Mark as Out of Stock", isOn: $isOutOfStock)
+                    Toggle("Mark as Out of Stock", isOn: $formVM.isOutOfStock)
                     
-                    if !isOutOfStock {
+                    if !formVM.isOutOfStock {
                         HStack {
                             Text("Stock Status")
                             Spacer()
@@ -155,12 +133,17 @@ struct EditItemView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
-                        saveItem()
+                        formVM.saveEdits(to: item)
+                        dismiss()
                     }
-                    .disabled(name.isEmpty || currentQuantity.isEmpty)
+                    .disabled(!formVM.canSaveEdit)
                 }
             }
             .navigationBarBackButtonHidden(true)
+        }
+        .onAppear {
+            formVM.bind(modelContext: modelContext)
+            formVM.load(from: item)
         }
     }
     
@@ -174,27 +157,6 @@ struct EditItemView: View {
         }
     }
     
-    private func saveItem() {
-        item.name = name
-        item.itemDescription = description
-        item.sku = sku.isEmpty ? "SKU-\(UUID().uuidString.prefix(6))" : sku
-        item.barcode = barcode
-        item.currentQuantity = Double(currentQuantity) ?? 0
-        item.minQuantity = Double(minQuantity) ?? 0
-        item.maxQuantity = Double(maxQuantity) ?? 0
-        item.unitCost = Double(unitCost) ?? 0
-        item.storage = selectedStorage
-        item.uom = selectedUOM
-        item.isOutOfStock = isOutOfStock
-        item.updatedAt = Date()
-        
-        try? modelContext.save()
-        
-        // Track completion for ad system
-        AdManager.shared.recordCompletion(event: .itemUpdated)
-        
-        dismiss()
-    }
 }
 
 #Preview {

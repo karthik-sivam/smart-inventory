@@ -19,7 +19,7 @@ final class UOM {
         self.createdAt = Date()
     }
     
-    static let standardUOMs = [
+    @MainActor static let standardUOMs = [
         UOM(name: "Pieces", symbol: "pcs", category: "Count", isDefault: true),
         UOM(name: "Kilograms", symbol: "kg", category: "Weight"),
         UOM(name: "Grams", symbol: "g", category: "Weight"),

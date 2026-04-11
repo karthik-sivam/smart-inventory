@@ -5,6 +5,7 @@ import PDFKit
 import UIKit
 import WebKit
 
+@MainActor
 class ExportManager: ObservableObject {
     @Published var isExporting = false
     @Published var exportProgress: Double = 0.0

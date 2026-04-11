@@ -14,6 +14,10 @@ struct DashboardView: View {
     @State private var showingAllItems = false
     @State private var showingLowStockItems = false
     @State private var showingOutOfStockItems = false
+
+    private var analyticsDateLimit: Date {
+        SubscriptionManager.shared.analyticsDateLimit ?? Date()
+    }
     
 
     
@@ -117,12 +121,33 @@ struct DashboardView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 40)
                             } else {
+                                let recentItems = items
+                                    .filter { $0.updatedAt >= analyticsDateLimit }
+                                    .sorted(by: { $0.updatedAt > $1.updatedAt })
+                                    .prefix(5)
                                 LazyVStack(spacing: 8) {
-                                    ForEach(items.sorted(by: { $0.updatedAt > $1.updatedAt }).prefix(5), id: \.id) { item in
+                                    ForEach(Array(recentItems), id: \.id) { item in
                                         RecentActivityRow(item: item)
                                     }
                                 }
                                 .padding(.horizontal)
+
+                                // Nudge free users to upgrade for full history
+                                if !SubscriptionManager.shared.canUseAdvancedAnalytics {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "lock.fill")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Text("Showing last 30 days · ")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        + Text("Upgrade for full history")
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                    }
+                                    .padding(.horizontal)
+                                    .padding(.top, 4)
+                                }
                             }
                         }
                         
@@ -173,9 +198,9 @@ struct DashboardView: View {
     private var lowStockItems: [InventoryItem] {
         items.filter { $0.isLowStock }
     }
-    
+
     private var outOfStockItems: [InventoryItem] {
-        items.filter { $0.isOutOfStock }
+        items.filter { $0.currentQuantity <= 0 || $0.isOutOfStock }
     }
     
     private var totalInventoryValue: Double {

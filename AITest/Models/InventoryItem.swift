@@ -40,7 +40,7 @@ final class InventoryItem {
     }
     
     var isLowStock: Bool {
-        currentQuantity <= minQuantity
+        minQuantity > 0 && currentQuantity > 0 && currentQuantity <= minQuantity
     }
     
     var isOverStock: Bool {
@@ -52,7 +52,7 @@ final class InventoryItem {
     }
     
     var stockStatus: String {
-        if isOutOfStock {
+        if currentQuantity <= 0 || isOutOfStock {
             return "Out of Stock"
         } else if isLowStock {
             return "Low Stock"

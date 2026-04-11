@@ -1,0 +1,14 @@
+# Flow 17 — Paywall: Storage Limit
+# Tests that paywall appears when free user tries to create a 6th storage
+# Prerequisite: Account already has 5 storages
+appId: com.vishuddhi.smartinventory
+---
+- launchApp
+- tapOn: "Storages"
+
+# Try to add a 6th storage
+- tapOn: "+"
+
+# Paywall should appear instead of the add form
+- assertVisible: "Pro"
+- assertNotVisible: "Storage Name"

@@ -1,0 +1,17 @@
+# Signs out via Profile tab
+appId: com.vishuddhi.smartinventory
+---
+- tapOn: "Profile"
+- waitForAnimationToEnd
+# Tap the Sign Out row in the list
+- tapOn:
+    text: "Sign Out"
+    index: 0
+- waitForAnimationToEnd
+# Confirm the alert — tap the destructive "Sign Out" button (index 1, after Cancel)
+- tapOn:
+    text: "Sign Out"
+    index: 1
+- waitForAnimationToEnd
+# After sign out, app shows auth screen
+- assertVisible: "Smart Inventory"

@@ -1,0 +1,25 @@
+# Flow 16 — Profile Screen
+# Tests profile screen content and navigation
+appId: com.vishuddhi.smartinventory
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Profile"
+- assertVisible: "Profile"
+
+# Subscription info
+- assertVisible: "Go Pro"
+
+# Support section
+- assertVisible: "Help & Support"
+
+# Privacy policy
+- tapOn: "Privacy Policy"
+- assertVisible: "Privacy"
+
+# Go back
+- tapOn: "Done"
+- assertVisible: "Profile"
+
+# Account section
+- assertVisible: "Sign Out"
+- assertVisible: "Delete Account"

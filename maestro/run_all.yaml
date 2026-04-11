@@ -1,0 +1,30 @@
+# Smart Inventory — Full Test Suite (Sequential)
+# Usage: maestro test maestro/run_all.yaml
+appId: com.vishuddhi.smartinventory
+---
+# ── Onboarding (clears app state) ────────────────
+- runFlow: flows/01_onboarding.yaml
+- runFlow: flows/02_onboarding_skip.yaml
+
+# ── Auth flows (signs out first, then tests) ──────
+- runFlow: flows/05_signin_wrong_password.yaml
+- runFlow: flows/06_forgot_password.yaml
+- runFlow: flows/04_signin.yaml
+
+# ── Core flows (require login — uses 00_signin_helper) ──
+- runFlow: flows/11_dashboard.yaml
+- runFlow: flows/07_add_storage.yaml
+- runFlow: flows/08_add_item.yaml
+- runFlow: flows/12_items_tab.yaml
+- runFlow: flows/09_quick_count.yaml
+- runFlow: flows/10_full_count.yaml
+- runFlow: flows/13_export_csv.yaml
+- runFlow: flows/14_export_pdf.yaml
+- runFlow: flows/15_settings.yaml
+- runFlow: flows/16_profile.yaml
+- runFlow: flows/19_delete_storage.yaml
+- runFlow: flows/20_signout.yaml
+
+# ── Paywall flows (manual — need seeded data) ────
+# - runFlow: flows/17_paywall_storage_limit.yaml
+# - runFlow: flows/18_paywall_item_limit.yaml

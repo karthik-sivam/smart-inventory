@@ -1,0 +1,43 @@
+# Flow 08 — Add Item to Storage
+# Tests adding an item inside a storage
+# Prerequisite: "Test Warehouse" storage exists
+appId: com.vishuddhi.smartinventory
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Storages"
+
+# Open Test Warehouse
+- tapOn: "Test Warehouse"
+- assertVisible: "Test Warehouse"
+
+# Open add item — tap the + button in nav bar (accessibility label "Add Item")
+- tapOn:
+    text: "Add Item"
+
+# Fill item form
+- tapOn: "Item Name"
+- inputText: "Test Product"
+
+- tapOn: "Description (Optional)"
+- inputText: "A test inventory item"
+
+- tapOn: "SKU (Optional)"
+- inputText: "SKU-001"
+
+- tapOn: "Current Quantity"
+- inputText: "50"
+
+- tapOn: "Min Quantity"
+- inputText: "10"
+
+- tapOn: "Max Quantity"
+- inputText: "100"
+
+- tapOn: "Unit Cost"
+- inputText: "25"
+
+- tapOn: "Save"
+
+# Item should appear in storage
+- assertVisible: "Test Product"
+- assertVisible: "SKU: SKU-001"

@@ -1,0 +1,43 @@
+# DEBUG — Sign In Step by Step
+# Takes a screenshot after every action so we can see exactly where it fails
+appId: com.vishuddhi.smartinventory
+---
+- clearState
+- launchApp
+- takeScreenshot: debug_01_app_launched
+
+- tapOn: "Skip"
+- takeScreenshot: debug_02_after_skip
+
+- tapOn: "Sign In"
+- takeScreenshot: debug_03_after_signin_tap
+
+- tapOn:
+    text: "Email"
+    index: 0
+- takeScreenshot: debug_04_email_focused
+
+- inputText: ${TEST_EMAIL}
+- takeScreenshot: debug_05_email_entered
+
+- tapOn: "Password"
+- takeScreenshot: debug_06_password_focused
+
+- inputText: ${TEST_PASSWORD}
+- takeScreenshot: debug_07_password_entered
+
+- tapOn: "Sign In"
+- takeScreenshot: debug_08_after_signin_button
+
+- waitForAnimationToEnd
+- takeScreenshot: debug_09_after_animation
+
+- tapOn:
+    text: "Allow"
+    optional: true
+- takeScreenshot: debug_10_after_allow
+
+- tapOn:
+    text: "OK"
+    optional: true
+- takeScreenshot: debug_11_final_state

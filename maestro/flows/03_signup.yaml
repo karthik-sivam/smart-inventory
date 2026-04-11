@@ -1,0 +1,31 @@
+# Flow 03 — Sign Up
+# Tests creating a new account
+# NOTE: Use a unique email each run or pre-delete the account in Firebase
+appId: com.vishuddhi.smartinventory
+---
+- clearState
+- launchApp
+
+# Skip onboarding
+- tapOn: "Skip"
+- assertVisible: "Create your account"
+
+# Fill sign up form
+- tapOn:
+    text: "Email"
+    index: 0
+- inputText: ${TEST_EMAIL}
+
+- tapOn: "Password"
+- inputText: ${TEST_PASSWORD}
+
+- tapOn: "Confirm Password"
+- inputText: ${TEST_PASSWORD}
+
+- tapOn: "Sign Up"
+
+# Should land on dashboard or email verification screen
+- assertTrue:
+    visible: "Dashboard"
+    OR:
+    visible: "verify"

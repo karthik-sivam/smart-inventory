@@ -1,0 +1,16 @@
+# Flow 11 — Dashboard
+# Tests that dashboard KPI cards and recent activity render correctly
+appId: com.vishuddhi.smartinventory
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+
+# KPI cards
+- assertVisible: "Total Storages"
+- assertVisible: "Total Items"
+- assertVisible: "Low Stock Items"
+- assertVisible: "Out of Stock"
+- assertVisible: "Total Value"
+
+# Recent activity section
+- assertVisible: "Recent Activity"

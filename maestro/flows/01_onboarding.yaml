@@ -1,0 +1,26 @@
+# Flow 01 — Onboarding
+# Tests the 4-page onboarding walkthrough on first launch
+appId: com.vishuddhi.smartinventory
+---
+- clearState
+- launchApp
+- assertVisible: "Know What You Have"
+- assertVisible: "Skip"
+
+# Page 1 → Page 2
+- tapOn: "Next"
+- assertVisible: "Organise by Location"
+
+# Page 2 → Page 3
+- tapOn: "Next"
+- assertVisible: "Never Run Out"
+
+# Page 3 → Page 4
+- tapOn: "Next"
+- assertVisible: "Your Data, Everywhere"
+- assertVisible: "No credit card required. Free forever."
+- assertNotVisible: "Skip"
+
+# Complete onboarding
+- tapOn: "Get Started"
+- assertVisible: "Smart Inventory"

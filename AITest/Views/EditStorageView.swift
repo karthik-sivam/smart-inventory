@@ -99,17 +99,18 @@ struct EditStorageView: View {
     }
     
     private func saveStorage() {
-        storage.name = name
-        storage.location = location
+        storage.name               = name
+        storage.location           = location
         storage.storageDescription = description
-        storage.color = selectedColor
-        storage.updatedAt = Date()
-        
+        storage.color              = selectedColor
+        storage.updatedAt          = Date()
+
         try? modelContext.save()
-        
-        // Track completion for ad system
+
+        // Sync to Firestore (fire-and-forget)
+        FirestoreManager.shared.syncStorage(storage)
+
         AdManager.shared.recordCompletion(event: .storageUpdated)
-        
         dismiss()
     }
 }

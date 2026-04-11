@@ -1,0 +1,109 @@
+{
+  "identifier" : "SmartInventory",
+  "nonConsumableProducts" : [
+    {
+      "displayPrice" : "3.99",
+      "familyShareable" : false,
+      "internalID" : "E3F4A5B6-C7D8-4E9F-0A1B-2C3D4E5F6A7B",
+      "localizations" : [
+        {
+          "description" : "Remove all ads from Smart Inventory forever. One-time purchase — no subscription.",
+          "displayName" : "Remove Ads",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.vishuddhi.smartinventory.removeads",
+      "referenceName" : "Remove Ads"
+    }
+  ],
+  "settings" : {
+    "_askToBuyEnabled" : false,
+    "_billingGracePeriodEnabled" : true,
+    "_billingGracePeriodISO8601Duration" : "P16D",
+    "_confirmToAttemptIneligibleTransaction" : true,
+    "_customerCancellationConfirmation" : false,
+    "_customRenewalRate" : 0,
+    "_disableDialogs" : false,
+    "_failTransactionsEnabled" : false,
+    "_interruptedPurchasesEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitVersion" : 2,
+    "_timeRate" : 1,
+    "randomizeRenewal" : false
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+      "localizations" : [
+        {
+          "locale" : "en_US",
+          "name" : "Smart Inventory Pro"
+        }
+      ],
+      "name" : "Smart Inventory Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "2.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "C1D2E3F4-A5B6-4C7D-8E9F-0A1B2C3D4E5F",
+          "introductoryOffer" : {
+            "displayPrice" : "0.00",
+            "offerID" : "intro_7day_free_monthly",
+            "paymentMode" : "FreeTrial",
+            "period" : 1,
+            "periodUnit" : "Week",
+            "type" : "Introductory"
+          },
+          "localizations" : [
+            {
+              "description" : "Unlimited storages, unlimited items, advanced analytics, barcode pro, and no ads.",
+              "displayName" : "Pro Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.vishuddhi.smartinventory.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Pro Monthly",
+          "subscriptionGroupID" : "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "22.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "D2E3F4A5-B6C7-4D8E-9F0A-1B2C3D4E5F6A",
+          "introductoryOffer" : {
+            "displayPrice" : "0.00",
+            "offerID" : "intro_7day_free_annual",
+            "paymentMode" : "FreeTrial",
+            "period" : 1,
+            "periodUnit" : "Week",
+            "type" : "Introductory"
+          },
+          "localizations" : [
+            {
+              "description" : "Best value. All Pro features for the price of ~$1.92/month. Save 36% vs monthly.",
+              "displayName" : "Pro Annual",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.vishuddhi.smartinventory.pro.annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Pro Annual",
+          "subscriptionGroupID" : "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

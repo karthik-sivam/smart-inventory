@@ -1,0 +1,10 @@
+# Helper — Signs out via the app UI so auth flows start from a clean state
+appId: com.vishuddhi.smartinventory
+---
+- launchApp
+- waitForAnimationToEnd
+# Only sign out if we're on the main app (dashboard visible)
+- runFlow:
+    when:
+      visible: "Total Storages"
+    file: signout_steps.yaml

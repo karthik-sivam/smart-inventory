@@ -1,0 +1,28 @@
+# Flow 09 — Quick Count
+# Tests the inline quick count button on an item
+# Prerequisite: "Test Product" item exists in "Test Warehouse"
+appId: com.vishuddhi.smartinventory
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Storages"
+- tapOn: "Test Warehouse"
+- assertVisible: "Test Product"
+
+# Tap Count button on item row
+- tapOn: "Count"
+- assertVisible: "Quick Count"
+- assertVisible: "New Quantity"
+
+# Enter new quantity
+- tapOn: "New Quantity"
+- eraseText: 10
+- inputText: "45"
+
+# Add optional note
+- tapOn: "Notes (optional)"
+- inputText: "Monthly stock check"
+
+- tapOn: "Save"
+
+# Should return to storage detail
+- assertVisible: "Test Product"

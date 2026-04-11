@@ -1,0 +1,11 @@
+# Helper — Ensure app is on Dashboard
+# Firebase Auth token persists in Keychain across clearState on iOS.
+# So we just relaunch and wait for Dashboard — user is always logged in.
+# To test fresh sign-in, use 04_signin.yaml which uses clearState + manual login.
+appId: com.vishuddhi.smartinventory
+---
+- launchApp
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Total Storages"
+    timeout: 20000

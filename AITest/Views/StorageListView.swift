@@ -4,23 +4,13 @@ import SwiftData
 struct StorageListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var storages: [Storage]
-    
-    @State private var searchText = ""
+    @StateObject private var viewModel = StorageListViewModel()
+    @EnvironmentObject private var subscriptionManager: SubscriptionManager
     @State private var showingAddStorage = false
     @State private var showingEditStorage: Storage?
     @State private var showingDeleteAlert: Storage?
-    
-    var filteredStorages: [Storage] {
-        if searchText.isEmpty {
-            return storages
-        } else {
-            return storages.filter { 
-                $0.name.localizedCaseInsensitiveContains(searchText) || 
-                $0.location.localizedCaseInsensitiveContains(searchText)
-            }
-        }
-    }
-    
+    @State private var showingPaywall = false
+
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
@@ -28,10 +18,16 @@ struct StorageListView: View {
                     Text("Storages")
                         .font(.title2)
                         .fontWeight(.bold)
-                    
+
                     Spacer()
-                    
-                    Button(action: { showingAddStorage = true }) {
+
+                    Button(action: {
+                        if subscriptionManager.canCreateStorage(currentCount: storages.count) {
+                            showingAddStorage = true
+                        } else {
+                            showingPaywall = true
+                        }
+                    }) {
                         Image(systemName: "plus")
                             .font(.title2)
                             .foregroundColor(.blue)
@@ -40,20 +36,23 @@ struct StorageListView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 10)
                 
-                SearchBar(text: $searchText, placeholder: "Search storages...")
+                SearchBar(text: $viewModel.searchText, placeholder: "Search storages...")
+                    .onChange(of: viewModel.searchText) { newValue in
+                        viewModel.setSearchText(newValue)
+                    }
                     .padding(.horizontal)
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        if filteredStorages.isEmpty {
+                        if viewModel.filteredStorages.isEmpty {
                             VStack(spacing: 16) {
                                 Image(systemName: "archivebox")
                                     .font(.system(size: 48))
                                     .foregroundColor(.gray)
-                                Text(searchText.isEmpty ? "No storages yet" : "No storages found")
+                                Text(viewModel.searchText.isEmpty ? "No storages yet" : "No storages found")
                                     .font(.title3)
                                     .fontWeight(.medium)
                                     .foregroundColor(.secondary)
-                                if searchText.isEmpty {
+                                if viewModel.searchText.isEmpty {
                                     Text("Create your first storage area")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
@@ -62,7 +61,7 @@ struct StorageListView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 60)
                         } else {
-                            ForEach(filteredStorages, id: \.id) { storage in
+                            ForEach(viewModel.filteredStorages, id: \.id) { storage in
                                                         HStack {
                             NavigationLink(destination: StorageDetailView(storage: storage)) {
                                 StorageCard(storage: storage)
@@ -109,6 +108,9 @@ struct StorageListView: View {
         .sheet(item: $showingEditStorage) { storage in
             EditStorageView(storage: storage)
         }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView()
+        }
         .alert("Delete Storage", isPresented: Binding(
             get: { showingDeleteAlert != nil },
             set: { if !$0 { showingDeleteAlert = nil } }
@@ -118,7 +120,7 @@ struct StorageListView: View {
             }
             Button("Delete", role: .destructive) {
                 if let storage = showingDeleteAlert {
-                    deleteStorage(storage)
+                    viewModel.deleteStorage(storage)
                 }
                 showingDeleteAlert = nil
             }
@@ -127,22 +129,12 @@ struct StorageListView: View {
                 Text("Are you sure you want to delete '\(storage.name)'? This will also delete all items in this storage.")
             }
         }
-    }
-    
-    private func deleteStorage(_ storage: Storage) {
-        // Delete all items in the storage first
-        for item in storage.items {
-            modelContext.delete(item)
+        .onAppear {
+            viewModel.bind(modelContext: modelContext, storages: storages)
         }
-        
-        // Delete the storage
-        modelContext.delete(storage)
-        
-        // Save changes
-        try? modelContext.save()
-        
-        // Track completion for ad system
-        AdManager.shared.recordCompletion(event: .storageUpdated)
+        .onChange(of: storages) { newValue in
+            viewModel.updateStorages(newValue)
+        }
     }
 }
 
@@ -273,13 +265,16 @@ struct AddStorageView: View {
             description: description,
             color: selectedColor
         )
-        
+
         modelContext.insert(storage)
         try? modelContext.save()
-        
+
+        // Mirror to Firestore cloud
+        FirestoreManager.shared.syncStorage(storage)
+
         // Track completion for ad system
         AdManager.shared.recordCompletion(event: .storageCreated)
-        
+
         dismiss()
     }
 }

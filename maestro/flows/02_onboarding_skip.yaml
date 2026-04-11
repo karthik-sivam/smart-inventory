@@ -1,0 +1,12 @@
+# Flow 02 — Onboarding Skip
+# Tests that Skip button jumps directly to auth screen
+appId: com.vishuddhi.smartinventory
+---
+- clearState
+- launchApp
+- assertVisible: "Know What You Have"
+
+# Skip from page 1
+- tapOn: "Skip"
+# After skip: either auth screen (fresh install) or dashboard (Keychain session exists)
+- assertVisible: "Smart Inventory"
