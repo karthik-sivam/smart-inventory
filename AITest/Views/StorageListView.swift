@@ -90,6 +90,7 @@ struct StorageListView: View {
                                         .clipShape(Circle())
                                         .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
                                 }
+                                .accessibilityLabel("Delete \(storage.name)")
                             }
                             .padding(.leading, 8)
                         }

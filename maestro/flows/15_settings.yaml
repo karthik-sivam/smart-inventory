@@ -3,8 +3,11 @@
 appId: com.vishuddhi.smartinventory
 ---
 - runFlow: 00_signin_helper.yaml
-- tapOn: "Profile"
-- tapOn: "Settings"
+
+# Settings is accessed via the gear icon on the Dashboard
+- tapOn: "Dashboard"
+- tapOn:
+    id: "gear"
 - assertVisible: "Settings"
 
 # Subscription section
@@ -17,5 +20,5 @@ appId: com.vishuddhi.smartinventory
 # Privacy section
 - assertVisible: "Privacy & Ads"
 
-# Navigate back
-- tapOn: "Profile"
+# Close settings
+- tapOn: "Done"

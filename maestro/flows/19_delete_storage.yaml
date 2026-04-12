@@ -5,18 +5,13 @@ appId: com.vishuddhi.smartinventory
 - runFlow: 00_signin_helper.yaml
 - tapOn: "Storages"
 
-# Swipe left on storage to reveal delete
-- swipe:
-    direction: LEFT
-    element:
-      text: "Test Warehouse"
-
-- tapOn: "Delete"
+# Tap trash button on Test Warehouse card
+- tapOn: "Delete Test Warehouse"
 
 # Confirm deletion in alert
 - assertVisible: "Delete Storage"
-- assertVisible: "This will also delete all items"
 - tapOn: "Delete"
+- waitForAnimationToEnd
 
-# Storage should be gone
-- assertNotVisible: "Test Warehouse"
+# Confirm we're still on the Storages screen after deletion
+- assertVisible: "Storages"

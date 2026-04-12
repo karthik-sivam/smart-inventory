@@ -12,9 +12,10 @@ appId: com.vishuddhi.smartinventory
 # Support section
 - assertVisible: "Help & Support"
 
-# Privacy policy
+# Privacy policy — opens SFSafariViewController, assert Done button is visible
 - tapOn: "Privacy Policy"
-- assertVisible: "Privacy"
+- waitForAnimationToEnd
+- assertVisible: "Done"
 
 # Go back
 - tapOn: "Done"
