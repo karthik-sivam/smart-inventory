@@ -19,13 +19,21 @@ class AuthManager: ObservableObject {
     @Published var showError = false
     
     static let shared = AuthManager()
-    
+
+    /// Display name for activity audit trail and team invites.
+    var actorName: String {
+        if let name = currentUser?.displayName?.trimmingCharacters(in: .whitespaces), !name.isEmpty {
+            return name
+        }
+        return currentUser?.email ?? "Unknown"
+    }
+
     private init() {
         setupAuthStateListener()
     }
     
     private func setupAuthStateListener() {
-        Auth.auth().addStateDidChangeListener { [weak self] _, user in
+        _ = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor [weak self] in
                 self?.currentUser = user
                 self?.isAuthenticated = user != nil
@@ -42,10 +50,13 @@ class AuthManager: ObservableObject {
             let result = try await Auth.auth().createUser(withEmail: email, password: password)
             currentUser = result.user
             isAuthenticated = true
-            
+
             // Track completion for ad system
             AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedUp)
-            
+            // Analytics
+            AnalyticsManager.shared.track(.userSignedUp(method: "email"))
+            AnalyticsManager.shared.identify(userId: result.user.uid, isPro: false, signupMethod: "email")
+
             print("User signed up successfully: \(result.user.email ?? "")")
         } catch {
             handleAuthError(error)
@@ -63,10 +74,13 @@ class AuthManager: ObservableObject {
             let result = try await Auth.auth().signIn(withEmail: email, password: password)
             currentUser = result.user
             isAuthenticated = true
-            
+
             // Track completion for ad system
             AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedIn)
-            
+            // Analytics
+            AnalyticsManager.shared.track(.userSignedIn(method: "email"))
+            AnalyticsManager.shared.identify(userId: result.user.uid, isPro: false, signupMethod: "email")
+
             print("User signed in successfully: \(result.user.email ?? "")")
         } catch {
             handleAuthError(error)
@@ -96,10 +110,13 @@ class AuthManager: ObservableObject {
             
             currentUser = authResult.user
             isAuthenticated = true
-            
+
             // Track completion for ad system
             AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedIn)
-            
+            // Analytics
+            AnalyticsManager.shared.track(.userSignedIn(method: "google"))
+            AnalyticsManager.shared.identify(userId: authResult.user.uid, isPro: false, signupMethod: "google")
+
             print("User signed in with Google successfully: \(authResult.user.email ?? "")")
         } catch {
             handleAuthError(error)
@@ -118,10 +135,14 @@ class AuthManager: ObservableObject {
             try Auth.auth().signOut()
             currentUser = nil
             isAuthenticated = false
-            
+            TeamManager.shared.reset()
+
             // Track completion for ad system
             AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedOut)
-            
+            // Analytics — reset before clearing userId so the event is attributed correctly
+            AnalyticsManager.shared.track(.userSignedOut)
+            AnalyticsManager.shared.reset()
+
             print("User signed out successfully")
         } catch {
             handleAuthError(error)

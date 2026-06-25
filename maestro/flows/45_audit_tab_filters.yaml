@@ -1,0 +1,26 @@
+# Flow 45 — Audit Tab Filter Chips
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Audit"
+- assertVisible: "Due"
+- assertVisible: "Uncounted"
+- assertVisible: "Low Stock"
+- assertVisible: "All"
+- tapOn: "All"
+- tapOn: "Search items to audit…"
+- inputText: "Test Product Maestro"
+- tapOn: "All"
+- extendedWaitUntil:
+    visible: "Test Product Maestro"
+    timeout: 10000
+- assertVisible: "Test Product Maestro"
+- tapOn: "Due"
+- tapOn: "Low Stock"
+- tapOn: "All"
+- tapOn: "Search items to audit…"
+- inputText: "Test Product Maestro"
+- tapOn: "All"
+- extendedWaitUntil:
+    visible: "Test Product Maestro"
+    timeout: 10000

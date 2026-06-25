@@ -1,0 +1,39 @@
+# Flow 22 — Out of Stock Detection
+# Prerequisite: Low Stock Item in Test Warehouse (flow 21).
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml
+- scrollUntilVisible:
+    element: "Low Stock Item"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Low Stock Item"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Count Item"
+    timeout: 15000
+- assertVisible: "Low Stock"
+- scrollUntilVisible:
+    element: "Mark as Empty"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Mark as Empty"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Out of Stock"
+    timeout: 15000
+- assertVisible: "Out of Stock"
+- tapOn: "Dashboard"
+- scrollUntilVisible:
+    element: "Out of Stock"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "Out of Stock"
+- tapOn:
+    text: "Out of Stock"
+    index: 0
+- extendedWaitUntil:
+    visible: "Out of Stock Items"
+    timeout: 10000
+- assertVisible: "Low Stock Item"

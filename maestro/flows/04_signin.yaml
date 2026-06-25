@@ -1,27 +1,13 @@
 # Flow 04 — Sign In
-# Tests signing in with existing credentials
-# Prerequisite: Account exists in Firebase with TEST_EMAIL / TEST_PASSWORD
-appId: com.vishuddhi.smartinventory
+# Ensures dashboard with valid credentials: signs in only when the auth screen is shown;
+# if already logged in, skips credential entry and asserts KPIs.
+# Prerequisite: Firebase account for TEST_EMAIL / TEST_PASSWORD
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
 ---
-- runFlow: 00_signout_helper.yaml
-# After signout, app is on auth screen already — no Skip needed
-
-# Switch to Sign In mode
-- tapOn: "Sign In"
-- assertVisible: "Welcome back"
-
-# Fill credentials
-- tapOn:
-    text: "Email"
-    index: 0
-- inputText: ${TEST_EMAIL}
-
-- tapOn: "Password"
-- inputText: ${TEST_PASSWORD}
-
-- tapOn: "Sign In"
-
-# Should reach dashboard
-- assertVisible: "Smart Inventory"
+- runFlow: 00_signin_helper_fresh.yaml
+# Dashboard greeting is "Stoqly" — require KPI cards after sign-in
 - assertVisible: "Total Storages"
 - assertVisible: "Total Items"

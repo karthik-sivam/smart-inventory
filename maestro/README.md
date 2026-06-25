@@ -1,4 +1,4 @@
-# Smart Inventory — Maestro Test Suite
+# Stoqly — Maestro Test Suite
 
 ## Setup
 
@@ -18,20 +18,32 @@ brew install --cask temurin
 
 ## Running Tests
 
+Default test credentials are set in each flow’s `env:` block (`test@smartinventory.dev` / `Test@1234`) and in `run_all.yaml`, so **individual flows work without extra flags**. Override when needed:
+
 ```bash
 cd /Users/karthik_sivam/Documents/My\ Apps/SmartInventory/smart-inventory
 
-# Run a single flow (env vars must be passed explicitly for individual flows)
-maestro test --env TEST_EMAIL=test@vishuddhi.in --env TEST_PASSWORD=Test@1234 maestro/flows/04_signin.yaml
+# Single flow (uses built-in defaults)
+maestro test maestro/flows/04_signin.yaml
 
-# Run all flows (config.yaml env vars are picked up automatically)
+# Override credentials
+maestro test -e TEST_EMAIL=you@example.com -e TEST_PASSWORD='YourPass' maestro/flows/04_signin.yaml
+
+# Full suite
 maestro test maestro/run_all.yaml
 
 # Open visual studio (record flows by tapping)
 maestro studio
 ```
 
-> **Note:** `config.yaml` env vars are only applied when running `run_all.yaml`. For individual flows, always pass `--env TEST_EMAIL=... --env TEST_PASSWORD=...` explicitly.
+> **Note:** Flows that sign in (`00_signin_helper.yaml`, `04_signin.yaml`, `03_signup.yaml`, etc.) include the same `env:` defaults. `00_signin_helper` supplies credentials for any flow that includes it (e.g. dashboard, add item) when run alone.
+
+### Helpers: login state
+
+| File | Behavior |
+|------|----------|
+| `00_signin_helper.yaml` | **Does not sign out.** Launches the app, switches from Sign Up → Sign In if needed, fills credentials only when `"Welcome back"` is visible, then waits for the dashboard. If already logged in (KPIs visible), it only waits for `"Total Storages"`. |
+| `00_signout_helper.yaml` | **Conditional sign-out.** Signs out via Profile **only when** `"Total Storages"` is visible (logged-in main app). Used by flows that must start on the auth screen (e.g. wrong password, forgot password). If you are already on auth, it does nothing after launch. |
 
 ## Flow Index
 
@@ -57,11 +69,14 @@ maestro studio
 | 18_paywall_item_limit.yaml | Paywall on 51st item (manual) |
 | 19_delete_storage.yaml | Delete storage with confirmation |
 | 20_signout.yaml | Sign out and return to auth |
+| 21_low_stock_detection.yaml | Add item with min qty, count below min, verify Low Stock card |
+| 22_out_of_stock_detection.yaml | Count item to 0, verify Out of Stock card and filtered list |
+| 23_edit_item.yaml | Edit item quantity and min quantity, verify saved |
+| 24_low_stock_export.yaml | Export Low Stock List CSV with low stock item present |
 
 ## Before First Run
 
-- Create a Firebase test account with `test@vishuddhi.in` / `Test@1234`
-- Or update credentials in `config.yaml`
+- Create a Firebase test account matching the defaults in `run_all.yaml` / flow `env:` blocks (`test@smartinventory.dev` / `Test@1234`), or change those values in the YAML files you run.
 - Flows 17 & 18 (paywall limits) are commented out in `run_all.yaml` — run manually after seeding data
 
 ## Tips

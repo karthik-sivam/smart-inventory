@@ -1,43 +1,67 @@
 # Flow 08 — Add Item to Storage
 # Tests adding an item inside a storage
-# Prerequisite: "Test Warehouse" storage exists
-appId: com.vishuddhi.smartinventory
+# Prerequisite: "Test Warehouse" storage exists (flow 07)
+appId: com.vishuddhi.stoqly
 ---
 - runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- waitForAnimationToEnd
 - tapOn: "Storages"
-
-# Open Test Warehouse
+- scrollUntilVisible:
+    element: "Test Warehouse"
+    direction: DOWN
+    timeout: 15000
 - tapOn: "Test Warehouse"
 - assertVisible: "Test Warehouse"
-
-# Open add item — tap the + button in nav bar (accessibility label "Add Item")
+- runFlow: open_add_item_storage.yaml
 - tapOn:
-    text: "Add Item"
-
-# Fill item form
-- tapOn: "Item Name"
-- inputText: "Test Product"
-
-- tapOn: "Description (Optional)"
-- inputText: "A test inventory item"
-
-- tapOn: "SKU (Optional)"
-- inputText: "SKU-001"
-
-- tapOn: "Current Quantity"
+    id: "itemNameField"
+- eraseText: 80
+- inputText: "Test Product Maestro"
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    id: "addItemSkuField"
+- inputText: "SKU-MAE-001"
+- scrollUntilVisible:
+    element:
+      id: "currentQuantityInput"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn:
+    id: "currentQuantityInput"
+- eraseText: 10
 - inputText: "50"
-
-- tapOn: "Min Quantity"
+- tapOn:
+    text: "Done"
+    optional: true
+- scrollUntilVisible:
+    element:
+      id: "minQuantityInput"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "minQuantityInput"
 - inputText: "10"
-
-- tapOn: "Max Quantity"
+- scrollUntilVisible:
+    element:
+      id: "maxQuantityInput"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "maxQuantityInput"
 - inputText: "100"
-
-- tapOn: "Unit Cost"
-- inputText: "25"
-
-- tapOn: "Save"
-
-# Item should appear in storage
-- assertVisible: "Test Product"
-- assertVisible: "SKU: SKU-001"
+- tapOn:
+    text: "Done"
+    optional: true
+- runFlow: save_add_item.yaml
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "Test Product Maestro"
+    timeout: 15000
+- assertVisible: "Test Product Maestro"

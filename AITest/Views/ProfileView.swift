@@ -17,7 +17,7 @@ struct ProfileView: View {
     @State private var showPaywall = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
 
                 // MARK: - User Info
@@ -290,10 +290,10 @@ struct ProfileView: View {
             Text("Please check your email and click the verification link.")
         }
         // Sheets
-        .sheet(isPresented: $showEditProfile) { EditProfileView() }
-        .sheet(isPresented: $showEmailVerification) { EmailVerificationView() }
-        .sheet(isPresented: $showPrivacyPolicy) { PrivacyPolicyView() }
-        .sheet(isPresented: $showPaywall) { PaywallView() }
+        .sheet(isPresented: $showEditProfile) { EditProfileView().sheetStyle() }
+        .sheet(isPresented: $showEmailVerification) { EmailVerificationView().sheetStyle() }
+        .sheet(isPresented: $showPrivacyPolicy) { PrivacyPolicyView().sheetStyle() }
+        .sheet(isPresented: $showPaywall) { PaywallView(source: "pro_feature").sheetStyle() }
         .task {
             await subscriptionManager.loadProducts()
         }
@@ -302,9 +302,9 @@ struct ProfileView: View {
     // MARK: - Help Support
 
     @MainActor private func openHelpAndSupport() {
-        let subject = "Smart Inventory Support Request"
+        let subject = "Stoqly Support Request"
         let body = """
-        Hello Smart Inventory Support Team,
+        Hello Stoqly Support Team,
 
         Device: \(UIDevice.current.model)
         iOS Version: \(UIDevice.current.systemVersion)
@@ -332,7 +332,7 @@ struct EditProfileView: View {
     @State private var isLoading = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section("Profile Information") {
                     TextField("Display Name", text: $displayName)

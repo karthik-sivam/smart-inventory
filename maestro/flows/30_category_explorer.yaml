@@ -1,0 +1,28 @@
+# Flow 30 — Category Explorer from Dashboard
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- scrollUntilVisible:
+    element: "Items by Category"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 50
+- tapOn: "Items by Category"
+- assertVisible: "Items by Category"
+# Legend is above the item list — filter before scrolling to rows
+- tapOn: "Uncategorised"
+- assertVisible: "Clear"
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 20000
+- assertVisible: "Test Product Maestro"
+- tapOn: "Clear"
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "Test Product Maestro"
+- tapOn: "Done"
+- assertVisible: "Dashboard"

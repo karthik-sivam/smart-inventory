@@ -1,0 +1,16 @@
+# Search Items tab and wait for debounced filter to show the row.
+# env: ITEM_NAME
+appId: com.vishuddhi.stoqly
+---
+- tapOn: "Items"
+- tapOn: "Search items..."
+- eraseText: 50
+- inputText: ${ITEM_NAME}
+- extendedWaitUntil:
+    visible: ${ITEM_NAME}
+    timeout: 10000
+- tapOn: "All Storages"
+- scrollUntilVisible:
+    element: ${ITEM_NAME}
+    direction: DOWN
+    timeout: 15000

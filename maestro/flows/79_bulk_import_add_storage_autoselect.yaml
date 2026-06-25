@@ -1,0 +1,55 @@
+# Flow 79 — Bulk Import: Add New Storage auto-selects on return
+# Opens the Import screen, taps "Add New Storage", creates one, and verifies
+# it is automatically selected as the default storage on return.
+appId: com.vishuddhi.stoqly
+env:
+  STORAGE_NAME: "Import Test Storage"
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- tapOn:
+    id: "gear"
+- scrollUntilVisible:
+    element: "Import Items (CSV / Excel)"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Import Items (CSV / Excel)"
+- extendedWaitUntil:
+    visible: "Import Items"
+    timeout: 8000
+
+# Tap "Add New Storage" (shown when storages already exist)
+# Falls back gracefully to "Add Your First Storage" text if no storages exist
+- tapOn:
+    text: "Add New Storage"
+    optional: true
+- tapOn:
+    text: "Add Your First Storage"
+    optional: true
+
+- extendedWaitUntil:
+    visible: "Add Storage"
+    timeout: 8000
+- assertVisible: "Add Storage"
+
+# Fill storage name
+- tapOn: "Storage Name"
+- inputText: ${STORAGE_NAME}
+
+# Verify color picker is present and tap a color (green — index 1 in the grid)
+- assertVisible: "Color"
+- tapOn:
+    id: "com.vishuddhi.stoqly:id/colorPicker"
+    optional: true
+
+- tapOn: "Save"
+- waitForAnimationToEnd
+
+# Back on Import screen — new storage should be auto-selected
+- extendedWaitUntil:
+    visible: "Import Items"
+    timeout: 8000
+- assertVisible: ${STORAGE_NAME}
+
+- tapOn: "Cancel"
+- assertVisible: "Settings"

@@ -1,0 +1,56 @@
+# Flow 34 — Post-login onboarding (3-step modal)
+# MANUAL NOTE: Only appears on first sign-in when storages are empty and
+# postLoginOnboardingShown has not been set. Requires fresh simulator state
+# or cleared UserDefaults for a reliable automated run.
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
+---
+- launchApp:
+    appId: com.vishuddhi.stoqly
+    clearState: true
+    arguments:
+      UITestResetOnboarding: true
+- tapOn:
+    text: "Don't Allow"
+    optional: true
+- tapOn:
+    text: "Ask App Not to Track"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "onboarding.title.0"
+    timeout: 25000
+- tapOn: "Skip"
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Create your account"
+    commands:
+      - tapOn: "Sign In"
+- tapOn:
+    text: "Email"
+    index: 0
+- eraseText: 64
+- inputText: ${TEST_EMAIL}
+- tapOn: "Password"
+- inputText: ${TEST_PASSWORD}
+- tapOn: "Sign In"
+- extendedWaitUntil:
+    visible: "Welcome to Stoqly"
+    timeout: 20000
+- tapOn:
+    id: "postLoginGetStarted"
+- assertVisible: "Where do you store things?"
+- tapOn:
+    id: "postLoginStorageNameField"
+- inputText: "Test Storage"
+- tapOn:
+    id: "postLoginCreateStorage"
+- assertVisible: "You're all set!"
+- tapOn:
+    id: "postLoginLetsGo"
+- assertVisible: "Stoqly"

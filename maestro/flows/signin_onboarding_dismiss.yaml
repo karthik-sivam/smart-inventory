@@ -1,0 +1,26 @@
+# Dismiss first-run onboarding after splash (no launchApp).
+appId: com.vishuddhi.stoqly
+---
+- tapOn:
+    text: "Stoqly"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Don’t Allow"
+    optional: true
+- tapOn:
+    text: "Ask App Not to Track"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "onboarding.title.0"
+    timeout: 25000
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    text: "Get Started"
+    optional: true
+- waitForAnimationToEnd

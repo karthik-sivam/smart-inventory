@@ -1,0 +1,64 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0\froman\fcharset0 Arial;}}
+\f0\fs24
+
+SMART INVENTORY - MANUAL VERIFICATION CHECKLIST
+================================================
+
+Things that require you to test on a real device or simulator.
+Ask Claude to remind you of this list anytime.
+
+Last Updated: 2026-04-19
+
+--------------------------------------------
+PENDING MANUAL CHECKS
+--------------------------------------------
+
+[PENDING] 1. PHOTO SUPPORT SMOKE TEST (from Phase 1 - Item photo batch)
+   - Sign in with test@smartinventory.dev / Test@1234
+   - Free user: tap Add Item -> tap the Photo field -> confirm PaywallView slides up
+   - Pro user: temporarily set isPro=true in SubscriptionManager, add an item,
+     tap Add Photo, pick an image, confirm thumbnail appears, save, confirm no crash
+   - Edit that item -> confirm existing photo thumbnail loads from URL
+   - REVERT isPro override after testing
+
+[PENDING] 2. ROUND 1 UI VERIFICATION (empty states, categories, haptics)
+   - Sign out so StorageListView shows the guided empty state
+   - Confirm: gradient icon, "Welcome to Smart Inventory" headline,
+     "Create Your First Storage" CTA button, and 3 hint rows are visible
+   - Create a storage, add 2 items with DIFFERENT categories (e.g. Food & Beverage + Cleaning)
+   - In StorageDetailView: confirm category filter chips appear and filter correctly
+   - In Items tab: confirm category badges appear on item rows (small grey pill)
+   - Confirm "Uncategorised" items show NO badge
+   - On a real device: delete an item -> feel warning haptic
+   - On a real device: save an item -> feel success haptic
+   - On a real device: tap a category filter chip -> feel light haptic
+
+[PENDING] 3. MAESTRO FLOW COUNT RECONCILIATION
+   - Roadmap says 24 flows, suite currently accounts for 23 (21 run + 2 skipped paywall)
+   - Identify the missing 24th flow and either add it or confirm it was intentionally removed
+   - Update maestro_final_report.txt if the count changes
+
+[PENDING] 4. VISHUDDHI.IN WEBSITE FIX
+   - Website is currently down/unreachable
+   - Must be live before App Store submission (required for Privacy Policy URL + Support URL)
+   - Privacy policy page needed at: vishuddhi.in/privacy (or similar)
+   - Support page or email needed at: vishuddhi.in/support (or similar)
+   - Needed before: Phase 3 App Store submission
+
+[PENDING] 5. FIREBASE STORAGE RULES
+   - Before shipping to real users, lock down Firebase Storage rules so users can
+     only read/write their own item photos (path: items/{uid}/*)
+   - Current default rules may be open -- verify in Firebase Console -> Storage -> Rules
+   - Suggested rule:
+       match /items/\{userId\}/\{allPaths=**\} \{
+         allow read, write: if request.auth != null && request.auth.uid == userId;
+       \}
+
+--------------------------------------------
+COMPLETED MANUAL CHECKS
+--------------------------------------------
+
+(none yet)
+
+}

@@ -1,9 +1,14 @@
 # Signs out via Profile tab
-appId: com.vishuddhi.smartinventory
+appId: com.vishuddhi.stoqly
 ---
 - tapOn: "Profile"
 - waitForAnimationToEnd
-# Tap the Sign Out row in the list
+- scrollUntilVisible:
+    element: "Sign Out"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 50
+# Tap the Sign Out row in the Account section
 - tapOn:
     text: "Sign Out"
     index: 0
@@ -14,4 +19,4 @@ appId: com.vishuddhi.smartinventory
     index: 1
 - waitForAnimationToEnd
 # After sign out, app shows auth screen
-- assertVisible: "Smart Inventory"
+- assertVisible: "Stoqly"

@@ -1,0 +1,25 @@
+# Flow 53 — Search with No Results (Negative)
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow:
+    file: find_item_on_items_tab.yaml
+    env:
+      ITEM_NAME: Test Product Maestro
+- tapOn: "Search items..."
+- eraseText: 50
+- inputText: "xyzzy_nonexistent_item_12345"
+- extendedWaitUntil:
+    visible: "Try a different name, category, or barcode."
+    timeout: 10000
+- assertVisible: "Try a different name, category, or barcode."
+- tapOn: "Search items..."
+- eraseText: 40
+- extendedWaitUntil:
+    visible: "Test Product Maestro"
+    timeout: 15000
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 10000
+- assertVisible: "Test Product Maestro"

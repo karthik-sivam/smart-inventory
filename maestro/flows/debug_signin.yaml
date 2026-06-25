@@ -1,6 +1,9 @@
 # DEBUG — Sign In Step by Step
 # Takes a screenshot after every action so we can see exactly where it fails
-appId: com.vishuddhi.smartinventory
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
 ---
 - clearState
 - launchApp
@@ -9,8 +12,12 @@ appId: com.vishuddhi.smartinventory
 - tapOn: "Skip"
 - takeScreenshot: debug_02_after_skip
 
-- tapOn: "Sign In"
-- takeScreenshot: debug_03_after_signin_tap
+- runFlow:
+    when:
+      visible: "Create your account"
+    commands:
+      - tapOn: "Sign In"
+- takeScreenshot: debug_03_after_signin_mode_switch
 
 - tapOn:
     text: "Email"

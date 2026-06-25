@@ -1,0 +1,29 @@
+# Flow 43 — Full Count with Adjustment Reason and Notes
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_product_detail.yaml
+- tapOn: "Count Item"
+- waitForAnimationToEnd
+- runFlow: dismiss_count_tips.yaml
+- extendedWaitUntil:
+    visible: "Quick Count"
+    timeout: 15000
+- tapOn: "Change UOM or count type"
+- waitForAnimationToEnd
+- assertVisible: "Count Item"
+- tapOn: "Counted Quantity"
+- eraseText: 10
+- inputText: "30"
+- tapOn: "Select reason"
+- tapOn: "Physical Count"
+- tapOn: "Notes (Optional)"
+- inputText: "Weekly physical count"
+- tapOn: "Save"
+- assertVisible: "Test Product Maestro"
+- tapOn: "Test Product Maestro"
+- scrollUntilVisible:
+    element: "Count History"
+    direction: DOWN
+    timeout: 10000
+- assertVisible: "Count History"

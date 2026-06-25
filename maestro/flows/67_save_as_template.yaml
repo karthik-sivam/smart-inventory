@@ -1,0 +1,32 @@
+# Flow 67 — Save existing item as template from EditItemView
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Items"
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 15000
+- swipe:
+    direction: LEFT
+    on: "Test Product Maestro"
+- tapOn: "Edit"
+- assertVisible: "Edit Item"
+- scrollUntilVisible:
+    element: "Save as Template"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Save as Template"
+- assertVisible:
+    text: "Saved as template"
+    optional: true
+- tapOn: "Save"
+- tapOn: "Dashboard"
+- tapOn:
+    id: "gear"
+- scrollUntilVisible:
+    element: "Item Templates"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Item Templates"
+- assertVisible: "Test Product Maestro"

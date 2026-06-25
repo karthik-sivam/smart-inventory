@@ -11,7 +11,7 @@ struct AuthView: View {
     @State private var successMessage = ""
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 // Background gradient
                 LinearGradient(
@@ -29,7 +29,7 @@ struct AuthView: View {
                                 .font(.system(size: 60))
                                 .foregroundColor(.white)
                             
-                            Text("Smart Inventory")
+                            Text("Stoqly")
                                 .font(.largeTitle)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
@@ -107,12 +107,12 @@ struct AuthView: View {
                                     .foregroundColor(.white.opacity(0.3))
                             }
                             
-                            // Google Sign In Button
+                            // Google Sign In Button — adaptive card so it works in dark mode
                             Button(action: signInWithGoogle) {
                                 HStack {
                                     if authManager.isLoading {
                                         ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle(tint: .black))
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .primary))
                                             .scaleEffect(0.8)
                                     } else {
                                         Image(systemName: "globe")
@@ -122,11 +122,11 @@ struct AuthView: View {
                                     
                                     Text(authManager.isLoading ? "Please wait..." : "Continue with Google")
                                         .fontWeight(.semibold)
-                                        .foregroundColor(.black)
+                                        .foregroundColor(.primary)
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 16)
-                                .background(Color.white)
+                                .background(Color(.systemBackground))
                                 .cornerRadius(12)
                                 .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
                             }
@@ -178,6 +178,7 @@ struct AuthView: View {
         }
         .sheet(isPresented: $showForgotPassword) {
             ForgotPasswordView()
+                .sheetStyle()
         }
     }
     
@@ -244,7 +245,7 @@ struct ForgotPasswordView: View {
     @State private var showSuccessMessage = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 30) {
                 // Header
                 VStack(spacing: 16) {

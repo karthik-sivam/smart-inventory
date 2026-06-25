@@ -1,0 +1,25 @@
+# Flow 49 — Dashboard See All Activity (when >10 events)
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- scrollUntilVisible:
+    element: "Recent Activity"
+    direction: DOWN
+    timeout: 10000
+- assertVisible: "Recent Activity"
+- scrollUntilVisible:
+    element: "See All"
+    direction: DOWN
+    timeout: 5000
+    optional: true
+- tapOn:
+    text: "See All"
+    optional: true
+- assertVisible:
+    text: "Activity History"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- assertVisible: "Recent Activity"

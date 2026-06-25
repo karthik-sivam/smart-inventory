@@ -1,7 +1,10 @@
 # Flow 03 — Sign Up
 # Tests creating a new account
 # NOTE: Use a unique email each run or pre-delete the account in Firebase
-appId: com.vishuddhi.smartinventory
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
 ---
 - clearState
 - launchApp

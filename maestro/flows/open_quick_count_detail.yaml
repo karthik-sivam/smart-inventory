@@ -1,0 +1,18 @@
+# Open Quick Count via Item Detail → Count Item button.
+# env: ITEM_NAME (required), ITEM_SKU (optional)
+appId: com.vishuddhi.stoqly
+env:
+  ITEM_NAME: ""
+  ITEM_SKU: ""
+---
+- runFlow:
+    file: open_item_detail.yaml
+    env:
+      ITEM_NAME: ${ITEM_NAME}
+      ITEM_SKU: ${ITEM_SKU}
+- tapOn: "Count Item"
+- waitForAnimationToEnd
+- runFlow: dismiss_count_tips.yaml
+- extendedWaitUntil:
+    visible: "Quick Count"
+    timeout: 15000

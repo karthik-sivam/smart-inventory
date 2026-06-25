@@ -1,9 +1,10 @@
-# Helper — Signs out via the app UI so auth flows start from a clean state
-appId: com.vishuddhi.smartinventory
+# Helper — Reach auth screen only when necessary (conditional sign-out).
+# If already logged in (dashboard KPIs visible), signs out via Profile so auth-only flows can run.
+# If already on auth / not logged in, does nothing after launch.
+appId: com.vishuddhi.stoqly
 ---
 - launchApp
 - waitForAnimationToEnd
-# Only sign out if we're on the main app (dashboard visible)
 - runFlow:
     when:
       visible: "Total Storages"

@@ -1,0 +1,29 @@
+# Flow 52 — Search by Category and Storage Name (Items tab)
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow:
+    file: find_item_on_items_tab.yaml
+    env:
+      ITEM_NAME: Test Product Maestro
+- assertVisible: "Test Product Maestro"
+- tapOn: "Search items..."
+- eraseText: 30
+- inputText: "Uncategorised"
+- extendedWaitUntil:
+    visible: "Test Product Maestro"
+    timeout: 15000
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 10000
+- assertVisible: "Test Product Maestro"
+- tapOn: "Search items..."
+- eraseText: 30
+- inputText: "Test Warehouse"
+- extendedWaitUntil:
+    visible: "Test Product Maestro"
+    timeout: 15000
+- assertVisible: "Test Product Maestro"
+- tapOn: "Search items..."
+- eraseText: 30

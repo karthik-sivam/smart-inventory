@@ -1,0 +1,85 @@
+# Flow 58 — Full Business Day End-to-End
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Storages"
+- swipe:
+    direction: LEFT
+    on: "E2E Business Storage"
+    optional: true
+- tapOn:
+    text: "Delete"
+    optional: true
+- tapOn:
+    text: "Delete"
+    optional: true
+- tapOn: "Add Storage"
+- tapOn: "Storage Name"
+- inputText: "E2E Business Storage"
+- tapOn: "Save"
+- assertVisible: "E2E Business Storage"
+- tapOn: "E2E Business Storage"
+- tapOn:
+    text: "Add Item"
+- extendedWaitUntil:
+    visible: "SKU (Optional)"
+    timeout: 10000
+- tapOn: "Item Name"
+- inputText: "E2E Item One"
+- runFlow:
+    file: fill_add_item_quantity.yaml
+    env:
+      QTY: "100"
+- runFlow: save_add_item.yaml
+- assertVisible: "E2E Item One"
+- tapOn:
+    text: "Add Item"
+- extendedWaitUntil:
+    visible: "SKU (Optional)"
+    timeout: 10000
+- tapOn: "Item Name"
+- inputText: "E2E Item Two"
+- runFlow:
+    file: fill_add_item_quantity.yaml
+    env:
+      QTY: "50"
+- runFlow: save_add_item.yaml
+- assertVisible: "E2E Item Two"
+- runFlow:
+    file: open_quick_count_swipe.yaml
+    env:
+      ITEM_NAME: E2E Item One
+- runFlow:
+    file: fill_quick_count_set_to.yaml
+    env:
+      QTY: "95"
+- runFlow: save_quick_count.yaml
+- runFlow:
+    file: open_quick_count_swipe.yaml
+    env:
+      ITEM_NAME: E2E Item Two
+- runFlow:
+    file: fill_quick_count_set_to.yaml
+    env:
+      QTY: "45"
+- runFlow: save_quick_count.yaml
+- tapOn:
+    text: "Back"
+    optional: true
+- tapOn: "Dashboard"
+- assertVisible: "Total Items"
+- scrollUntilVisible:
+    element: "Recent Activity"
+    direction: DOWN
+    timeout: 15000
+    optional: true
+- tapOn: "Storages"
+- scrollUntilVisible:
+    element: "E2E Business Storage"
+    direction: DOWN
+    timeout: 10000
+- swipe:
+    direction: LEFT
+    on: "E2E Business Storage"
+- tapOn: "Delete"
+- tapOn: "Delete"

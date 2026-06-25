@@ -75,7 +75,7 @@ struct OnboardingView: View {
                 // Page content — use TabView for swipe gesture support
                 TabView(selection: $currentPage) {
                     ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
-                        OnboardingPageView(page: page)
+                        OnboardingPageView(page: page, pageIndex: index)
                             .tag(index)
                     }
                 }
@@ -145,6 +145,7 @@ struct OnboardingView: View {
 struct OnboardingPageView: View {
 
     let page: OnboardingPage
+    let pageIndex: Int
     @State private var didAppear = false
 
     var body: some View {
@@ -176,11 +177,13 @@ struct OnboardingPageView: View {
             .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: didAppear)
 
             VStack(spacing: 12) {
+                // Keep title/subtitle fully opaque so VoiceOver & UI tests see them immediately
+                // (alpha 0 removes elements from the accessibility tree and breaks Maestro).
                 Text(page.title)
                     .font(.title2)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
-                    .opacity(didAppear ? 1 : 0)
+                    .accessibilityIdentifier("onboarding.title.\(pageIndex)")
                     .offset(y: didAppear ? 0 : 20)
                     .animation(.easeOut(duration: 0.4).delay(0.2), value: didAppear)
 
@@ -189,7 +192,6 @@ struct OnboardingPageView: View {
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
-                    .opacity(didAppear ? 1 : 0)
                     .offset(y: didAppear ? 0 : 20)
                     .animation(.easeOut(duration: 0.4).delay(0.3), value: didAppear)
             }

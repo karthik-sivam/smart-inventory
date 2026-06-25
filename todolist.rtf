@@ -1,0 +1,158 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Helvetica;}}
+\f0\fs28
+
+ANALYTICS EVENT TRACKING — Cursor Spec
+Add AnalyticsManager.shared.track(...) calls at key user actions throughout the app.
+AnalyticsManager and StoqlyEvent are already defined in AITest/Services/AnalyticsManager.swift.
+Import is NOT needed — AnalyticsManager is in the same module.
+
+CRITICAL RULES (never violate):
+- Use modelContext.safeSave(context:) — never try? modelContext.save()
+- Insert ActivityEvent BEFORE modelContext.delete(item)
+- Never set isPro = true in any code
+- Never add NavigationStack inside sheet/modal views that already have one
+
+---
+
+ITEM 1 — Storage creation tracking
+File: AITest/Views/StorageListView.swift (or wherever AddStorageView calls onStorageAdded)
+Location: Inside the onStorageAdded callback closure (after storage is saved)
+Change: Add after the existing callback logic:
+  AnalyticsManager.shared.track(.storageCreated(color: newStorage.colorHex ?? "default"))
+
+---
+
+ITEM 2 — Storage deletion tracking
+File: AITest/Views/StorageListView.swift or StorageDetailView.swift
+Location: Inside the delete storage confirmation action, just before modelContext.delete(storage)
+Change: Add:
+  AnalyticsManager.shared.track(.storageDeleted)
+
+---
+
+ITEM 3 — Item added tracking
+File: AITest/Views/EditItemView.swift (the save action)
+Location: After modelContext.safeSave(context: "AddItem") succeeds (inside do block)
+Change: Add:
+  AnalyticsManager.shared.track(.itemAdded(
+      category: item.category ?? "Uncategorized",
+      hasBarcode: !(item.barcode?.isEmpty ?? true),
+      hasPhoto: item.photoURL != nil
+  ))
+
+---
+
+ITEM 4 — Item deleted tracking
+File: AITest/Views/ItemDetailView.swift or StorageDetailView.swift
+Location: Just BEFORE modelContext.delete(item) (required — storage relationship nulls after delete)
+Change: Add:
+  AnalyticsManager.shared.track(.itemDeleted(category: item.category ?? "Uncategorized"))
+
+---
+
+ITEM 5 — Item counted tracking
+File: AITest/Views/Components/QuickCountView.swift (wherever the count is saved)
+Location: After modelContext.safeSave(context: "ItemCounted") succeeds
+Change: Add:
+  AnalyticsManager.shared.track(.itemCounted(storageName: item.storage?.name ?? "Unknown"))
+
+---
+
+ITEM 6 — Barcode scan tracking
+File: AITest/Views/BarcodeScannerView.swift (or BarcodeScannerContainerView)
+Location 1: When the scanner is presented (onAppear or sheet onAppear)
+  AnalyticsManager.shared.track(.barcodeScanInitiated)
+Location 2: When a barcode is resolved (success callback with product or failure)
+  AnalyticsManager.shared.track(.barcodeScanResult(found: productFound, enriched: wasEnriched))
+
+---
+
+ITEM 7 — Smart Count tracking
+File: AITest/Views/SmartCountView.swift (or VoiceInventoryView, ImageInventoryView, PaperInventoryView)
+Location 1: In SmartCountView.onAppear:
+  AnalyticsManager.shared.track(.smartCountOpened)
+Location 2: When user taps a mode card (Voice / Photo / Sheet):
+  AnalyticsManager.shared.track(.smartCountModeSelected(mode: "voice")) // or "photo"/"sheet"
+Location 3: When AI count review is saved successfully:
+  AnalyticsManager.shared.track(.smartCountCompleted(mode: activeMode, itemCount: reviewItems.count))
+Location 4: On AI error/failure:
+  AnalyticsManager.shared.track(.smartCountFailed(mode: activeMode, reason: error.localizedDescription))
+
+---
+
+ITEM 8 — Bulk import tracking
+File: AITest/Views/BulkImportView.swift
+Location: After the single safeSave in performImport succeeds (in the ImportResult assignment block)
+Change:
+  let fmt = selectedFileURL?.pathExtension.lowercased() == "xlsx" ? "xlsx" : "csv"
+  AnalyticsManager.shared.track(.bulkImportCompleted(itemCount: result.imported, format: fmt))
+On error path:
+  AnalyticsManager.shared.track(.bulkImportFailed(reason: error.localizedDescription))
+
+---
+
+ITEM 9 — Paywall tracking
+File: AITest/Models/SubscriptionManager.swift (PaywallView) and any view that shows PaywallView as a sheet
+Location: In PaywallView.onAppear — but source context needs to be passed in.
+Change: Add a `source: String` parameter to PaywallView's initialiser (default "unknown").
+  In PaywallView.onAppear:
+    AnalyticsManager.shared.track(.paywallShown(source: source))
+  Update all .sheet { PaywallView() } callers to pass source:
+    .sheet { PaywallView(source: "storage_limit") }   // or "item_limit", "pro_feature", "ai_limit"
+
+---
+
+ITEM 10 — Subscription purchased/cancelled tracking
+File: AITest/Models/SubscriptionManager.swift
+Location 1: In the purchase() success path (after hasPro = true is set):
+  let plan = product.id.contains("annual") ? "annual" : "monthly"
+  AnalyticsManager.shared.track(.subscriptionStarted(plan: plan))
+  AnalyticsManager.shared.identify(
+      userId: AuthManager.shared.currentUser?.uid ?? "",
+      isPro: true,
+      signupMethod: UserDefaults.standard.string(forKey: "signupMethod") ?? "unknown"
+  )
+Location 2: In the remove-ads purchase success path:
+  AnalyticsManager.shared.track(.removeAdsPurchased)
+Location 3: Restore purchases tapped:
+  AnalyticsManager.shared.track(.restorePurchaseTapped)
+
+---
+
+ITEM 11 — Key screen views
+File: AITest/Views/DashboardView.swift — in .onAppear:
+  AnalyticsManager.shared.track(.dashboardViewed)
+
+File: AITest/Views/ReorderListView.swift — in .onAppear:
+  AnalyticsManager.shared.track(.reorderListViewed(itemCount: reorderItems.count))
+
+File: AITest/Views/ExpiryTimelineView.swift — in .onAppear:
+  AnalyticsManager.shared.track(.expiryTimelineViewed(itemCount: expiringItems.count))
+
+File: AITest/Views/CategoryExplorerView.swift — in .onAppear:
+  AnalyticsManager.shared.track(.categoryExplorerViewed)
+
+---
+
+ITEM 12 — Export tracking
+File: AITest/Models/ExportManager.swift
+Location: After successful CSV export and after successful PDF export:
+  AnalyticsManager.shared.track(.exportCompleted(format: "csv"))   // or "pdf"
+
+---
+
+ITEM 13 — Sync error tracking (non-fatal)
+File: AITest/Models/FirestoreManager.swift
+Location: In error catch blocks inside pushStorage / pushItem where sync fails silently
+Change: Add (non-throwing, best effort):
+  AnalyticsManager.shared.track(.syncFailed(reason: error.localizedDescription))
+  Note: Do NOT throw from here — sync errors should never crash the user; just log them.
+
+---
+
+BUILD CHECK:
+After all changes, build the project in Xcode (Cmd+B).
+Confirm zero new errors and zero new warnings related to AnalyticsManager.
+Then update automation_results.rtf with results.
+}

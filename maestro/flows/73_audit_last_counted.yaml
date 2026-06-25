@@ -1,0 +1,28 @@
+# Flow 73 — Audit Last Counted Text (M1)
+appId: com.vishuddhi.stoqly
+env:
+  ITEM_NAME: Test Product Maestro
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Audit"
+- tapOn: "Uncounted"
+- assertVisible:
+    text: "Never counted"
+    optional: true
+- tapOn: "All"
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "Test Product Maestro"
+- runFlow: open_quick_count_audit.yaml
+- runFlow:
+    file: fill_quick_count_set_to.yaml
+    env:
+      QTY: "25"
+- runFlow: save_quick_count.yaml
+- tapOn: "All"
+- assertVisible: ${ITEM_NAME}
+- assertVisible:
+    text: "Counted today"
+    optional: true

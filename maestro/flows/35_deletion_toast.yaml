@@ -1,0 +1,45 @@
+# Flow 35 — Deletion confirmation toast
+# Verifies swipe-delete on the Items tab shows the bottom toast pill.
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Items"
+- tapOn:
+    text: "Add Item"
+- tapOn:
+    id: "itemNameField"
+- eraseText: 80
+- inputText: "Toast Test Item"
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true
+- runFlow: select_storage_uom_items_tab.yaml
+- scrollUntilVisible:
+    element:
+      id: "currentQuantityInput"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "currentQuantityInput"
+- eraseText: 10
+- inputText: "5"
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true
+- runFlow: save_add_item.yaml
+- scrollUntilVisible:
+    element: "Toast Test Item"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "Toast Test Item"
+- swipe:
+    direction: LEFT
+    on: "Toast Test Item"
+- tapOn: "Delete"
+- tapOn: "Delete"
+- assertVisible:
+    id: "deletionToastLabel"

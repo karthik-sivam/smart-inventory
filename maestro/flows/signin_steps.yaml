@@ -1,8 +1,15 @@
 # Sign in steps - only runs when onboarding/auth screen is visible
-appId: com.vishuddhi.smartinventory
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
 ---
 - tapOn: "Skip"
-- tapOn: "Sign In"
+- runFlow:
+    when:
+      visible: "Create your account"
+    commands:
+      - tapOn: "Sign In"
 - tapOn:
     text: "Email"
     index: 0
@@ -12,7 +19,16 @@ appId: com.vishuddhi.smartinventory
 - tapOn: "Sign In"
 - waitForAnimationToEnd
 - tapOn:
+    text: "Not Now"
+    optional: true
+- tapOn:
     text: "Allow"
+    optional: true
+- tapOn:
+    text: "Don’t Allow"
+    optional: true
+- tapOn:
+    text: "Ask App Not to Track"
     optional: true
 - tapOn:
     text: "OK"

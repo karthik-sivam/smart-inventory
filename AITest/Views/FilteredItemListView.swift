@@ -4,6 +4,7 @@ enum FilterType {
     case lowStock
     case outOfStock
     case allItems
+    case expiringSoon
 }
 
 struct ItemFilterManager {
@@ -107,22 +108,58 @@ struct FilterSearchView: View {
 struct ItemsListView: View {
     let items: [InventoryItem]
     let filterType: FilterType
-    
+
+    private var emptyFilterIcon: String {
+        switch filterType {
+        case .lowStock: return "exclamationmark.triangle"
+        case .outOfStock: return "xmark.circle"
+        case .expiringSoon: return "calendar.badge.exclamationmark"
+        case .allItems: return "cube.box"
+        }
+    }
+
+    private var emptyFilterColor: Color {
+        switch filterType {
+        case .lowStock: return .orange
+        case .outOfStock: return .red
+        case .expiringSoon: return .orange
+        case .allItems: return .gray
+        }
+    }
+
+    private var emptyFilterTitle: String {
+        switch filterType {
+        case .lowStock: return "No low stock items"
+        case .outOfStock: return "No out of stock items"
+        case .expiringSoon: return "No expiring items"
+        case .allItems: return "No items"
+        }
+    }
+
+    private var emptyFilterSubtitle: String {
+        switch filterType {
+        case .lowStock: return "All items are well stocked"
+        case .outOfStock: return "All items are in stock"
+        case .expiringSoon: return "No items expiring in the next 7 days"
+        case .allItems: return "Add items to get started"
+        }
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 if items.isEmpty {
                     VStack(spacing: 16) {
-                        Image(systemName: filterType == .lowStock ? "exclamationmark.triangle" : "xmark.circle")
+                        Image(systemName: emptyFilterIcon)
                             .font(.system(size: 48))
-                            .foregroundColor(filterType == .lowStock ? .orange : .red)
+                            .foregroundColor(emptyFilterColor)
                         
-                        Text(filterType == .lowStock ? "No low stock items" : "No out of stock items")
+                        Text(emptyFilterTitle)
                             .font(.title3)
                             .fontWeight(.medium)
                             .foregroundColor(.secondary)
                         
-                        Text(filterType == .lowStock ? "All items are well stocked" : "All items are in stock")
+                        Text(emptyFilterSubtitle)
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -143,16 +180,12 @@ struct ItemsListView: View {
 }
 
 struct FilteredItemListView: View {
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var currencyManager: CurrencyManager
-    
     let title: String
     let items: [InventoryItem]
     let filterType: FilterType
     
     @State private var searchText = ""
     @State private var selectedStorage: Storage?
-    @State private var showingAddItem = false
     
     private var filterManager: ItemFilterManager {
         ItemFilterManager(
@@ -163,7 +196,7 @@ struct FilteredItemListView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 // Header
                 HStack {
@@ -172,14 +205,6 @@ struct FilteredItemListView: View {
                         .fontWeight(.bold)
                     
                     Spacer()
-                    
-                    if !filterManager.filteredItems.isEmpty {
-                        Button(action: { showingAddItem = true }) {
-                            Image(systemName: "plus")
-                                .font(.title2)
-                                .foregroundColor(.blue)
-                        }
-                    }
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 10)
@@ -198,12 +223,6 @@ struct FilteredItemListView: View {
                 )
             }
             .navigationBarHidden(true)
-        }
-        .sheet(isPresented: $showingAddItem) {
-            if let storage = selectedStorage ?? filterManager.availableStorages.first {
-                AddItemView(storage: storage)
-                    .environmentObject(currencyManager)
-            }
         }
     }
 }
@@ -242,14 +261,14 @@ struct FilteredItemCard: View {
                 }
                 
                 HStack {
-                    Text("Current: \(String(format: "%.1f", item.currentQuantity)) \(item.uom?.symbol ?? "")")
+                    Text("Current: \(item.currentQuantity.smartFormatted) \(item.uom?.symbol ?? "")")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
                     Spacer()
                     
                     if item.isLowStock {
-                        Text("Min: \(String(format: "%.1f", item.minQuantity)) \(item.uom?.symbol ?? "")")
+                        Text("Min: \(item.minQuantity.smartFormatted) \(item.uom?.symbol ?? "")")
                             .font(.caption)
                             .foregroundColor(.orange)
                     }
@@ -282,5 +301,4 @@ struct FilteredItemCard: View {
         items: [],
         filterType: .lowStock
     )
-    .environmentObject(CurrencyManager())
 } 

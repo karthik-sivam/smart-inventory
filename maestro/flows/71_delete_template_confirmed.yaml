@@ -1,0 +1,38 @@
+# Flow 71 — Delete templates confirmed (cleanup)
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- tapOn:
+    id: "gear"
+- scrollUntilVisible:
+    element: "Item Templates"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Item Templates"
+- swipe:
+    direction: LEFT
+    on: "Maestro Test Template"
+    optional: true
+- tapOn:
+    text: "Delete"
+    optional: true
+- tapOn:
+    text: "Delete Template"
+    optional: true
+- assertNotVisible:
+    text: "Maestro Test Template"
+    optional: true
+- swipe:
+    direction: LEFT
+    on: "Test Product Maestro"
+    optional: true
+- tapOn:
+    text: "Delete"
+    optional: true
+- tapOn:
+    text: "Delete Template"
+    optional: true
+- assertNotVisible:
+    text: "Test Product Maestro"
+    optional: true

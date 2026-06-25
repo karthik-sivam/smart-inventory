@@ -1,0 +1,31 @@
+# Flow 76 — Smart Insights Card (M2)
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- scrollUntilVisible:
+    element:
+      text: "Smart Insights"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 30
+- assertVisible: "Smart Insights"
+- assertVisible:
+    text: "Everything looks healthy"
+    optional: true
+- assertVisible:
+    text: "Never audited"
+    optional: true
+- assertVisible:
+    text: "Possible dead stock"
+    optional: true
+- tapOn:
+    text: "Never audited"
+    optional: true
+- assertVisible:
+    text: "Done"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- assertVisible: "Dashboard"

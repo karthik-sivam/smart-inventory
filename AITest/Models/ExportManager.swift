@@ -48,7 +48,12 @@ class ExportManager: ObservableObject {
             isExporting = false
             exportProgress = 1.0
         }
-        
+
+        if result != nil {
+            let formatString = data.format == .csv ? "csv" : "pdf"
+            AnalyticsManager.shared.track(.exportCompleted(format: formatString))
+        }
+
         return result
     }
     
@@ -149,7 +154,7 @@ class ExportManager: ObservableObject {
         var csv = "Item Name,SKU,Storage,Current Quantity,Max Quantity,Reorder Quantity,UOM,Priority\n"
         
         for item in reorderItems {
-            let reorderQuantity = max(item.maxQuantity - item.currentQuantity, item.minQuantity)
+            let reorderQuantity = max(item.maxQuantity - item.currentQuantity, item.effectiveMinQuantity)
             let priority = item.isOutOfStock ? "HIGH" : "MEDIUM"
             
             let row = [
@@ -248,7 +253,7 @@ class ExportManager: ObservableObject {
         </head>
         <body>
             <div class="header">
-                <div class="title">Smart Inventory Report</div>
+                <div class="title">Stoqly Report</div>
                 <div class="subtitle">Generated on \(dateFormatter.string(from: data.timestamp))</div>
             </div>
         """
@@ -384,7 +389,7 @@ class ExportManager: ObservableObject {
         """
         
         for item in reorderItems {
-            let reorderQuantity = max(item.maxQuantity - item.currentQuantity, item.minQuantity)
+            let reorderQuantity = max(item.maxQuantity - item.currentQuantity, item.effectiveMinQuantity)
             let priority = item.isOutOfStock ? "HIGH" : "MEDIUM"
             let priorityClass = item.isOutOfStock ? "urgent" : "warning"
             
@@ -428,7 +433,7 @@ class ExportManager: ObservableObject {
             typeName = "Reorder_List"
         }
         
-        return "SmartInventory_\(typeName)_\(timestamp).\(format)"
+        return "Stoqly_\(typeName)_\(timestamp).\(format)"
     }
     
     private func saveToFile(content: String, fileName: String) -> URL? {

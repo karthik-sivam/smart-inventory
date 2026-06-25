@@ -1,7 +1,7 @@
 # Flow 18 — Paywall: Item Limit
 # Tests that paywall appears when free user tries to add a 51st item
 # Prerequisite: A storage already has 50 items
-appId: com.vishuddhi.smartinventory
+appId: com.vishuddhi.stoqly
 ---
 - launchApp
 - tapOn: "Storages"

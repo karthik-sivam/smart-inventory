@@ -1,21 +1,33 @@
-# Smart Inventory — Full Test Suite (Sequential)
+# Stoqly — Full Test Suite (Sequential)
 # Usage: maestro test maestro/run_all.yaml
-appId: com.vishuddhi.smartinventory
+# Test credentials (Firebase) — set here for maestro test maestro/run_all.yaml
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
 ---
 # ── Onboarding (clears app state) ────────────────
 - runFlow: flows/01_onboarding.yaml
 - runFlow: flows/02_onboarding_skip.yaml
 
-# ── Auth flows (signs out first, then tests) ──────
+# ── Auth flows (04 checks login state; 05/06 sign out only if already on dashboard) ──
+- runFlow: flows/04_signin.yaml
 - runFlow: flows/05_signin_wrong_password.yaml
 - runFlow: flows/06_forgot_password.yaml
-- runFlow: flows/04_signin.yaml
 
 # ── Core flows (require login — uses 00_signin_helper) ──
 - runFlow: flows/11_dashboard.yaml
 - runFlow: flows/07_add_storage.yaml
 - runFlow: flows/08_add_item.yaml
+- runFlow: flows/25_global_search.yaml
+- runFlow: flows/27_category_filter.yaml
+- runFlow: flows/28_swipe_actions_items.yaml
+- runFlow: flows/29_swipe_actions_storages.yaml
+- runFlow: flows/30_category_explorer.yaml
+- runFlow: flows/32_quick_count_placeholder.yaml
+- runFlow: flows/33_activity_feed.yaml
 - runFlow: flows/12_items_tab.yaml
+- runFlow: flows/26_audit_tab.yaml
 - runFlow: flows/09_quick_count.yaml
 - runFlow: flows/10_full_count.yaml
 - runFlow: flows/13_export_csv.yaml
@@ -23,7 +35,67 @@ appId: com.vishuddhi.smartinventory
 - runFlow: flows/15_settings.yaml
 - runFlow: flows/16_profile.yaml
 - runFlow: flows/19_delete_storage.yaml
+- runFlow: flows/07_add_storage.yaml
+- runFlow: flows/08_add_item.yaml
 - runFlow: flows/20_signout.yaml
+
+# ── Stock status flows ────────────────────────────
+- runFlow: flows/21_low_stock_detection.yaml
+- runFlow: flows/31_reorder_list.yaml
+- runFlow: flows/22_out_of_stock_detection.yaml
+- runFlow: flows/77_reorder_item_tap.yaml
+- runFlow: flows/23_edit_item.yaml
+- runFlow: flows/24_low_stock_export.yaml
+
+# ── Phase 3 additions ─────────────────────────────
+- runFlow: flows/34_post_login_onboarding.yaml
+- runFlow: flows/35_deletion_toast.yaml
+- runFlow: flows/36_batch_expiry.yaml
+
+# ── QA expansion (flows 37–62) ───────────────────
+- runFlow: flows/37_edit_storage.yaml
+- runFlow: flows/38_storage_detail.yaml
+- runFlow: flows/39_item_detail_full.yaml
+- runFlow: flows/40_add_item_full.yaml
+- runFlow: flows/41_add_item_validation.yaml
+- runFlow: flows/42_mark_out_of_stock.yaml
+- runFlow: flows/43_count_with_reason_notes.yaml
+- runFlow: flows/44_large_change_alert.yaml
+- runFlow: flows/45_audit_tab_filters.yaml
+- runFlow: flows/46_expiry_timeline.yaml
+- runFlow: flows/47_add_item_with_expiry.yaml
+- runFlow: flows/48_dashboard_health_card.yaml
+- runFlow: flows/49_dashboard_see_all_activity.yaml
+- runFlow: flows/50_attention_banner.yaml
+- runFlow: flows/51_search_history.yaml
+- runFlow: flows/52_search_sku_category.yaml
+- runFlow: flows/53_search_no_results.yaml
+- runFlow: flows/54_audit_empty_state.yaml
+- runFlow: flows/55_empty_storage_state.yaml
+- runFlow: flows/56_currency_change.yaml
+- runFlow: flows/57_restock_cycle_e2e.yaml
+- runFlow: flows/58_business_day_e2e.yaml
+- runFlow: flows/59_cross_tab_navigation.yaml
+- runFlow: flows/60_team_members_view.yaml
+- runFlow: flows/61_product_catalog.yaml
+- runFlow: flows/62_count_negative_input.yaml
+- runFlow: flows/63_templates_settings_entry.yaml
+- runFlow: flows/64_create_template.yaml
+- runFlow: flows/65_template_validation.yaml
+- runFlow: flows/66_edit_template_no_links.yaml
+- runFlow: flows/67_save_as_template.yaml
+- runFlow: flows/68_use_template_add_item.yaml
+- runFlow: flows/69_edit_template_with_links.yaml
+- runFlow: flows/70_delete_template_with_links.yaml
+- runFlow: flows/71_delete_template_confirmed.yaml
+- runFlow: flows/72_audit_session_progress.yaml
+- runFlow: flows/73_audit_last_counted.yaml
+- runFlow: flows/74_health_card_drilldown.yaml
+- runFlow: flows/75_value_by_category.yaml
+- runFlow: flows/76_smart_insights.yaml
+- runFlow: flows/78_bulk_import_settings_entry.yaml
+- runFlow: flows/79_bulk_import_add_storage_autoselect.yaml
+- runFlow: flows/80_bulk_import_add_storage_color.yaml
 
 # ── Paywall flows (manual — need seeded data) ────
 # - runFlow: flows/17_paywall_storage_limit.yaml

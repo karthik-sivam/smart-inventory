@@ -30,6 +30,7 @@ struct Currency: Identifiable, Codable, Hashable {
     ]
 }
 
+@MainActor
 class CurrencyManager: ObservableObject {
     @Published var selectedCurrency: Currency {
         didSet {

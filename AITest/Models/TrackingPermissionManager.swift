@@ -12,7 +12,7 @@ import SwiftUI
 /// SETUP REQUIRED in Xcode:
 /// Target → Info → Custom iOS Target Properties → Add:
 ///   Key:   NSUserTrackingUsageDescription
-///   Value: "Smart Inventory uses your advertising ID to show you relevant ads that
+///   Value: "Stoqly uses your advertising ID to show you relevant ads that
 ///           support the free version of this app."
 @MainActor
 class TrackingPermissionManager: ObservableObject {

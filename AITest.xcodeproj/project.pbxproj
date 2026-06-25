@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5A4AFEA72FED43E200B47D05 /* AmplitudeSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 5A4AFEA62FED43E200B47D05 /* AmplitudeSwift */; };
+		5AAC39492E92DFFE001F3908 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5AAC39482E92DFFC001F3906 /* WebKit.framework */; };
 		5AC623BF2F828DE900AC4937 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5AC623BE2F828DE900AC4937 /* StoreKit.framework */; };
 		D218DEF62E2CAE0400EB13A0 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = D218DEF52E2CAE0400EB13A0 /* GoogleSignIn */; };
 		D257B53D2E2C0DE600D46682 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = D257B53C2E2C0DE600D46682 /* FirebaseAnalytics */; };
@@ -25,14 +27,14 @@
 			containerPortal = D2776A062E1DAA5D00C580F6 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = D2776A0D2E1DAA5D00C580F6;
-			remoteInfo = AITest;
+			remoteInfo = SmartInventory;
 		};
 		D2776A282E1DAA5F00C580F6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D2776A062E1DAA5D00C580F6 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = D2776A0D2E1DAA5D00C580F6;
-			remoteInfo = AITest;
+			remoteInfo = SmartInventory;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -41,18 +43,19 @@
 		5AC623B92F8258BF00AC4937 /* SmartInventory.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = SmartInventory.storekit; sourceTree = "<group>"; };
 		5AC623BE2F828DE900AC4937 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		D218DEF92E2D0DF800EB13A0 /* privacy.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = privacy.html; sourceTree = "<group>"; };
-		D2776A0E2E1DAA5D00C580F6 /* AITest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AITest.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		D2776A1D2E1DAA5F00C580F6 /* AITestTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AITestTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		D2776A272E1DAA5F00C580F6 /* AITestUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AITestUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D2776A0E2E1DAA5D00C580F6 /* SmartInventory.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SmartInventory.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D2776A1D2E1DAA5F00C580F6 /* SmartInventoryTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SmartInventoryTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D2776A272E1DAA5F00C580F6 /* SmartInventoryUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SmartInventoryUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E1F4B0FF2FA1C5AB00A1C001 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "AITest/GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		5AC623BC2F828B5400AC4937 /* Exceptions for "AITest" folder in "AITest" target */ = {
+		5AC623BC2F828B5400AC4937 /* Exceptions for "AITest" folder in "SmartInventory" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = D2776A0D2E1DAA5D00C580F6 /* AITest */;
+			target = D2776A0D2E1DAA5D00C580F6 /* SmartInventory */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -60,7 +63,7 @@
 		D2776A102E1DAA5D00C580F6 /* AITest */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				5AC623BC2F828B5400AC4937 /* Exceptions for "AITest" folder in "AITest" target */,
+				5AC623BC2F828B5400AC4937 /* Exceptions for "AITest" folder in "SmartInventory" target */,
 			);
 			path = AITest;
 			sourceTree = "<group>";
@@ -82,6 +85,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5A4AFEA72FED43E200B47D05 /* AmplitudeSwift in Frameworks */,
 				D257B5472E2C0DE600D46682 /* FirebaseMessaging in Frameworks */,
 				D257B53D2E2C0DE600D46682 /* FirebaseAnalytics in Frameworks */,
 				D257B5432E2C0DE600D46682 /* FirebaseCrashlytics in Frameworks */,
@@ -90,6 +94,7 @@
 				D257B5452E2C0DE600D46682 /* FirebaseFirestore in Frameworks */,
 				D257B53F2E2C0DE600D46682 /* FirebaseAnalyticsCore in Frameworks */,
 				5AC623BF2F828DE900AC4937 /* StoreKit.framework in Frameworks */,
+				5AAC39492E92DFFE001F3908 /* WebKit.framework in Frameworks */,
 				D257B54B2E2C0DE600D46682 /* GoogleMobileAds in Frameworks */,
 				D218DEF62E2CAE0400EB13A0 /* GoogleSignIn in Frameworks */,
 			);
@@ -121,6 +126,14 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		5AC3050E2F8EA6640074FF18 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				E1F4B0FF2FA1C5AB00A1C001 /* GoogleService-Info.plist */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		D2776A052E1DAA5D00C580F6 = {
 			isa = PBXGroup;
 			children = (
@@ -131,15 +144,16 @@
 				D2776A2A2E1DAA5F00C580F6 /* AITestUITests */,
 				5AAC39472E92DFFB001F3906 /* Frameworks */,
 				D2776A0F2E1DAA5D00C580F6 /* Products */,
+				5AC3050E2F8EA6640074FF18 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
 		D2776A0F2E1DAA5D00C580F6 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				D2776A0E2E1DAA5D00C580F6 /* AITest.app */,
-				D2776A1D2E1DAA5F00C580F6 /* AITestTests.xctest */,
-				D2776A272E1DAA5F00C580F6 /* AITestUITests.xctest */,
+				D2776A0E2E1DAA5D00C580F6 /* SmartInventory.app */,
+				D2776A1D2E1DAA5F00C580F6 /* SmartInventoryTests.xctest */,
+				D2776A272E1DAA5F00C580F6 /* SmartInventoryUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -147,14 +161,15 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		D2776A0D2E1DAA5D00C580F6 /* AITest */ = {
+		D2776A0D2E1DAA5D00C580F6 /* SmartInventory */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D2776A312E1DAA5F00C580F6 /* Build configuration list for PBXNativeTarget "AITest" */;
+			buildConfigurationList = D2776A312E1DAA5F00C580F6 /* Build configuration list for PBXNativeTarget "SmartInventory" */;
 			buildPhases = (
 				D2776A0A2E1DAA5D00C580F6 /* Sources */,
 				D2776A0B2E1DAA5D00C580F6 /* Frameworks */,
 				D2776A0C2E1DAA5D00C580F6 /* Resources */,
 				5AC623BD2F828CEF00AC4937 /* Firebase Crashlytics */,
+				5A4AFEA82FED453A00B47D05 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -163,7 +178,7 @@
 			fileSystemSynchronizedGroups = (
 				D2776A102E1DAA5D00C580F6 /* AITest */,
 			);
-			name = AITest;
+			name = SmartInventory;
 			packageProductDependencies = (
 				D257B53C2E2C0DE600D46682 /* FirebaseAnalytics */,
 				D257B53E2E2C0DE600D46682 /* FirebaseAnalyticsCore */,
@@ -174,14 +189,15 @@
 				D257B5482E2C0DE600D46682 /* FirebaseStorage */,
 				D257B54A2E2C0DE600D46682 /* GoogleMobileAds */,
 				D218DEF52E2CAE0400EB13A0 /* GoogleSignIn */,
+				5A4AFEA62FED43E200B47D05 /* AmplitudeSwift */,
 			);
-			productName = AITest;
-			productReference = D2776A0E2E1DAA5D00C580F6 /* AITest.app */;
+			productName = SmartInventory;
+			productReference = D2776A0E2E1DAA5D00C580F6 /* SmartInventory.app */;
 			productType = "com.apple.product-type.application";
 		};
-		D2776A1C2E1DAA5F00C580F6 /* AITestTests */ = {
+		D2776A1C2E1DAA5F00C580F6 /* SmartInventoryTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D2776A342E1DAA5F00C580F6 /* Build configuration list for PBXNativeTarget "AITestTests" */;
+			buildConfigurationList = D2776A342E1DAA5F00C580F6 /* Build configuration list for PBXNativeTarget "SmartInventoryTests" */;
 			buildPhases = (
 				D2776A192E1DAA5F00C580F6 /* Sources */,
 				D2776A1A2E1DAA5F00C580F6 /* Frameworks */,
@@ -195,16 +211,16 @@
 			fileSystemSynchronizedGroups = (
 				D2776A202E1DAA5F00C580F6 /* AITestTests */,
 			);
-			name = AITestTests;
+			name = SmartInventoryTests;
 			packageProductDependencies = (
 			);
-			productName = AITestTests;
-			productReference = D2776A1D2E1DAA5F00C580F6 /* AITestTests.xctest */;
+			productName = SmartInventoryTests;
+			productReference = D2776A1D2E1DAA5F00C580F6 /* SmartInventoryTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		D2776A262E1DAA5F00C580F6 /* AITestUITests */ = {
+		D2776A262E1DAA5F00C580F6 /* SmartInventoryUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D2776A372E1DAA5F00C580F6 /* Build configuration list for PBXNativeTarget "AITestUITests" */;
+			buildConfigurationList = D2776A372E1DAA5F00C580F6 /* Build configuration list for PBXNativeTarget "SmartInventoryUITests" */;
 			buildPhases = (
 				D2776A232E1DAA5F00C580F6 /* Sources */,
 				D2776A242E1DAA5F00C580F6 /* Frameworks */,
@@ -218,11 +234,11 @@
 			fileSystemSynchronizedGroups = (
 				D2776A2A2E1DAA5F00C580F6 /* AITestUITests */,
 			);
-			name = AITestUITests;
+			name = SmartInventoryUITests;
 			packageProductDependencies = (
 			);
-			productName = AITestUITests;
-			productReference = D2776A272E1DAA5F00C580F6 /* AITestUITests.xctest */;
+			productName = SmartInventoryUITests;
+			productReference = D2776A272E1DAA5F00C580F6 /* SmartInventoryUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -261,15 +277,16 @@
 				D257B53B2E2C0DE600D46682 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				D257B54C2E2C0DE600D46682 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 				D218DEF42E2CAE0400EB13A0 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				5A4AFEA52FED43E200B47D05 /* XCRemoteSwiftPackageReference "Amplitude-Swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D2776A0F2E1DAA5D00C580F6 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				D2776A0D2E1DAA5D00C580F6 /* AITest */,
-				D2776A1C2E1DAA5F00C580F6 /* AITestTests */,
-				D2776A262E1DAA5F00C580F6 /* AITestUITests */,
+				D2776A0D2E1DAA5D00C580F6 /* SmartInventory */,
+				D2776A1C2E1DAA5F00C580F6 /* SmartInventoryTests */,
+				D2776A262E1DAA5F00C580F6 /* SmartInventoryUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -299,7 +316,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		5AC623BD2F828CEF00AC4937 /* Firebase Crashlytics */ = {
+		5A4AFEA82FED453A00B47D05 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -308,8 +325,28 @@
 			);
 			inputPaths = (
 				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}",
+				"$(SRCROOT)/$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)",
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${BUILD_DIR%Build/*}SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n";
+		};
+		5AC623BD2F828CEF00AC4937 /* Firebase Crashlytics */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}",
 				"$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)",
-				"$(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/GoogleService-Info.plist",
+				"${PROJECT_DIR}/AITest/GoogleService-Info.plist",
 			);
 			name = "Firebase Crashlytics";
 			outputFileListPaths = (
@@ -318,7 +355,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${BUILD_DIR%Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\" -gsp \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/GoogleService-Info.plist\"\n";
+			shellScript = "\"${BUILD_DIR%Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\" -gsp \"${PROJECT_DIR}/AITest/GoogleService-Info.plist\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -349,12 +386,12 @@
 /* Begin PBXTargetDependency section */
 		D2776A1F2E1DAA5F00C580F6 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = D2776A0D2E1DAA5D00C580F6 /* AITest */;
+			target = D2776A0D2E1DAA5D00C580F6 /* SmartInventory */;
 			targetProxy = D2776A1E2E1DAA5F00C580F6 /* PBXContainerItemProxy */;
 		};
 		D2776A292E1DAA5F00C580F6 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = D2776A0D2E1DAA5D00C580F6 /* AITest */;
+			target = D2776A0D2E1DAA5D00C580F6 /* SmartInventory */;
 			targetProxy = D2776A282E1DAA5F00C580F6 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -395,7 +432,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 773C9JD4U2;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -490,15 +527,17 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = AITest/AITest.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = V5987KNH55;
+				ENABLE_DEBUG_DYLIB = NO;
 				ENABLE_PREVIEWS = YES;
+				EXTRACT_APP_INTENTS_METADATA = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AITest/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Smart Inventory";
+				INFOPLIST_KEY_CFBundleDisplayName = Stoqly;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Smart Inventory uses your camera to scan product barcodes for quick inventory entry.";
-				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Smart Inventory uses your advertising ID to show you relevant ads that support the free version of this app.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Stoqly uses your camera to scan product barcodes for quick inventory entry.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Stoqly uses your advertising ID to show you relevant ads that support the free version of this app.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -511,8 +550,12 @@
 				);
 				MARKETING_VERSION = 1.0;
 				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
-				PRODUCT_BUNDLE_IDENTIFIER = com.vishuddhi.smartinventory;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vishuddhi.stoqly;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
@@ -526,16 +569,20 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = AITest/AITest.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = V5987KNH55;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = V5987KNH55;
 				ENABLE_PREVIEWS = YES;
+				EXTRACT_APP_INTENTS_METADATA = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AITest/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Smart Inventory";
+				INFOPLIST_KEY_CFBundleDisplayName = Stoqly;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Smart Inventory uses your camera to scan product barcodes for quick inventory entry.";
-				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Smart Inventory uses your advertising ID to show you relevant ads that support the free version of this app.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Stoqly uses your camera to scan product barcodes for quick inventory entry.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Stoqly uses your advertising ID to show you relevant ads that support the free version of this app.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -548,8 +595,14 @@
 				);
 				MARKETING_VERSION = 1.0;
 				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
-				PRODUCT_BUNDLE_IDENTIFIER = com.vishuddhi.smartinventory;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vishuddhi.stoqly;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Stoqly_Dist_2026;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
@@ -569,13 +622,13 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MARKETING_VERSION = 1.0;
 				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
-				PRODUCT_BUNDLE_IDENTIFIER = com.karthik.AITestTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.karthik.SmartInventoryTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AITest.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AITest";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SmartInventory.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SmartInventory";
 			};
 			name = Debug;
 		};
@@ -591,13 +644,13 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MARKETING_VERSION = 1.0;
 				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
-				PRODUCT_BUNDLE_IDENTIFIER = com.karthik.AITestTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.karthik.SmartInventoryTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AITest.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AITest";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SmartInventory.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SmartInventory";
 			};
 			name = Release;
 		};
@@ -611,13 +664,13 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
-				PRODUCT_BUNDLE_IDENTIFIER = com.karthik.AITestUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.karthik.SmartInventoryUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = AITest;
+				TEST_TARGET_NAME = SmartInventory;
 			};
 			name = Debug;
 		};
@@ -631,13 +684,13 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
-				PRODUCT_BUNDLE_IDENTIFIER = com.karthik.AITestUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.karthik.SmartInventoryUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = AITest;
+				TEST_TARGET_NAME = SmartInventory;
 			};
 			name = Release;
 		};
@@ -653,7 +706,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		D2776A312E1DAA5F00C580F6 /* Build configuration list for PBXNativeTarget "AITest" */ = {
+		D2776A312E1DAA5F00C580F6 /* Build configuration list for PBXNativeTarget "SmartInventory" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D2776A322E1DAA5F00C580F6 /* Debug */,
@@ -662,7 +715,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		D2776A342E1DAA5F00C580F6 /* Build configuration list for PBXNativeTarget "AITestTests" */ = {
+		D2776A342E1DAA5F00C580F6 /* Build configuration list for PBXNativeTarget "SmartInventoryTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D2776A352E1DAA5F00C580F6 /* Debug */,
@@ -671,7 +724,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		D2776A372E1DAA5F00C580F6 /* Build configuration list for PBXNativeTarget "AITestUITests" */ = {
+		D2776A372E1DAA5F00C580F6 /* Build configuration list for PBXNativeTarget "SmartInventoryUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D2776A382E1DAA5F00C580F6 /* Debug */,
@@ -683,6 +736,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		5A4AFEA52FED43E200B47D05 /* XCRemoteSwiftPackageReference "Amplitude-Swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/amplitude/Amplitude-Swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
 		D218DEF42E2CAE0400EB13A0 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/google/GoogleSignIn-iOS.git";
@@ -710,6 +771,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		5A4AFEA62FED43E200B47D05 /* AmplitudeSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A4AFEA52FED43E200B47D05 /* XCRemoteSwiftPackageReference "Amplitude-Swift" */;
+			productName = AmplitudeSwift;
+		};
 		D218DEF52E2CAE0400EB13A0 /* GoogleSignIn */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D218DEF42E2CAE0400EB13A0 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;

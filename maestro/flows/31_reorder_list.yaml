@@ -1,0 +1,27 @@
+# Flow 31 — Reorder List from Dashboard
+# Prerequisite: flow 21_low_stock_detection.yaml seeds low-stock data immediately before this.
+appId: com.vishuddhi.stoqly
+env:
+  ITEM_NAME: Low Stock Item
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- assertVisible: "Low Stock"
+- scrollUntilVisible:
+    element:
+      id: "lowStockKpiCard"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "lowStockKpiCard"
+- extendedWaitUntil:
+    visible: "Reorder List"
+    timeout: 10000
+- scrollUntilVisible:
+    element: "Low Stock Item"
+    direction: DOWN
+    timeout: 10000
+- assertVisible: "Low Stock Item"
+- assertVisible: "Low Stock"
+- tapOn: "Done"
+- assertVisible: "Dashboard"

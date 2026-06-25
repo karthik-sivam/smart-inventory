@@ -11,6 +11,7 @@ struct EditStorageView: View {
     @State private var location: String
     @State private var description: String
     @State private var selectedColor: String
+    @State private var supplierEmail: String
     
     private let colors = [
         "#007AFF", "#34C759", "#FF9500", "#FF3B30", "#AF52DE",
@@ -23,10 +24,11 @@ struct EditStorageView: View {
         self._location = State(initialValue: storage.location)
         self._description = State(initialValue: storage.storageDescription)
         self._selectedColor = State(initialValue: storage.color)
+        self._supplierEmail = State(initialValue: storage.supplierEmail)
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Storage Information")) {
                     TextField("Storage Name", text: $name)
@@ -54,6 +56,13 @@ struct EditStorageView: View {
                     }
                     .padding(.vertical, 8)
                 }
+
+                Section("Supplier") {
+                    TextField("Supplier Email (optional)", text: $supplierEmail)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
                 
                 Section(header: Text("Storage Statistics")) {
                     HStack {
@@ -66,7 +75,7 @@ struct EditStorageView: View {
                     HStack {
                         Text("Total Quantity")
                         Spacer()
-                        Text(String(format: "%.1f", storage.totalQuantity))
+                        Text(storage.totalQuantity.smartFormatted)
                             .fontWeight(.medium)
                     }
                     
@@ -103,9 +112,10 @@ struct EditStorageView: View {
         storage.location           = location
         storage.storageDescription = description
         storage.color              = selectedColor
+        storage.supplierEmail      = supplierEmail
         storage.updatedAt          = Date()
 
-        try? modelContext.save()
+        modelContext.safeSave(context: "editStorage")
 
         // Sync to Firestore (fire-and-forget)
         FirestoreManager.shared.syncStorage(storage)

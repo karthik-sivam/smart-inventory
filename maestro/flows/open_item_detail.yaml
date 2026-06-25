@@ -1,0 +1,22 @@
+# Open Item Detail from a storage/items list row.
+# env: ITEM_NAME (required), ITEM_SKU (optional — defaults to SKU-MAE-001)
+appId: com.vishuddhi.stoqly
+env:
+  ITEM_NAME: ""
+  ITEM_SKU: SKU_MAE_001
+---
+- scrollUntilVisible:
+    element: ${ITEM_NAME}
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "itemNavLink_${ITEM_SKU}"
+    optional: true
+- tapOn:
+    text: ${ITEM_SKU}
+    optional: true
+- tapOn: ${ITEM_NAME}
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Count Item"
+    timeout: 15000

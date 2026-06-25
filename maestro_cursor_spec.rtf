@@ -1,0 +1,337 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Helvetica;}}
+\f0\fs28
+
+MAESTRO TEST SUITE — Cursor Spec
+New tests, failure fixes, and code coverage for Stoqly
+=======================================================
+
+CONTEXT
+-------
+The Maestro test suite lives in maestro/flows/ and has 102 YAML files covering
+flows 01–80 plus numerous helpers. There are ZERO tests for Smart Count
+(VoiceInventoryView, ImageInventoryView, PaperInventoryView, SmartCountView).
+Your job in this spec has three sequential phases:
+
+  Phase A: Fix any currently failing existing flows
+  Phase B: Write new Smart Count test flows (81–87)
+  Phase C: Enable Xcode code coverage and report results
+
+CRITICAL RULES (from CLAUDE.md — never violate):
+- modelContext.safeSave(context:) — never try? modelContext.save()
+- Never set isPro = true anywhere in any code
+- Never add NavigationStack inside sheet/modal views that already have one
+- Test credentials: test@smartinventory.dev / Test@1234
+
+---
+
+PHASE A — FIX FAILING FLOWS
+============================
+
+Step A1: Run the full suite and collect results.
+
+  cd /Users/karthik_sivam/Documents/My\ Apps/SmartInventory/smart-inventory
+  maestro test maestro/flows/01_onboarding.yaml 2>&1 | tail -5
+  maestro test maestro/run_all_simulator.sh 2>&1 > maestro_phase_a_results.log
+
+  (If run_all_simulator.sh doesn't exist, run individual flows sequentially
+  from 01 to 80.)
+
+Step A2: For each failing flow, diagnose the root cause:
+  a) "Element not found" — the element text or id has changed in the UI.
+     Open the view file for that screen in AITest/Views/ and find the current
+     .accessibilityIdentifier or visible text. Update the YAML to match.
+  b) "Timeout waiting for app" — add a longer timeout or an intermediate wait.
+  c) "App not in foreground" — add a launchApp step at the top of the flow.
+  d) Flows that depend on state from prior flows — make the flow self-contained
+     by including the appropriate helper at the top.
+
+Step A3: Common fixes to apply across all flows:
+  - If a flow taps a nav tab by icon and fails, switch to tapOn with the
+    accessibility label text ("Dashboard", "Items", "Profile").
+  - If assertVisible fails on a translated/dynamic string, switch to
+    assertVisible with id: instead of text:.
+  - After fixing, re-run the individual flow to confirm it passes.
+
+Step A4: Update maestro/README.md with any flows that were fixed, noting
+  what changed and why.
+
+---
+
+PHASE B — NEW SMART COUNT FLOWS (81–87)
+========================================
+
+Smart Count is accessed via the sparkle/AI icon visible within a storage's
+item list (StorageDetailView). The three modes are Voice, Photo, and Sheet.
+
+Navigation path to reach Smart Count:
+  1. Sign in → Dashboard → tap any existing storage → storage detail opens
+  2. Tap the AI/sparkle icon (accessibility id: "smart-count-button" or
+     look for the icon next to the storage name in the toolbar)
+  3. SmartCountView appears as a sheet showing three mode cards
+
+If the button ID differs from the above, open AITest/Views/SmartCountView.swift
+and AITest/Views/StorageDetailView.swift to find the actual accessibility
+identifiers, then use those in the YAML.
+
+---
+
+FLOW 81 — Smart Count: Open and dismiss
+File: maestro/flows/81_smart_count_open.yaml
+
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml    # opens an existing storage
+- tapOn:
+    id: "smart-count-button"           # adjust id if different
+- assertVisible: "Smart Count"
+- assertVisible: "Voice"
+- assertVisible: "Photo"
+- assertVisible: "Sheet"
+- tapOn: "Cancel"                      # or swipe down to dismiss sheet
+- assertVisible: "Test Warehouse"      # back on storage detail
+
+---
+
+FLOW 82 — Smart Count: Voice mode navigation
+File: maestro/flows/82_smart_count_voice_mode.yaml
+
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml
+- tapOn:
+    id: "smart-count-button"
+- assertVisible: "Smart Count"
+- tapOn: "Voice"
+- assertVisible:
+    text: "Tap to speak"
+    optional: true
+- assertVisible:
+    text: "Start"
+    optional: true
+- assertVisible:
+    text: "Listening"
+    optional: true
+# Do NOT tap the record button — microphone access in simulator is unavailable.
+# Just verify the voice UI loaded and back navigation works.
+- tapOn: "Cancel"
+- assertVisible: "Smart Count"
+- tapOn: "Cancel"
+
+---
+
+FLOW 83 — Smart Count: Photo mode navigation
+File: maestro/flows/83_smart_count_photo_mode.yaml
+
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml
+- tapOn:
+    id: "smart-count-button"
+- assertVisible: "Smart Count"
+- tapOn: "Photo"
+- assertVisible:
+    text: "Point camera"
+    optional: true
+- assertVisible:
+    text: "Take Photo"
+    optional: true
+# Camera unavailable in simulator — just verify UI loaded.
+- tapOn: "Cancel"
+- assertVisible: "Smart Count"
+- tapOn: "Cancel"
+
+---
+
+FLOW 84 — Smart Count: Sheet mode navigation
+File: maestro/flows/84_smart_count_sheet_mode.yaml
+
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml
+- tapOn:
+    id: "smart-count-button"
+- assertVisible: "Smart Count"
+- tapOn: "Sheet"
+- assertVisible:
+    text: "Photograph"
+    optional: true
+- assertVisible:
+    text: "Scan Sheet"
+    optional: true
+# Camera unavailable in simulator — verify UI loaded.
+- tapOn: "Cancel"
+- assertVisible: "Smart Count"
+- tapOn: "Cancel"
+
+---
+
+FLOW 85 — Smart Count: Back navigation from mode to mode picker
+File: maestro/flows/85_smart_count_back_nav.yaml
+
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml
+- tapOn:
+    id: "smart-count-button"
+- assertVisible: "Smart Count"
+- tapOn: "Voice"
+# Navigate back to mode picker
+- tapOn:
+    text: "Back"
+    optional: true
+- tapOn:
+    id: "back-button"
+    optional: true
+- assertVisible: "Smart Count"
+- assertVisible: "Voice"
+- assertVisible: "Photo"
+- assertVisible: "Sheet"
+- tapOn: "Cancel"
+
+---
+
+FLOW 86 — Smart Count: Pro gate (free user, AI limit hit)
+File: maestro/flows/86_smart_count_pro_gate.yaml
+
+Note: This tests that when the AI usage limit is reached, the paywall
+appears. Only write this test if there is a visible "limit reached" state
+accessible without actually consuming AI credits. If the UI shows a
+disabled state or a lock icon when limit is reached, test that. Otherwise,
+mark this flow as manual-only with a comment.
+
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml
+- tapOn:
+    id: "smart-count-button"
+- assertVisible:
+    text: "3 remaining"
+    optional: true
+- assertVisible:
+    text: "Upgrade"
+    optional: true
+# If paywall gate is visible, tap it and verify paywall appears:
+- tapOn:
+    text: "Upgrade"
+    optional: true
+- assertVisible:
+    text: "Stoqly Pro"
+    optional: true
+- tapOn: "Cancel"
+
+---
+
+FLOW 87 — Post-login onboarding: full walkthrough
+File: maestro/flows/87_post_login_onboarding_full.yaml
+
+Note: PostLoginOnboardingView shows once after first sign-in if the user
+hasn't dismissed it. It may not show on every test run. Wrap assertions
+in optional: true and handle both paths (shown vs not shown).
+
+appId: com.vishuddhi.stoqly
+---
+- launchApp:
+    clearState: true
+- runFlow: signin_credentials.yaml
+- assertVisible:
+    text: "Welcome to Stoqly"
+    optional: true
+- tapOn:
+    text: "Next"
+    optional: true
+- tapOn:
+    text: "Next"
+    optional: true
+- tapOn:
+    text: "Get Started"
+    optional: true
+- assertVisible:
+    text: "Total Storages"
+    timeout: 15000
+
+---
+
+AFTER WRITING ALL FLOWS:
+
+1. Run each new flow individually to confirm it passes:
+     maestro test maestro/flows/81_smart_count_open.yaml
+     maestro test maestro/flows/82_smart_count_voice_mode.yaml
+     ... (83 through 87)
+
+2. If a flow fails because the accessibility id or text doesn't match:
+   - Open the view file (AITest/Views/SmartCountView.swift,
+     VoiceInventoryView.swift, ImageInventoryView.swift, PaperInventoryView.swift)
+   - Find the actual .accessibilityIdentifier or the visible text label
+   - Update the YAML to match
+
+3. If Smart Count button is not accessible via id, look for it by its icon
+   position or by its SwiftUI role. Consider adding an explicit
+   .accessibilityIdentifier("smart-count-button") in StorageDetailView.swift's
+   toolbar button for Smart Count, then re-build and re-run.
+
+4. Add flows 81–87 to maestro/run_all.yaml (or run_all_simulator.sh).
+
+5. Update maestro/README.md Flow Index table with the new flows.
+
+---
+
+PHASE C — CODE COVERAGE
+========================
+
+Step C1: Enable coverage in Xcode.
+  In Xcode:
+    Product → Scheme → Edit Scheme (or Cmd+<)
+    → Test → Options tab
+    → Check "Gather coverage for" → "All targets" (or select AITest target)
+    → Close
+
+Step C2: Run tests with coverage via xcodebuild (from Terminal, not sandbox):
+
+  xcodebuild test \
+    -scheme SmartInventory \
+    -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max,OS=latest' \
+    -enableCodeCoverage YES \
+    -resultBundlePath build/TestResults.xcresult \
+    2>&1 | tee build/xcodebuild_coverage.log
+
+Step C3: View coverage in Xcode.
+  - Open Xcode → Report Navigator (Cmd+9) → select the latest test run
+  - Click "Coverage" tab
+  - Review coverage % per file
+
+Step C4: Generate a coverage summary (optional CLI approach):
+  xcrun xccov view --report build/TestResults.xcresult > build/coverage_report.txt
+  cat build/coverage_report.txt | grep -E "(AITest/|\.swift)" | sort -t'%' -k1 -rn | head -40
+
+Step C5: Identify low-coverage areas and report back.
+  Files likely to have low coverage:
+  - AITest/Views/SmartCountView.swift — no UI tests yet
+  - AITest/Views/VoiceInventoryView.swift — no UI tests yet
+  - AITest/Views/ImageInventoryView.swift — no UI tests yet
+  - AITest/Views/PaperInventoryView.swift — no UI tests yet
+  - AITest/Services/AnalyticsManager.swift — new, untested
+  - AITest/Models/TeamManager.swift — team features
+
+  For each file below 40% coverage, note it in automation_results.rtf with
+  the coverage % and a recommendation for additional tests.
+
+Step C6: Update automation_results.rtf with:
+  - Total coverage % across all targets
+  - Per-file breakdown for files above and below 50%
+  - List of new flows added (81–87) and their pass/fail status
+  - List of flows fixed in Phase A and what was changed
+
+---
+
+BUILD CHECK (after all phases):
+  - Build the project in Xcode (Cmd+B) — zero new errors or warnings
+  - Run full Maestro suite — report pass/fail count
+  - Confirm isPro is never hardcoded to true anywhere
+}

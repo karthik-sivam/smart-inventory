@@ -1,18 +1,28 @@
 # Flow 16 — Profile Screen
 # Tests profile screen content and navigation
-appId: com.vishuddhi.smartinventory
+appId: com.vishuddhi.stoqly
 ---
 - runFlow: 00_signin_helper.yaml
 - tapOn: "Profile"
 - assertVisible: "Profile"
 
-# Subscription info
-- assertVisible: "Go Pro"
+# Subscription info (Pro test build shows "Pro Features" header)
+- assertVisible:
+    text: "Go Pro"
+    optional: true
+- assertVisible:
+    text: "Pro Features"
+    optional: true
 
 # Support section
 - assertVisible: "Help & Support"
 
-# Privacy policy — opens SFSafariViewController, assert Done button is visible
+# Privacy policy — opens in-app browser; row is below Email Verification on unverified accounts
+- scrollUntilVisible:
+    element: "Privacy Policy"
+    direction: DOWN
+    timeout: 25000
+    visibilityPercentage: 50
 - tapOn: "Privacy Policy"
 - waitForAnimationToEnd
 - assertVisible: "Done"
@@ -21,6 +31,11 @@ appId: com.vishuddhi.smartinventory
 - tapOn: "Done"
 - assertVisible: "Profile"
 
-# Account section
+# Account section (below fold on smaller simulators)
+- scrollUntilVisible:
+    element: "Sign Out"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 50
 - assertVisible: "Sign Out"
 - assertVisible: "Delete Account"

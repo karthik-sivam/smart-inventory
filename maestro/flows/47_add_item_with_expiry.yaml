@@ -1,0 +1,56 @@
+# Flow 47 — Add Item with Expiry Date
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml
+- runFlow: open_add_item_storage.yaml
+- tapOn:
+    id: "itemNameField"
+- eraseText: 80
+- inputText: "Expiry Test Item"
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true
+- scrollUntilVisible:
+    element:
+      id: "currentQuantityInput"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn:
+    id: "currentQuantityInput"
+- eraseText: 10
+- inputText: "20"
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true
+- scrollUntilVisible:
+    element: "Has Expiry Date"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Has Expiry Date"
+- waitForAnimationToEnd
+- assertVisible: "Expiry Date"
+- runFlow: save_add_item.yaml
+- scrollUntilVisible:
+    element: "Expiry Test Item"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "Expiry Test Item"
+- tapOn: "Expiry Test Item"
+- extendedWaitUntil:
+    visible: "Batches (FIFO order)"
+    timeout: 10000
+- assertVisible: "USE FIRST"
+- tapOn:
+    text: "Back"
+    optional: true
+- swipe:
+    direction: LEFT
+    on: "Expiry Test Item"
+- tapOn: "Delete"
+- tapOn: "Delete"

@@ -1,0 +1,29 @@
+# Flow 77 — Reorder List Item Tap → ItemDetailView (M2)
+# Prerequisite: flow 21 seeds low-stock item (run in suite after 21).
+appId: com.vishuddhi.stoqly
+env:
+  ITEM_NAME: Low Stock Item
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- tapOn:
+    id: "lowStockKpiCard"
+- extendedWaitUntil:
+    visible: "Reorder List"
+    timeout: 10000
+- assertVisible: "Reorder List"
+- scrollUntilVisible:
+    element:
+      text: ${ITEM_NAME}
+    direction: DOWN
+    timeout: 10000
+- assertVisible: ${ITEM_NAME}
+- tapOn: ${ITEM_NAME}
+- extendedWaitUntil:
+    visible: "Count Item"
+    timeout: 10000
+- assertVisible: "Count Item"
+- tapOn: "Back"
+- assertVisible: "Reorder List"
+- tapOn: "Done"
+- assertVisible: "Dashboard"

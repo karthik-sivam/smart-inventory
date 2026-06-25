@@ -1,0 +1,17 @@
+# Fresh install sign-in (clears state). Use for flow 04 only.
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: signin_onboarding_dismiss.yaml
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 30000
+- runFlow: signin_credentials.yaml
+- extendedWaitUntil:
+    visible: "Total Storages"
+    timeout: 90000

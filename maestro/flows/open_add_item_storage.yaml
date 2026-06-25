@@ -1,0 +1,8 @@
+# Open the Add Item sheet from storage detail (toolbar + or empty-state button).
+appId: com.vishuddhi.stoqly
+---
+- tapOn:
+    id: "addItemButton"
+- extendedWaitUntil:
+    visible: "SKU (Optional)"
+    timeout: 10000

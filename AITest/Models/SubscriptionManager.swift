@@ -30,13 +30,13 @@ import SwiftUI
 // └─────────────────────────────────────────────────────────────────┘
 //
 // SETUP REQUIRED in App Store Connect:
-//   Subscription Group: "Smart Inventory Pro"
+//   Subscription Group: "Stoqly Pro"
 //     Products:
-//       com.vishuddhi.smartinventory.pro.monthly   $2.99/mo
-//       com.vishuddhi.smartinventory.pro.annual    $22.99/yr
+//       com.vishuddhi.stoqly.pro.monthly   $2.99/mo
+//       com.vishuddhi.stoqly.pro.annual    $22.99/yr
 //
 //   Non-Consumable IAP:
-//       com.vishuddhi.smartinventory.removeads     $3.99 (one-time)
+//       com.vishuddhi.stoqly.removeads     $3.99 (one-time)
 //
 //   In Xcode: Target → Signing & Capabilities → + → In-App Purchase
 //   For local testing: assign SmartInventory.storekit to your Run scheme.
@@ -62,13 +62,17 @@ class SubscriptionManager: ObservableObject {
     @Published var products: [Product] = []
     @Published var purchaseState: PurchaseState = .idle
     @Published var isLoading = false
+    /// Expiration of the active Pro entitlement (subscription renewal date or trial end).
+    @Published private(set) var proSubscriptionExpirationDate: Date?
+    /// True when the active Pro entitlement is an introductory / free-trial offer.
+    @Published private(set) var isOnProTrial: Bool = false
 
     // MARK: - Product IDs
 
     enum ProductID: String, CaseIterable {
-        case proMonthly    = "com.vishuddhi.smartinventory.pro.monthly"
-        case proAnnual     = "com.vishuddhi.smartinventory.pro.annual"
-        case removeAds     = "com.vishuddhi.smartinventory.removeads"
+        case proMonthly    = "com.vishuddhi.stoqly.pro.monthly"
+        case proAnnual     = "com.vishuddhi.stoqly.pro.annual"
+        case removeAds     = "com.vishuddhi.stoqly.removeads"
 
         var displayName: String {
             switch self {
@@ -148,6 +152,21 @@ class SubscriptionManager: ObservableObject {
                 purchaseState = .success(product.displayName)
                 print("StoreKit ✅ Purchased: \(product.id)")
 
+                switch product.id {
+                case ProductID.removeAds.rawValue:
+                    AnalyticsManager.shared.track(.removeAdsPurchased)
+                case ProductID.proMonthly.rawValue, ProductID.proAnnual.rawValue:
+                    let plan = product.id.contains("annual") ? "annual" : "monthly"
+                    AnalyticsManager.shared.track(.subscriptionStarted(plan: plan))
+                    AnalyticsManager.shared.identify(
+                        userId: AuthManager.shared.currentUser?.uid ?? "",
+                        isPro: true,
+                        signupMethod: UserDefaults.standard.string(forKey: "signupMethod") ?? "unknown"
+                    )
+                default:
+                    break
+                }
+
             case .pending:
                 purchaseState = .idle
                 print("StoreKit ⏳ Purchase pending parental approval.")
@@ -182,9 +201,18 @@ class SubscriptionManager: ObservableObject {
 
     // MARK: - Status Refresh
 
+    /// Days until the Pro trial ends; `nil` when not on a trial or expiry is unknown.
+    var trialDaysRemaining: Int? {
+        guard isOnProTrial, let expiry = proSubscriptionExpirationDate else { return nil }
+        let days = Calendar.current.dateComponents([.day], from: Date(), to: expiry).day ?? 0
+        return max(0, days)
+    }
+
     func refreshPurchaseStatus() async {
         var hasPro = false
         var hasNoAds = false
+        var trialExpiry: Date?
+        var onTrial = false
 
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let transaction) = result else { continue }
@@ -196,6 +224,14 @@ class SubscriptionManager: ObservableObject {
             switch transaction.productID {
             case ProductID.proMonthly.rawValue, ProductID.proAnnual.rawValue:
                 hasPro = true
+                if let expiry = transaction.expirationDate {
+                    if trialExpiry == nil || expiry < trialExpiry! {
+                        trialExpiry = expiry
+                    }
+                }
+                if transaction.offer?.type == .introductory {
+                    onTrial = true
+                }
             case ProductID.removeAds.rawValue:
                 hasNoAds = true
             default:
@@ -204,6 +240,8 @@ class SubscriptionManager: ObservableObject {
         }
 
         isPro = hasPro
+        proSubscriptionExpirationDate = trialExpiry
+        isOnProTrial = onTrial
         // Pro includes ad removal
         hasRemovedAds = hasNoAds || hasPro
 
@@ -295,6 +333,9 @@ class SubscriptionManager: ObservableObject {
     /// Phase 3 — Pro only.
     var canUseAI: Bool { isPro }
 
+    /// Item photo capture and cloud storage -- Pro only.
+    var canUseItemPhotos: Bool { isPro }
+
     /// Ads shown unless Pro or Remove Ads active.
     var shouldShowAds: Bool { !isPro && !hasRemovedAds }
 
@@ -320,14 +361,41 @@ class SubscriptionManager: ObservableObject {
 // MARK: - Paywall View
 
 struct PaywallView: View {
+    var featureContext: String? = nil
+    var source: String = "unknown"
+
     @StateObject private var sub = SubscriptionManager.shared
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: PaywallTab = .pro
 
     enum PaywallTab { case pro, removeAds }
 
+    private var paywallHeadline: String {
+        if let featureContext, selectedTab == .pro {
+            return "Unlock \(featureContext)"
+        }
+        return selectedTab == .pro ? "Upgrade to Stoqly Pro" : "Remove Ads"
+    }
+
+    /// Price hint shown in the header — derives from live StoreKit prices
+    /// so the user always sees a number even before scrolling to the product cards.
+    private var priceHint: String {
+        switch selectedTab {
+        case .pro:
+            if let monthly = sub.proMonthlyProduct {
+                return "From \(monthly.displayPrice) / month"
+            }
+            return sub.isLoading ? "Loading pricing…" : "Monthly & annual plans available"
+        case .removeAds:
+            if let removeAds = sub.removeAdsProduct {
+                return "\(removeAds.displayPrice) · one-time"
+            }
+            return sub.isLoading ? "Loading pricing…" : "One-time purchase"
+        }
+    }
+
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
 
@@ -343,13 +411,25 @@ struct PaywallView: View {
                             )
                             .animation(.easeInOut(duration: 0.2), value: selectedTab)
 
-                        Text(selectedTab == .pro ? "Smart Inventory Pro" : "Remove Ads")
+                        Text(paywallHeadline)
                             .font(.title2).fontWeight(.bold)
                         Text(selectedTab == .pro
                              ? "For businesses that are growing"
                              : "Support the app · Enjoy ad-free")
                             .font(.subheadline).foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
+
+                        // Price hint — always visible so user knows cost
+                        // before scrolling to the product cards below.
+                        Text(priceHint)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.blue)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 5)
+                            .background(Color.blue.opacity(0.08))
+                            .cornerRadius(20)
+                            .animation(.easeInOut, value: priceHint)
                     }
                     .padding(.top)
 
@@ -372,9 +452,19 @@ struct PaywallView: View {
                     if sub.isLoading {
                         ProgressView("Loading plans…").padding()
                     } else if sub.products.isEmpty {
-                        Text("Unable to load plans. Check your connection.")
-                            .font(.caption).foregroundColor(.secondary)
-                            .multilineTextAlignment(.center).padding()
+                        VStack(spacing: 10) {
+                            Text("Unable to load plans. Check your connection.")
+                                .font(.caption).foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                            Button {
+                                Task { await sub.loadProducts() }
+                            } label: {
+                                Label("Retry", systemImage: "arrow.clockwise")
+                                    .font(.subheadline).fontWeight(.semibold)
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                        .padding()
                     } else {
                         VStack(spacing: 12) {
                             if selectedTab == .pro {
@@ -402,6 +492,7 @@ struct PaywallView: View {
                     // Legal
                     VStack(spacing: 12) {
                         Button("Restore Purchases") {
+                            AnalyticsManager.shared.track(.restorePurchaseTapped)
                             Task { await sub.restorePurchases() }
                         }
                         .font(.subheadline).foregroundColor(.blue)
@@ -426,11 +517,14 @@ struct PaywallView: View {
                     Button("Close") { dismiss() }
                 }
             }
-            .onChange(of: sub.purchaseState) { state in
+            .onChange(of: sub.purchaseState) { _, state in
                 if case .success = state { dismiss() }
             }
         }
         .task { await sub.loadProducts() }
+        .onAppear {
+            AnalyticsManager.shared.track(.paywallShown(source: source))
+        }
     }
 }
 
@@ -443,12 +537,15 @@ private struct ProFeatureList: View {
             PaywallSectionHeader(title: "Everything in Free, plus:")
 
             Group {
-                PaywallFeatureRow(icon: "archivebox.fill",          color: .purple, text: "Unlimited storage areas",           note: "Free: 5 max")
-                PaywallFeatureRow(icon: "cube.box.fill",            color: .blue,   text: "Unlimited items per storage",       note: "Free: 50 max")
-                PaywallFeatureRow(icon: "chart.line.uptrend.xyaxis",color: .green,  text: "Advanced analytics & full history", note: "Free: 30 days")
-                PaywallFeatureRow(icon: "barcode.viewfinder",       color: .orange, text: "Barcode scanner pro")
-                PaywallFeatureRow(icon: "person.2.fill",            color: .teal,   text: "Multi-user collaboration",          note: "Phase 2")
-                PaywallFeatureRow(icon: "sparkles",                 color: .indigo, text: "AI reorder suggestions",           note: "Phase 3")
+                PaywallFeatureRow(icon: "archivebox.fill",          color: .purple, text: "Unlimited storage areas",             note: "Free: 5 max")
+                PaywallFeatureRow(icon: "cube.box.fill",            color: .blue,   text: "Unlimited items per storage",         note: "Free: 50 max")
+                PaywallFeatureRow(icon: "chart.line.uptrend.xyaxis",color: .green,  text: "Advanced analytics & full history",   note: "Free: 30 days")
+                PaywallFeatureRow(icon: "barcode.viewfinder",       color: .orange, text: "Barcode scanner pro (bulk, history)")
+                PaywallFeatureRow(icon: "mic.fill",                 color: .teal,   text: "Unlimited AI Voice Inventory",        note: "Free: 3/month")
+                PaywallFeatureRow(icon: "camera.fill",              color: .teal,   text: "Unlimited AI Photo & Shelf Scan",     note: "Free: 3/month")
+                PaywallFeatureRow(icon: "doc.text.viewfinder",      color: .teal,   text: "Unlimited AI Sheet Inventory",        note: "Free: 3/month")
+                PaywallFeatureRow(icon: "square.and.arrow.down.on.square", color: .indigo, text: "Bulk CSV / Excel import")
+                PaywallFeatureRow(icon: "person.2.fill",            color: .cyan,   text: "Multi-user collaboration",            note: "Coming soon")
                 PaywallFeatureRow(icon: "xmark.circle.fill",        color: .gray,   text: "No ads")
             }
 
@@ -562,6 +659,23 @@ struct ProductCard: View {
     let product: Product
     let badge: String?
 
+    /// For annual subscriptions we compute the description from live prices so
+    /// it always matches the savings badge. The App Store Connect description
+    /// field often has a hardcoded percentage that drifts out of sync with the
+    /// actual prices — this avoids that mismatch.
+    private var displayDescription: String {
+        if product.subscription?.subscriptionPeriod.unit == .year,
+           let monthly = sub.proMonthlyProduct {
+            let annualisedMonthly = monthly.price * 12
+            guard annualisedMonthly > 0 else { return product.description }
+            let savingPct = (Double(truncating: annualisedMonthly - product.price as NSDecimalNumber)
+                            / Double(truncating: annualisedMonthly as NSDecimalNumber)) * 100
+            let saving = Int(savingPct.rounded())
+            return "Billed annually · save \(saving)% vs monthly"
+        }
+        return product.description
+    }
+
     var body: some View {
         Button {
             Task { await sub.purchase(product) }
@@ -585,8 +699,8 @@ struct ProductCard: View {
                         }
                     }
 
-                    if !product.description.isEmpty {
-                        Text(product.description)
+                    if !displayDescription.isEmpty {
+                        Text(displayDescription)
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .lineLimit(2)
@@ -647,7 +761,7 @@ struct ProGate: ViewModifier {
                 .overlay(
                     ProLockOverlay(featureName: feature) { showPaywall = true }
                 )
-                .sheet(isPresented: $showPaywall) { PaywallView() }
+                .sheet(isPresented: $showPaywall) { PaywallView(source: "pro_feature").sheetStyle() }
         }
     }
 }

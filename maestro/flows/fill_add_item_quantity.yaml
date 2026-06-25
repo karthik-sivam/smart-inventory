@@ -1,0 +1,23 @@
+# Focus Current Quantity on the storage Add Item form and enter a value.
+# env: QTY (required)
+appId: com.vishuddhi.stoqly
+---
+- scrollUntilVisible:
+    element:
+      id: "currentQuantityInput"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn:
+    id: "currentQuantityInput"
+    optional: true
+- tapOn:
+    text: "Current Quantity"
+    optional: true
+- eraseText: 10
+- inputText: ${QTY}
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true

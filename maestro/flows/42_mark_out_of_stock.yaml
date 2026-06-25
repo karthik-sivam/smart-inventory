@@ -1,0 +1,26 @@
+# Flow 42 — Mark as Empty from Item Detail (low-stock path)
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_product_detail.yaml
+- scrollUntilVisible:
+    element: "Mark as Empty"
+    direction: DOWN
+    timeout: 10000
+    optional: true
+- tapOn:
+    text: "Mark as Empty"
+    optional: true
+- assertVisible:
+    text: "Out of Stock"
+    optional: true
+- tapOn: "Count Item"
+- extendedWaitUntil:
+    visible: "Quick Count"
+    timeout: 8000
+- runFlow:
+    file: fill_quick_count_set_to.yaml
+    env:
+      QTY: "50"
+- runFlow: save_quick_count.yaml
+- assertVisible: "Test Product Maestro"

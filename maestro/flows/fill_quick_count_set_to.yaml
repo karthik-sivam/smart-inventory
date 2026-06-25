@@ -1,0 +1,12 @@
+# Enter a Set-to quantity in the open Quick Count sheet.
+# env: QTY (required)
+appId: com.vishuddhi.stoqly
+---
+- tapOn:
+    id: "quickCountQuantityInput"
+    optional: true
+- tapOn:
+    text: "New Quantity"
+    optional: true
+- eraseText: 10
+- inputText: ${QTY}

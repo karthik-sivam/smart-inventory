@@ -1,0 +1,38 @@
+# Flow 56 — Settings Currency Change
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- tapOn:
+    id: "gear"
+- assertVisible: "Settings"
+- scrollUntilVisible:
+    element:
+      id: "settingsCurrencyPicker"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "settingsCurrencyPicker"
+- tapOn:
+    id: "currency_EUR"
+- tapOn:
+    text: "Settings"
+    index: 0
+- tapOn: "Done"
+- tapOn: "Dashboard"
+- assertVisible: "Total Value"
+- tapOn:
+    id: "gear"
+- scrollUntilVisible:
+    element:
+      id: "settingsCurrencyPicker"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "settingsCurrencyPicker"
+- tapOn:
+    id: "currency_USD"
+- tapOn:
+    text: "Settings"
+    index: 0
+- tapOn: "Done"

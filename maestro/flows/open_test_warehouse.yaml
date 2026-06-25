@@ -1,0 +1,10 @@
+# Navigate to Test Warehouse storage detail.
+appId: com.vishuddhi.stoqly
+---
+- tapOn: "Storages"
+- scrollUntilVisible:
+    element: "Test Warehouse"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Test Warehouse"
+- assertVisible: "Test Warehouse"

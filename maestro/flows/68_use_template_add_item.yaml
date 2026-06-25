@@ -1,0 +1,55 @@
+# Flow 68 — Use Template pre-fills Add Item form and links createdFromTemplateId
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Storages"
+- scrollUntilVisible:
+    element: "Test Warehouse"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Test Warehouse"
+- tapOn:
+    id: "addItemButton"
+    optional: true
+- tapOn:
+    text: "Add Item"
+    optional: true
+- assertVisible: "Add Item"
+- assertVisible: "Use Template"
+- tapOn: "Use Template"
+- assertVisible: "Choose Template"
+- tapOn:
+    text: "Maestro Test Template"
+    optional: true
+- tapOn:
+    text: "Test Product Maestro"
+    optional: true
+- tapOn:
+    id: "itemNameField"
+    optional: true
+- eraseText: 50
+- inputText: "Template Created Item"
+- runFlow: save_add_item.yaml
+- assertVisible: "Template Created Item"
+- tapOn: "Dashboard"
+- tapOn:
+    id: "gear"
+- scrollUntilVisible:
+    element: "Item Templates"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Item Templates"
+- assertVisible: "Maestro Test Template"
+- assertVisible:
+    text: "1 item"
+    optional: true
+- tapOn:
+    text: "Back"
+    optional: true
+- tapOn: "Storages"
+- tapOn: "Test Warehouse"
+- swipe:
+    direction: LEFT
+    on: "Template Created Item"
+- tapOn: "Delete"
+- tapOn: "Delete"

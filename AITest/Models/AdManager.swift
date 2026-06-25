@@ -286,12 +286,14 @@ class AdManager: NSObject, ObservableObject {
     func showInterstitialAd() {
         #if !targetEnvironment(simulator)
         guard let ad = interstitialAd else {
+            adLoadError = "No ad available at the moment."
             print("AdMob: Interstitial not ready — preloading for next opportunity.")
             preloadInterstitialAd()
             return
         }
         guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
+            adLoadError = "Unable to present ad."
             return
         }
         ad.present(fromRootViewController: root)
@@ -340,6 +342,8 @@ class AdManager: NSObject, ObservableObject {
 
     func dismissAd() {
         shouldShowAd = false
+        adLoadError = nil
+        isAdLoading = false
         // Pre-load next interstitial so it's ready
         preloadInterstitialAd()
     }
@@ -463,6 +467,8 @@ struct InterstitialAdTrigger: View {
     @ObservedObject var adManager: AdManager
     let onDismiss: () -> Void
 
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         ZStack {
             Color.black.opacity(0.85).ignoresSafeArea()
@@ -485,9 +491,18 @@ struct InterstitialAdTrigger: View {
                             .foregroundColor(.white.opacity(0.7))
                             .multilineTextAlignment(.center)
                     }
+                } else {
+                    VStack(spacing: 12) {
+                        Image(systemName: "rectangle.slash")
+                            .font(.system(size: 40))
+                            .foregroundColor(.white.opacity(0.8))
+                        Text("No ad to show")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
                 }
 
-                Button(action: onDismiss) {
+                Button(action: close) {
                     Text("Continue")
                         .font(.headline)
                         .foregroundColor(.white)
@@ -504,6 +519,12 @@ struct InterstitialAdTrigger: View {
                 adManager.showInterstitialAd()
             }
         }
+    }
+
+    private func close() {
+        adManager.dismissAd()
+        onDismiss()
+        dismiss()
     }
 }
 
@@ -563,7 +584,8 @@ struct RewardAdTrigger: View {
 /// Wrap your main content in this view to automatically handle
 /// banner and interstitial ads based on user actions.
 struct RealAdIntegrationView<Content: View>: View {
-    @StateObject private var adManager = AdManager.shared
+    @ObservedObject private var adManager = AdManager.shared
+    @State private var showInterstitialOverlay = false
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -582,15 +604,23 @@ struct RealAdIntegrationView<Content: View>: View {
                 .animation(.easeInOut, value: adManager.shouldShowAd)
             }
         }
-        .fullScreenCover(
-            isPresented: Binding(
-                get: { adManager.shouldShowAd && adManager.currentAdType == .interstitial },
-                set: { _ in }
-            )
-        ) {
+        .onChange(of: adManager.shouldShowAd) { _, _ in
+            syncInterstitialOverlay()
+        }
+        .onChange(of: adManager.currentAdType) { _, _ in
+            syncInterstitialOverlay()
+        }
+        .onAppear {
+            syncInterstitialOverlay()
+        }
+        .fullScreenCover(isPresented: $showInterstitialOverlay) {
             InterstitialAdTrigger(adManager: adManager) {
-                adManager.dismissAd()
+                showInterstitialOverlay = false
             }
         }
+    }
+
+    private func syncInterstitialOverlay() {
+        showInterstitialOverlay = adManager.shouldShowAd && adManager.currentAdType == .interstitial
     }
 }

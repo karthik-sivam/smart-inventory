@@ -1,0 +1,17 @@
+# Select Test Warehouse + default UOM on Items-tab Add Item form.
+appId: com.vishuddhi.stoqly
+---
+- scrollUntilVisible:
+    element: "Storage & UOM"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    text: "Select Storage"
+    optional: true
+- tapOn: "Test Warehouse"
+- tapOn:
+    text: "Select UOM"
+    optional: true
+- tapOn:
+    text: "Pieces (pcs)"
+    optional: true

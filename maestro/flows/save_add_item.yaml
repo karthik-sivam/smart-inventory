@@ -1,0 +1,12 @@
+# Tap Save on Add Item sheet (nav bar — dismiss keyboard first).
+appId: com.vishuddhi.stoqly
+---
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    id: "addItemSaveButton"
+- waitForAnimationToEnd

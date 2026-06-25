@@ -1,0 +1,18 @@
+# Flow 55 — Empty Storage Empty State
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Storages"
+- tapOn: "Add Storage"
+- tapOn: "Storage Name"
+- inputText: "Empty Test Storage"
+- tapOn: "Save"
+- assertVisible: "Empty Test Storage"
+- tapOn: "Empty Test Storage"
+- assertVisible: "Empty Test Storage is empty"
+- tapOn: "Back"
+- swipe:
+    direction: LEFT
+    on: "Empty Test Storage"
+- tapOn: "Delete"
+- tapOn: "Delete"

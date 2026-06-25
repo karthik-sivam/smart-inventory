@@ -6,10 +6,21 @@ import SwiftData
 
 @MainActor
 final class StorageListViewModel: ObservableObject {
+    static let freeStorageCap = SubscriptionManager.freeStorageLimit
+
     @Published var searchText: String = ""
     @Published private(set) var filteredStorages: [Storage] = []
 
     private var storages: [Storage] = []
+
+    var isAtFreeStorageCap: Bool {
+        !SubscriptionManager.shared.isPro && storages.count >= Self.freeStorageCap
+    }
+
+    var freeStorageUsageText: String? {
+        guard !SubscriptionManager.shared.isPro else { return nil }
+        return "\(storages.count) of \(Self.freeStorageCap) storages used"
+    }
     private var modelContext: ModelContext?
 
     func bind(modelContext: ModelContext?, storages: [Storage]) {
@@ -40,8 +51,9 @@ final class StorageListViewModel: ObservableObject {
         FirestoreManager.shared.deleteStorage(storage)
 
         // Remove locally (cascade deletes items via SwiftData relationship)
+        AnalyticsManager.shared.track(.storageDeleted)
         modelContext.delete(storage)
-        try? modelContext.save()
+        modelContext.safeSave(context: "storageViewModel save")
         AdManager.shared.recordCompletion(event: .storageUpdated)
     }
 

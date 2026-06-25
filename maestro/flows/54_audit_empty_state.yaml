@@ -1,0 +1,25 @@
+# Flow 54 — Audit Due filter: counted item no longer appears as due
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Audit"
+- tapOn: "All"
+- tapOn: "Search items to audit…"
+- inputText: "Test Product Maestro"
+- tapOn: "All"
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 15000
+- runFlow: open_quick_count_audit.yaml
+- runFlow:
+    file: fill_quick_count_set_to.yaml
+    env:
+      QTY: "50"
+- runFlow: save_quick_count.yaml
+- tapOn: "Audit"
+- tapOn: "Due"
+- tapOn: "Search items to audit…"
+- inputText: "Test Product Maestro"
+- tapOn: "Due"
+- assertNotVisible: "Test Product Maestro"

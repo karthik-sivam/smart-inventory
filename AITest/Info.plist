@@ -5,9 +5,15 @@
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-9489340523484530~5027045442</string>
 	<key>NSUserTrackingUsageDescription</key>
-	<string>Smart Inventory uses your advertising ID to show you relevant ads that support the free version of this app.</string>
+	<string>Stoqly uses your advertising ID to show you relevant ads that support the free version of this app.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Smart Inventory uses your camera to scan product barcodes.</string>
+	<string>Stoqly uses your camera to scan product barcodes and photograph products for AI-powered inventory counting.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Stoqly uses your microphone to let you take inventory by speaking item names and quantities.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Stoqly uses speech recognition to convert your spoken inventory counts into text for AI processing.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Stoqly accesses your photo library so you can upload inventory sheets and product photos for AI-powered counting.</string>
     <key>SKAdNetworkItems</key>
     <array>
         <dict>
@@ -216,5 +222,25 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.119980681461-ii75qpqt1f85uqflii5u5qjr2t04m5me</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleDisplayName</key>
+	<string>Stoqly</string>
+	<key>CFBundleName</key>
+	<string>Stoqly</string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
 </dict>
 </plist>

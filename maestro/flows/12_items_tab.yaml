@@ -1,18 +1,33 @@
 # Flow 12 — Items Tab
 # Tests browsing items across all storages and search
-appId: com.vishuddhi.smartinventory
+appId: com.vishuddhi.stoqly
+env:
+  ITEM_NAME: Test Product Maestro
 ---
 - runFlow: 00_signin_helper.yaml
-- tapOn: "Items"
-- assertVisible: "Items"
-- assertVisible: "All Storages"
+- runFlow:
+    file: find_item_on_items_tab.yaml
+    env:
+      ITEM_NAME: Test Product Maestro
+- assertVisible: "Test Product Maestro"
 
-# Search for existing item
+# Search by category to verify expanded search
 - tapOn: "Search items..."
-- inputText: "Test Product"
-- assertVisible: "Test Product"
+- eraseText: 30
+- inputText: "Uncategorised"
+- extendedWaitUntil:
+    visible: "Test Product Maestro"
+    timeout: 15000
+- hideKeyboard:
+    optional: true
+- tapOn: "All Storages"
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 10000
+- assertVisible: "Test Product Maestro"
 
 # Clear search
 - tapOn: "Search items..."
-- eraseText: 20
+- eraseText: 30
 - assertVisible: "All Storages"

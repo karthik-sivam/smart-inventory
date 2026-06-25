@@ -8,6 +8,7 @@ final class Storage {
     var location: String
     var storageDescription: String
     var color: String
+    var supplierEmail: String = ""
     var createdAt: Date
     var updatedAt: Date
     
@@ -29,5 +30,9 @@ final class Storage {
     
     var totalQuantity: Double {
         items.reduce(0) { $0 + $1.currentQuantity }
+    }
+
+    var totalValue: Double {
+        items.reduce(0) { $0 + $1.totalValue }
     }
 } 

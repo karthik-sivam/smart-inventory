@@ -1,16 +1,28 @@
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var currencyManager: CurrencyManager
+    @EnvironmentObject private var firestoreManager: FirestoreManager
+    @Query private var items: [InventoryItem]
     @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @StateObject private var teamManager = TeamManager.shared
     @StateObject private var adManager = AdManager.shared
     @StateObject private var trackingManager = TrackingPermissionManager.shared
+
+    @AppStorage(NotificationManager.dailySummaryEnabledKey) private var dailySummaryEnabled = false
+    @AppStorage(NotificationManager.dailySummaryHourKey) private var dailySummaryHour = 18
+    @AppStorage(NotificationManager.dailySummaryMinuteKey) private var dailySummaryMinute = 0
+    @State private var dailySummaryTime = Calendar.current.date(
+        from: DateComponents(hour: 18, minute: 0)
+    ) ?? Date()
 
     @State private var showPaywall = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
 
                 // MARK: - Subscription Status
@@ -27,7 +39,7 @@ struct SettingsView: View {
                                     .font(.system(size: 18))
                             }
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Smart Inventory Pro")
+                                Text("Stoqly Pro")
                                     .font(.headline)
                                     .fontWeight(.semibold)
                                 Text("Unlimited storages · Advanced analytics · No ads")
@@ -45,7 +57,7 @@ struct SettingsView: View {
                                 UIApplication.shared.open(url)
                             }
                         }
-                        .foregroundColor(.blue)
+                        .foregroundColor(.stoqlyPrimary)
                     } else {
                         // Free user — upgrade prompt
                         HStack(spacing: 14) {
@@ -95,10 +107,67 @@ struct SettingsView: View {
                             Task { await subscriptionManager.restorePurchases() }
                         }
                         .font(.subheadline)
-                        .foregroundColor(.blue)
+                        .foregroundColor(.stoqlyPrimary)
                     }
                 } header: {
                     Text("Subscription")
+                }
+
+                if subscriptionManager.isPro {
+                    Section(header: Text("Team")) {
+                        NavigationLink(destination: TeamMembersView()) {
+                            Label("Team Members", systemImage: "person.2.fill")
+                        }
+                    }
+
+                    Section(header: Text("Inventory")) {
+                        NavigationLink(destination: TemplatesListView()) {
+                            Label("Item Templates", systemImage: "doc.on.doc.fill")
+                        }
+                        .accessibilityIdentifier("itemTemplatesRow")
+
+                        NavigationLink(destination: BulkImportView()) {
+                            Label("Import Items (CSV / Excel)", systemImage: "square.and.arrow.down.on.square")
+                        }
+                        .accessibilityIdentifier("bulkImportRow")
+                    }
+                }
+
+                if teamManager.isInTeamWorkspace {
+                    Section {
+                        Button(role: .destructive) {
+                            teamManager.leaveWorkspace()
+                            Task {
+                                await firestoreManager.pullFromCloud(modelContext: modelContext)
+                            }
+                        } label: {
+                            Label("Leave Team Workspace", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
+                    }
+                }
+
+                Section(header: Text("Daily Summary")) {
+                    Toggle("End-of-day stock summary", isOn: $dailySummaryEnabled)
+                        .onChange(of: dailySummaryEnabled) { _, enabled in
+                            if enabled {
+                                rescheduleDailySummary()
+                            } else {
+                                NotificationManager.shared.cancelDailySummary()
+                            }
+                        }
+                    if dailySummaryEnabled {
+                        DatePicker(
+                            "Notify at",
+                            selection: $dailySummaryTime,
+                            displayedComponents: .hourAndMinute
+                        )
+                        .onChange(of: dailySummaryTime) { _, newTime in
+                            let parts = Calendar.current.dateComponents([.hour, .minute], from: newTime)
+                            dailySummaryHour = parts.hour ?? 18
+                            dailySummaryMinute = parts.minute ?? 0
+                            rescheduleDailySummary()
+                        }
+                    }
                 }
 
                 // MARK: - Currency
@@ -107,9 +176,11 @@ struct SettingsView: View {
                         ForEach(Currency.currencies, id: \.code) { currency in
                             CurrencyRow(currency: currency)
                                 .tag(currency)
+                                .accessibilityIdentifier("currency_\(currency.code)")
                         }
                     }
                     .pickerStyle(NavigationLinkPickerStyle())
+                    .accessibilityIdentifier("settingsCurrencyPicker")
                     .onChange(of: currencyManager.selectedCurrency) { _, _ in
                         AdManager.shared.recordCompletion(event: .settingsChanged)
                     }
@@ -139,7 +210,7 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
-                        .foregroundColor(.blue)
+                        .foregroundColor(.stoqlyPrimary)
                     }
                 }
 
@@ -195,7 +266,7 @@ struct SettingsView: View {
                         ForEach(AdManager.shared.getTestDeviceIDs(), id: \.self) { id in
                             Text(id)
                                 .font(.system(.caption2, design: .monospaced))
-                                .foregroundColor(.blue)
+                                .foregroundColor(.stoqlyPrimary)
                         }
                     }
                     .padding(.vertical, 4)
@@ -229,6 +300,11 @@ struct SettingsView: View {
                 }
                 #endif
 
+                // MARK: - AI Features
+                Section(header: Text("AI Features")) {
+                    AIAPIKeyRow()
+                }
+
                 // MARK: - About
                 Section(header: Text("About")) {
                     HStack {
@@ -240,7 +316,7 @@ struct SettingsView: View {
                     HStack {
                         Label("App", systemImage: "cube.box")
                         Spacer()
-                        Text("Smart Inventory")
+                        Text("Stoqly")
                             .foregroundColor(.secondary)
                     }
                 }
@@ -265,11 +341,31 @@ struct SettingsView: View {
             .navigationBarBackButtonHidden(true)
         }
         .sheet(isPresented: $showPaywall) {
-            PaywallView()
+            PaywallView(source: "pro_feature")
+                .sheetStyle()
         }
         .task {
             await subscriptionManager.loadProducts()
         }
+        .onAppear {
+            dailySummaryTime = Calendar.current.date(
+                from: DateComponents(hour: dailySummaryHour, minute: dailySummaryMinute)
+            ) ?? dailySummaryTime
+            if dailySummaryEnabled {
+                rescheduleDailySummary()
+            }
+        }
+    }
+
+    private func rescheduleDailySummary() {
+        let lowStockCount = items.filter { $0.isLowStock || $0.isOutOfStock }.count
+        let expiringCount = items.filter { $0.isExpiringSoon || $0.isExpired }.count
+        NotificationManager.shared.scheduleDailySummary(
+            hour: dailySummaryHour,
+            minute: dailySummaryMinute,
+            lowStockCount: lowStockCount,
+            expiringCount: expiringCount
+        )
     }
 }
 
@@ -290,6 +386,112 @@ struct CurrencyRow: View {
             }
             Spacer()
         }
+    }
+}
+
+// MARK: - AIAPIKeyRow
+//
+// Lets the user paste their Anthropic API key directly from Settings.
+// The key is stored in UserDefaults (not Keychain for simplicity at this stage).
+// If Secrets.plist is present it takes precedence; otherwise UserDefaults is used.
+
+struct AIAPIKeyRow: View {
+    @AppStorage("stoqly_anthropic_api_key") private var savedKey: String = ""
+    @State private var editingKey = ""
+    @State private var isEditing = false
+    @State private var showKey = false
+
+    private var effectiveKey: String {
+        SecretsManager.anthropicAPIKey ?? savedKey
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Anthropic API Key", systemImage: "sparkles")
+                Spacer()
+                if !effectiveKey.isEmpty {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.stoqlySuccess)
+                        .font(.caption)
+                }
+            }
+
+            if isEditing {
+                HStack {
+                    if showKey {
+                        TextField("sk-ant-api03-…", text: $editingKey)
+                            .font(.caption)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                    } else {
+                        SecureField("sk-ant-api03-…", text: $editingKey)
+                            .font(.caption)
+                    }
+                    Button(action: { showKey.toggle() }) {
+                        Image(systemName: showKey ? "eye.slash" : "eye")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(8)
+                .background(Color.stoqlyCard)
+                .cornerRadius(8)
+
+                HStack {
+                    Button("Save") {
+                        savedKey = editingKey.trimmingCharacters(in: .whitespaces)
+                        isEditing = false
+                    }
+                    .font(.caption).fontWeight(.semibold)
+                    .foregroundColor(.stoqlyPrimary)
+
+                    Spacer()
+
+                    Button("Cancel") {
+                        isEditing = false
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+            } else {
+                if effectiveKey.isEmpty {
+                    Button("Add API Key") {
+                        editingKey = savedKey
+                        isEditing = true
+                    }
+                    .font(.caption)
+                    .foregroundColor(.stoqlyPrimary)
+                    Text("Required for Voice, Photo, and Sheet inventory features.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                } else {
+                    HStack {
+                        Text(SecretsManager.anthropicAPIKey != nil ? "Configured via Secrets.plist" : "•••••••••••••••••••••")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        if SecretsManager.anthropicAPIKey == nil {
+                            Button("Change") {
+                                editingKey = savedKey
+                                isEditing = true
+                            }
+                            .font(.caption)
+                            .foregroundColor(.stoqlyPrimary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+extension SecretsManager {
+    /// Returns the API key from Secrets.plist OR UserDefaults (Settings input).
+    static var effectiveAnthropicKey: String? {
+        if let key = anthropicAPIKey, !key.isEmpty { return key }
+        let stored = UserDefaults.standard.string(forKey: "stoqly_anthropic_api_key") ?? ""
+        return stored.isEmpty ? nil : stored
     }
 }
 

@@ -1,10 +1,25 @@
 # Flow 01 — Onboarding
 # Tests the 4-page onboarding walkthrough on first launch
-appId: com.vishuddhi.smartinventory
+appId: com.vishuddhi.stoqly
 ---
-- clearState
-- launchApp
-- assertVisible: "Know What You Have"
+- launchApp:
+    appId: com.vishuddhi.stoqly
+    clearState: true
+    arguments:
+      UITestResetOnboarding: true
+# Fresh install: notification + ATT sheets can cover onboarding (iOS 18+)
+- tapOn:
+    text: "Don’t Allow"
+    optional: true
+- tapOn:
+    text: "Ask App Not to Track"
+    optional: true
+- waitForAnimationToEnd
+# SplashScreenView ~4s, then fullScreenCover onboarding; title uses accessibility id
+- extendedWaitUntil:
+    visible:
+      id: "onboarding.title.0"
+    timeout: 25000
 - assertVisible: "Skip"
 
 # Page 1 → Page 2
@@ -23,4 +38,4 @@ appId: com.vishuddhi.smartinventory
 
 # Complete onboarding
 - tapOn: "Get Started"
-- assertVisible: "Smart Inventory"
+- assertVisible: "Stoqly"

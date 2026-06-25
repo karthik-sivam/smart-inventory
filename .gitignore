@@ -64,3 +64,22 @@ AITest.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # Maestro test credentials
 maestro/config.yaml
+maestro/run_all.yaml
+maestro_results*.txt
+maestro_final_report.txt
+
+# Secrets and credentials — NEVER commit these
+AITest/Secrets.plist
+AITest/GoogleService-Info.plist
+GoogleService-Info.plist
+
+# Debug / CI artefacts
+debug_*.png
+maestro_*.log
+maestro_*.txt
+build/
+*.log
+
+# macOS
+.DS_Store
+**/.DS_Store

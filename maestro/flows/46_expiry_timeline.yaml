@@ -1,0 +1,12 @@
+# Flow 46 — Expiry Timeline View (from Dashboard card)
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- scrollUntilVisible:
+    element: "Expiring Soon"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Expiring Soon"
+- assertVisible: "Expiry Timeline"
+- tapOn: "Done"

@@ -1,0 +1,23 @@
+# Open Quick Count from Audit tab.
+# env: ITEM_NAME (default Test Product Maestro), ITEM_SKU (default SKU-MAE-001)
+appId: com.vishuddhi.stoqly
+env:
+  ITEM_NAME: Test Product Maestro
+  ITEM_SKU: SKU-MAE-001
+---
+- scrollUntilVisible:
+    element: ${ITEM_NAME}
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "auditCountCard_SKU_MAE_001"
+    optional: true
+- tapOn:
+    text: "Count ${ITEM_NAME}"
+    optional: true
+- tapOn: ${ITEM_NAME}
+- waitForAnimationToEnd
+- runFlow: dismiss_count_tips.yaml
+- extendedWaitUntil:
+    visible: "Quick Count"
+    timeout: 15000

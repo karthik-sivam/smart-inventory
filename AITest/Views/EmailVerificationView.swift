@@ -8,7 +8,7 @@ struct EmailVerificationView: View {
     @State private var showSuccessAlert = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 30) {
                     // Header
@@ -71,7 +71,7 @@ struct EmailVerificationView: View {
                             
                             InstructionStep(
                                 number: "2",
-                                text: "Look for an email from Smart Inventory"
+                                text: "Look for an email from Stoqly"
                             )
                             
                             InstructionStep(

@@ -1,0 +1,10 @@
+# Dismiss first-time Quick Count tips overlay if shown.
+appId: com.vishuddhi.stoqly
+---
+- tapOn:
+    id: "countTipsDismissButton"
+    optional: true
+- tapOn:
+    text: "Got it"
+    optional: true
+- waitForAnimationToEnd

@@ -1,0 +1,14 @@
+# Flow 27 — Category chips in StorageDetailView
+# Chips (including "All") only render when an item has a non-Uncategorised category.
+# With only Uncategorised items, the list still shows products without chips.
+# Prerequisite: 08_add_item in same session.
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Storages"
+- tapOn: "Test Warehouse"
+- extendedWaitUntil:
+    visible: "Test Product Maestro"
+    timeout: 30000
+- assertVisible: "Test Product Maestro"
+- assertNotVisible: "All"

@@ -1,0 +1,13 @@
+# Flow 25 — Global Search
+# Tests the dashboard global search sheet
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- tapOn: "Search"
+- assertVisible: "Search across all storages"
+- tapOn: "Search items, SKUs, barcodes..."
+- inputText: "Test Product"
+- assertVisible: "Test Product Maestro"
+- tapOn: "Done"
+- assertVisible: "Dashboard"

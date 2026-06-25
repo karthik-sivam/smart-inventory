@@ -1,0 +1,16 @@
+# Flow 39 — Item Detail Full View
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_product_detail.yaml
+- assertVisible: "Count Item"
+- scrollUntilVisible:
+    element: "Item Info"
+    direction: DOWN
+    timeout: 10000
+- assertVisible: "Item Info"
+- scrollUntilVisible:
+    element: "Storage & Limits"
+    direction: DOWN
+    timeout: 10000
+- assertVisible: "Storage & Limits"

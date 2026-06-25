@@ -1,28 +1,49 @@
-# Flow 09 — Quick Count
-# Tests the inline quick count button on an item
-# Prerequisite: "Test Product" item exists in "Test Warehouse"
-appId: com.vishuddhi.smartinventory
+# Flow 09 — Quick Count (Set-to / Adjust-by UI)
+appId: com.vishuddhi.stoqly
+env:
+  ITEM_NAME: Test Product Maestro
 ---
 - runFlow: 00_signin_helper.yaml
-- tapOn: "Storages"
-- tapOn: "Test Warehouse"
-- assertVisible: "Test Product"
-
-# Tap Count button on item row
-- tapOn: "Count"
-- assertVisible: "Quick Count"
-- assertVisible: "New Quantity"
-
-# Enter new quantity
-- tapOn: "New Quantity"
-- eraseText: 10
-- inputText: "45"
-
-# Add optional note
+- runFlow: open_test_warehouse.yaml
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 15000
+- runFlow:
+    file: open_quick_count_swipe.yaml
+    env:
+      ITEM_NAME: ${ITEM_NAME}
+- assertVisible: "Set to"
+- assertVisible: "Adjust by"
+- assertVisible: "--"
+- runFlow:
+    file: fill_quick_count_set_to.yaml
+    env:
+      QTY: "45"
+- assertNotVisible: "--"
 - tapOn: "Notes (optional)"
-- inputText: "Monthly stock check"
-
+- inputText: "Monthly recount"
 - tapOn: "Save"
-
-# Should return to storage detail
-- assertVisible: "Test Product"
+- tapOn:
+    text: "Save Anyway"
+    optional: true
+- waitForAnimationToEnd
+- runFlow: open_test_warehouse.yaml
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 15000
+- runFlow:
+    file: open_quick_count_swipe.yaml
+    env:
+      ITEM_NAME: ${ITEM_NAME}
+- tapOn: "Adjust by"
+- runFlow:
+    file: fill_quick_count_set_to.yaml
+    env:
+      QTY: "5"
+- tapOn: "Save"
+- tapOn:
+    text: "Save Anyway"
+    optional: true
+- waitForAnimationToEnd

@@ -74,11 +74,11 @@ struct WebView: UIViewRepresentable {
                 <p>Please contact support at \(HelpAndSupport.supportEmail) for assistance.</p>
             </div>
             
-            <h2>Smart Inventory Privacy Policy</h2>
+            <h2>Stoqly Privacy Policy</h2>
             <p>This is a placeholder privacy policy. The actual privacy policy content should be loaded from the privacy.html file.</p>
             
             <h3>Data Collection</h3>
-            <p>Smart Inventory collects minimal data necessary for app functionality:</p>
+            <p>Stoqly collects minimal data necessary for app functionality:</p>
             <ul>
                 <li>Inventory data you create</li>
                 <li>Storage information</li>
@@ -108,6 +108,7 @@ struct WebView: UIViewRepresentable {
         Coordinator(self)
     }
     
+    @MainActor
     class Coordinator: NSObject, WKNavigationDelegate {
         var parent: WebView
         
@@ -159,7 +160,7 @@ struct WebView: UIViewRepresentable {
             webView.evaluateJavaScript(js, completionHandler: nil)
         }
         
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
             // Handle external links (mailto, http, https)
             if let url = navigationAction.request.url {
                 if url.scheme == "mailto" || url.scheme == "http" || url.scheme == "https" {
@@ -178,7 +179,7 @@ struct PrivacyPolicyView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             SafariWebView(url: URL(string: "https://vishuddhi.in/privacy.html")!)
                 .navigationTitle("Privacy Policy")
                 .navigationBarTitleDisplayMode(.inline)

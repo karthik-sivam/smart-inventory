@@ -1,15 +1,6 @@
 # Flow 20 — Sign Out
-# Tests the sign out confirmation and return to auth screen
-appId: com.vishuddhi.smartinventory
+# signout_steps.yaml already confirms the alert and asserts auth screen.
+appId: com.vishuddhi.stoqly
 ---
 - runFlow: 00_signin_helper.yaml
-- tapOn: "Profile"
-- assertVisible: "Sign Out"
-- tapOn: "Sign Out"
-
-# Confirmation alert
-- assertVisible: "Are you sure you want to sign out?"
-- tapOn: "Sign Out"
-
-# Should return to auth/onboarding
-- assertVisible: "Smart Inventory"
+- runFlow: signout_steps.yaml

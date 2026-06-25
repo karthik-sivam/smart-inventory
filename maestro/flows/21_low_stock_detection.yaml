@@ -1,0 +1,111 @@
+# Flow 21 — Low Stock Detection
+# Seeds low-stock data used by flows 31, 50, 22, and 24 in the full suite.
+# Uses Test Warehouse (seeded by flows 07+08 earlier in the suite).
+appId: com.vishuddhi.stoqly
+env:
+  ITEM_NAME: Low Stock Item
+  ITEM_SKU: SKU-LOW
+---
+- runFlow: 00_signin_helper.yaml
+
+# Remove any prior Low Stock Item from Test Warehouse
+- tapOn: "Storages"
+- scrollUntilVisible:
+    element: "Test Warehouse"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Test Warehouse"
+- swipe:
+    direction: LEFT
+    on: "Low Stock Item"
+    optional: true
+- tapOn:
+    text: "Delete"
+    optional: true
+- tapOn:
+    text: "Delete"
+    optional: true
+
+# Add item with min quantity = 10 (same reliable path as flow 08)
+- runFlow: open_add_item_storage.yaml
+- tapOn:
+    id: "itemNameField"
+- eraseText: 80
+- inputText: "Low Stock Item"
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true
+- tapOn:
+    id: "addItemSkuField"
+- inputText: "SKU-LOW"
+- scrollUntilVisible:
+    element:
+      id: "currentQuantityInput"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn:
+    id: "currentQuantityInput"
+- eraseText: 10
+- inputText: "20"
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true
+- scrollUntilVisible:
+    element:
+      id: "minQuantityInput"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "minQuantityInput"
+- inputText: "10"
+- scrollUntilVisible:
+    element:
+      id: "maxQuantityInput"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "maxQuantityInput"
+- inputText: "50"
+- tapOn:
+    text: "Done"
+    optional: true
+- runFlow: save_add_item.yaml
+- scrollUntilVisible:
+    element: "Low Stock Item"
+    direction: DOWN
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "Low Stock Item"
+    timeout: 15000
+- assertVisible: "Low Stock Item"
+
+# Count the item to 5 (below min of 10)
+- tapOn: "Low Stock Item"
+- extendedWaitUntil:
+    visible: "Count Item"
+    timeout: 15000
+- tapOn: "Count Item"
+- waitForAnimationToEnd
+- runFlow: dismiss_count_tips.yaml
+- extendedWaitUntil:
+    visible: "Quick Count"
+    timeout: 15000
+- runFlow:
+    file: fill_quick_count_set_to.yaml
+    env:
+      QTY: "5"
+- runFlow: save_quick_count.yaml
+- assertVisible: "Low Stock Item"
+- assertVisible: "Low Stock"
+
+# Verify dashboard shows Low Stock KPI card
+- tapOn: "Dashboard"
+- assertVisible: "Low Stock"
+- tapOn:
+    id: "lowStockKpiCard"
+    optional: true

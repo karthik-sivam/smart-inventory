@@ -1,0 +1,23 @@
+# Flow 51 — Search History in GlobalSearchView
+# History records the query when a result row is tapped.
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- tapOn: "Search"
+- tapOn: "Search items, SKUs, barcodes..."
+- inputText: "Test Product"
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "Test Product Maestro"
+- tapOn: "Test Product Maestro"
+# NavigationLink back button is labelled "Search", not "Back"
+- tapOn: "Search"
+- tapOn: "Done"
+- tapOn: "Search"
+- assertVisible: "Test Product"
+- tapOn: "Test Product"
+- assertVisible: "Test Product Maestro"
+- tapOn: "Done"

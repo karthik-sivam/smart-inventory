@@ -1,0 +1,8 @@
+# Tap Save on Quick Count and dismiss the large-change alert when shown.
+appId: com.vishuddhi.stoqly
+---
+- tapOn: "Save"
+- tapOn:
+    text: "Save Anyway"
+    optional: true
+- waitForAnimationToEnd

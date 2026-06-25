@@ -1,0 +1,65 @@
+# Flow 36 — Batch expiry tracking end-to-end
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml
+- runFlow: open_add_item_storage.yaml
+- tapOn:
+    id: "itemNameField"
+- eraseText: 80
+- inputText: "Batch Expiry Item"
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true
+- scrollUntilVisible:
+    element:
+      id: "currentQuantityInput"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn:
+    id: "currentQuantityInput"
+- eraseText: 10
+- inputText: "10"
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true
+- scrollUntilVisible:
+    element: "Has Expiry Date"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Has Expiry Date"
+- waitForAnimationToEnd
+- assertVisible: "Expiry Date"
+- runFlow: save_add_item.yaml
+- scrollUntilVisible:
+    element: "Batch Expiry Item"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "Batch Expiry Item"
+- tapOn: "Batch Expiry Item"
+- extendedWaitUntil:
+    visible: "Batches (FIFO order)"
+    timeout: 10000
+- assertVisible: "USE FIRST"
+- tapOn: "Count Item"
+- tapOn: "Adjust by"
+- tapOn:
+    id: "quickCountQuantityInput"
+    optional: true
+- inputText: "10"
+- scrollUntilVisible:
+    element: "Track as new batch"
+    direction: DOWN
+    timeout: 8000
+- tapOn: "Track as new batch"
+- runFlow: save_quick_count.yaml
+- scrollUntilVisible:
+    element: "Batches (FIFO order)"
+    direction: DOWN
+    timeout: 8000
+- assertVisible: "USE FIRST"

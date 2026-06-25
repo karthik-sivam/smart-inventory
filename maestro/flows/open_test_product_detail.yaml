@@ -1,0 +1,12 @@
+# Open Test Product Maestro detail from Test Warehouse.
+appId: com.vishuddhi.stoqly
+---
+- runFlow: open_test_warehouse.yaml
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Test Product Maestro"
+- extendedWaitUntil:
+    visible: "Count Item"
+    timeout: 15000

@@ -1,12 +1,25 @@
 # Flow 02 — Onboarding Skip
 # Tests that Skip button jumps directly to auth screen
-appId: com.vishuddhi.smartinventory
+appId: com.vishuddhi.stoqly
 ---
-- clearState
-- launchApp
-- assertVisible: "Know What You Have"
+- launchApp:
+    appId: com.vishuddhi.stoqly
+    clearState: true
+    arguments:
+      UITestResetOnboarding: true
+- tapOn:
+    text: "Don’t Allow"
+    optional: true
+- tapOn:
+    text: "Ask App Not to Track"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "onboarding.title.0"
+    timeout: 20000
 
 # Skip from page 1
 - tapOn: "Skip"
 # After skip: either auth screen (fresh install) or dashboard (Keychain session exists)
-- assertVisible: "Smart Inventory"
+- assertVisible: "Stoqly"

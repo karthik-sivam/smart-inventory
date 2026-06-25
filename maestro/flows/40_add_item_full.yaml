@@ -1,0 +1,75 @@
+# Flow 40 — Add Item with All Fields
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml
+- runFlow: open_add_item_storage.yaml
+- tapOn:
+    id: "itemNameField"
+- eraseText: 80
+- inputText: "Full Fields Test Item"
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true
+- scrollUntilVisible:
+    element: "Description (Optional)"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Description (Optional)"
+- inputText: "A test item with all fields filled"
+- tapOn:
+    id: "addItemSkuField"
+- inputText: "SKU-TEST-001"
+- scrollUntilVisible:
+    element:
+      id: "currentQuantityInput"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn:
+    id: "currentQuantityInput"
+- eraseText: 10
+- inputText: "100"
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true
+- scrollUntilVisible:
+    element:
+      id: "minQuantityInput"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "minQuantityInput"
+- inputText: "10"
+- scrollUntilVisible:
+    element:
+      id: "maxQuantityInput"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "maxQuantityInput"
+- inputText: "200"
+- scrollUntilVisible:
+    element: "Unit Cost"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Unit Cost"
+- inputText: "5.99"
+- tapOn:
+    text: "Done"
+    optional: true
+- runFlow: save_add_item.yaml
+- scrollUntilVisible:
+    element: "Full Fields Test Item"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "Full Fields Test Item"
+- swipe:
+    direction: LEFT
+    on: "Full Fields Test Item"
+- tapOn: "Delete"
+- tapOn: "Delete"

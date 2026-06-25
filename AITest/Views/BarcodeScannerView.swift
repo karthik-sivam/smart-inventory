@@ -1,407 +1,252 @@
 import SwiftUI
+import VisionKit
 import AVFoundation
 
 // MARK: - BarcodeScannerView
 //
-// Real AVFoundation camera-based barcode and QR code scanner.
+// Uses DataScannerViewController (VisionKit, iOS 16+) — Apple's recommended
+// high-level scanner. It owns the full camera + detection pipeline internally,
+// avoiding the AVCaptureMetadataOutput XPC issues that plagued the raw
+// AVFoundation approach.
+//
+// KEY: startScanning() MUST be called in viewDidAppear — calling it earlier
+// (e.g. in makeUIViewController) silently no-ops and detection never starts.
+// ScannerNavigationController handles this via its viewDidAppear override.
+//
+// PRESENTATION CONTRACT (read this before adding new call sites):
+//
+//   This view MUST be presented via `.fullScreenCover`, NOT `.sheet`. When a
+//   view that hosts an AVFoundation capture session is presented as a sheet
+//   inside another sheet, iOS routes the capture XPC to the wrong window
+//   scene and the pipeline silently fails with:
+//
+//       FigXPCUtilities signalled err=-17281     (RemoteServiceNotFound)
+//       FigCaptureSourceRemote: assert err == 0  (capture source bail)
+//       (Fig) signalled err=-12710               (CMFigCapture session)
+//
+//   `.fullScreenCover` reparents the presented controller to the root scene
+//   presentation chain, giving the capture pipeline a stable host. See the
+//   working "Scan to Find" call site in ItemListView for the canonical
+//   presentation pattern.
 //
 // SETUP REQUIRED in Xcode:
 //   Target → Info → Custom iOS Target Properties → Add:
-//     Key:   NSCameraUsageDescription
-//     Value: "Smart Inventory uses your camera to scan product barcodes
-//             for quick inventory entry."
-//
-// Supported formats: EAN-8, EAN-13, UPC-A, UPC-E, QR Code, Code 128, Code 39, Code 93,
-//                    ITF-14, DataMatrix, Aztec, PDF417
+//     NSCameraUsageDescription  →  "Stoqly uses your camera to scan product barcodes."
 
-struct BarcodeScannerView: View {
+// MARK: - ScannerNavigationController
 
-    /// Called when a barcode is successfully scanned.
-    let onScan: (String, String) -> Void   // (barcode value, format)
+/// A UINavigationController subclass whose sole job is to call
+/// `scanner.startScanning()` once the view hierarchy is fully on screen.
+/// DataScannerViewController silently ignores startScanning() if called
+/// before viewDidAppear, so this is the reliable hook.
+private final class ScannerNavigationController: UINavigationController {
+    weak var scanner: DataScannerViewController?
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        try? scanner?.startScanning()
+    }
+}
+
+// MARK: - BarcodeScannerView
+
+struct BarcodeScannerView: UIViewControllerRepresentable {
+
+    let onScan: (String, String) -> Void
     let onCancel: () -> Void
 
-    @StateObject private var coordinator = ScannerCoordinator()
-    @State private var showManualEntry = false
-    @State private var manualBarcode = ""
-    @State private var lastScannedValue = ""
-    @State private var flashOn = false
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onScan: onScan, onCancel: onCancel)
+    }
 
-    var body: some View {
-        ZStack {
-            // Camera feed
-            CameraPreviewLayer(coordinator: coordinator)
-                .ignoresSafeArea()
+    func makeUIViewController(context: Context) -> UIViewController {
+        // Apple-Silicon simulators report isSupported == true (they inherit the
+        // host's ANE) but the AVFoundation capture XPC has no real camera to
+        // attach to, so DataScannerViewController emits a stream of -17281 /
+        // -12710 errors and shows a black preview. Short-circuit to the
+        // manual-entry fallback so the simulator UX is usable and the console
+        // stays clean.
+        #if targetEnvironment(simulator)
+        return context.coordinator.makeFallbackViewController()
+        #else
+        // Device: require both VisionKit availability (camera permission +
+        // OS support) and hardware support (ANE-capable device).
+        guard DataScannerViewController.isAvailable,
+              DataScannerViewController.isSupported else {
+            return context.coordinator.makeFallbackViewController()
+        }
 
-            // Scanning overlay
-            VStack(spacing: 0) {
-                // Top bar
-                HStack {
-                    Button(action: onCancel) {
-                        Image(systemName: "xmark")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                            .padding(12)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Circle())
-                    }
+        let scanner = DataScannerViewController(
+            recognizedDataTypes: [
+                .barcode(symbologies: [
+                    .ean8, .ean13, .upce,
+                    .code39, .code93, .code128,
+                    .itf14, .dataMatrix, .aztec,
+                    .pdf417, .qr
+                ])
+            ],
+            qualityLevel: .balanced,
+            recognizesMultipleItems: false,
+            isHighFrameRateTrackingEnabled: false,
+            isGuidanceEnabled: true,
+            isHighlightingEnabled: true
+        )
+        scanner.delegate = context.coordinator
+        context.coordinator.scanner = scanner
 
-                    Spacer()
+        // ScannerNavigationController calls startScanning() in viewDidAppear.
+        let nav = ScannerNavigationController(rootViewController: scanner)
+        nav.scanner = scanner
+        nav.navigationBar.tintColor = .white
+        nav.navigationBar.barStyle = .black
+        nav.navigationBar.isTranslucent = true
 
-                    Text("Scan Barcode")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .shadow(radius: 2)
+        scanner.navigationItem.leftBarButtonItem = UIBarButtonItem(
+            title: "Cancel",
+            style: .plain,
+            target: context.coordinator,
+            action: #selector(Coordinator.cancelTapped)
+        )
+        scanner.navigationItem.rightBarButtonItem = UIBarButtonItem(
+            title: "Manual",
+            style: .plain,
+            target: context.coordinator,
+            action: #selector(Coordinator.manualTapped)
+        )
 
-                    Spacer()
+        return nav
+        #endif
+    }
 
-                    Button {
-                        flashOn.toggle()
-                        coordinator.toggleFlash(on: flashOn)
-                    } label: {
-                        Image(systemName: flashOn ? "bolt.fill" : "bolt.slash.fill")
-                            .font(.title2)
-                            .foregroundColor(flashOn ? .yellow : .white)
-                            .padding(12)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Circle())
-                    }
-                }
-                .padding()
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) { }
 
-                Spacer()
+    // MARK: - Coordinator
 
-                // Scan window
-                ZStack {
-                    // Dark overlay with hole
-                    ScanWindowMask()
+    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
 
-                    // Scan frame
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white, lineWidth: 3)
-                        .frame(width: 260, height: 160)
+        let onScan: (String, String) -> Void
+        let onCancel: () -> Void
+        weak var scanner: DataScannerViewController?
+        /// Used on simulator / unsupported devices where `scanner` is nil so
+        /// the manual-entry alert still has a presenter.
+        weak var fallbackPresenter: UIViewController?
+        private var hasScanned = false
 
-                    // Corner accents
-                    ScanCorners()
+        init(onScan: @escaping (String, String) -> Void, onCancel: @escaping () -> Void) {
+            self.onScan = onScan
+            self.onCancel = onCancel
+        }
 
-                    // Animated scan line
-                    if coordinator.isScanning {
-                        ScanLine()
-                    }
+        // MARK: DataScannerViewControllerDelegate
 
-                    // Success flash
-                    if coordinator.didScan {
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.green.opacity(0.3))
-                            .frame(width: 260, height: 160)
-                    }
-                }
+        func dataScanner(
+            _ dataScanner: DataScannerViewController,
+            didAdd addedItems: [RecognizedItem],
+            allItems: [RecognizedItem]
+        ) {
+            guard !hasScanned,
+                  case .barcode(let barcode) = addedItems.first,
+                  let payload = barcode.payloadStringValue,
+                  !payload.isEmpty else { return }
 
-                Spacer()
+            hasScanned = true
+            let symbology = barcode.observation.symbology.rawValue
 
-                // Bottom controls
-                VStack(spacing: 16) {
-                    if let scanned = coordinator.lastScanned {
-                        HStack {
-                            Image(systemName: "barcode")
-                            Text(scanned)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(Color.green.opacity(0.85))
-                        .cornerRadius(12)
-                        .transition(.scale.combined(with: .opacity))
-                    }
+            // Stop scanning so it doesn't fire again while we dismiss.
+            dataScanner.stopScanning()
 
-                    Button {
-                        showManualEntry = true
-                    } label: {
-                        Label("Enter barcode manually", systemImage: "keyboard")
-                            .font(.subheadline)
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Color.black.opacity(0.5))
-                            .cornerRadius(12)
-                    }
-                }
-                .padding(.bottom, 50)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+
+            // onScan is called on the main thread; the caller's closure sets
+            // formVM.barcode and dismisses the sheet.
+            DispatchQueue.main.async { [weak self] in
+                self?.onScan(payload, symbology)
             }
         }
-        .onAppear {
-            coordinator.startScanning { value, format in
-                guard value != lastScannedValue else { return }
-                lastScannedValue = value
-                // Haptic feedback
+
+        // MARK: Bar button actions
+
+        @objc func cancelTapped() {
+            scanner?.stopScanning()
+            onCancel()
+        }
+
+        @objc func manualTapped() {
+            // Prefer the real scanner as presenter; fall back to the simulator
+            // / unsupported-device VC so the alert always has somewhere to go.
+            guard let presenter: UIViewController = scanner ?? fallbackPresenter else { return }
+            let alert = UIAlertController(
+                title: "Enter Barcode",
+                message: "Type the barcode number manually.",
+                preferredStyle: .alert
+            )
+            alert.addTextField { tf in
+                tf.placeholder = "e.g. 5012345678900"
+                tf.keyboardType = .asciiCapable
+                tf.autocorrectionType = .no
+                tf.autocapitalizationType = .allCharacters
+            }
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Use", style: .default) { [weak self] _ in
+                guard let code = alert.textFields?.first?.text, !code.isEmpty else { return }
+                self?.hasScanned = true
+                self?.scanner?.stopScanning()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
-                // Brief delay so user sees the success state
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    onScan(value, format)
-                }
-            }
+                self?.onScan(code, "Manual")
+            })
+            presenter.present(alert, animated: true)
         }
-        .onDisappear { coordinator.stopScanning() }
-        .alert("Permission Required", isPresented: $coordinator.showPermissionAlert) {
-            Button("Open Settings") {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
-            }
-            Button("Cancel", role: .cancel) { onCancel() }
-        } message: {
-            Text("Smart Inventory needs camera access to scan barcodes. Please enable it in Settings.")
-        }
-        .sheet(isPresented: $showManualEntry) {
-            ManualBarcodeEntryView(barcode: $manualBarcode) { entered in
-                onScan(entered, "Manual")
-            }
-        }
-    }
-}
 
-// MARK: - Scanner Coordinator
+        // MARK: Fallback for Simulator / unsupported device
 
-@MainActor
-final class ScannerCoordinator: NSObject, ObservableObject, AVCaptureMetadataOutputObjectsDelegate {
+        func makeFallbackViewController() -> UIViewController {
+            let vc = UIViewController()
+            vc.view.backgroundColor = .black
 
-    @Published var isScanning = false
-    @Published var didScan = false
-    @Published var lastScanned: String?
-    @Published var showPermissionAlert = false
+            // Wrap in a UINavigationController so Cancel is reachable from
+            // the nav bar — matches the live scanner's chrome.
+            let nav = UINavigationController(rootViewController: vc)
+            nav.navigationBar.tintColor = .white
+            nav.navigationBar.barStyle = .black
+            nav.navigationBar.isTranslucent = true
 
-    private var captureSession: AVCaptureSession?
-    private var onScan: ((String, String) -> Void)?
-
-    var previewLayer: AVCaptureVideoPreviewLayer?
-
-    func startScanning(onScan: @escaping (String, String) -> Void) {
-        self.onScan = onScan
-
-        Task {
-            let status = AVCaptureDevice.authorizationStatus(for: .video)
-            switch status {
-            case .authorized:
-                await setupSession()
-            case .notDetermined:
-                let granted = await AVCaptureDevice.requestAccess(for: .video)
-                if granted { await setupSession() }
-                else { showPermissionAlert = true }
-            default:
-                showPermissionAlert = true
-            }
-        }
-    }
-
-    func stopScanning() {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.captureSession?.stopRunning()
-        }
-        isScanning = false
-    }
-
-    func toggleFlash(on: Bool) {
-        guard let device = AVCaptureDevice.default(for: .video),
-              device.hasTorch else { return }
-        try? device.lockForConfiguration()
-        device.torchMode = on ? .on : .off
-        device.unlockForConfiguration()
-    }
-
-    private func setupSession() async {
-        let session = AVCaptureSession()
-
-        guard let device = AVCaptureDevice.default(for: .video),
-              let input = try? AVCaptureDeviceInput(device: device),
-              session.canAddInput(input) else { return }
-
-        session.addInput(input)
-
-        let output = AVCaptureMetadataOutput()
-        guard session.canAddOutput(output) else { return }
-        session.addOutput(output)
-
-        output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-        output.metadataObjectTypes = [
-            .ean8, .ean13, .upce, .qr,
-            .code128, .code39, .code93,
-            .itf14, .dataMatrix, .aztec, .pdf417
-        ]
-
-        let layer = AVCaptureVideoPreviewLayer(session: session)
-        layer.videoGravity = .resizeAspectFill
-        previewLayer = layer
-
-        captureSession = session
-        isScanning = true
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            session.startRunning()
-        }
-    }
-
-    // MARK: - AVCaptureMetadataOutputObjectsDelegate
-
-    nonisolated func metadataOutput(
-        _ output: AVCaptureMetadataOutput,
-        didOutput metadataObjects: [AVMetadataObject],
-        from connection: AVCaptureConnection
-    ) {
-        guard let obj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-              let value = obj.stringValue else { return }
-
-        let format = obj.type.rawValue
-
-        Task { @MainActor in
-            lastScanned = value
-            didScan = true
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-                self?.didScan = false
-            }
-
-            onScan?(value, format)
-        }
-    }
-}
-
-// MARK: - Camera Preview Layer
-
-struct CameraPreviewLayer: UIViewRepresentable {
-    let coordinator: ScannerCoordinator
-
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
-        view.backgroundColor = .black
-        return view
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {
-        guard let previewLayer = coordinator.previewLayer else { return }
-        previewLayer.frame = uiView.bounds
-        if previewLayer.superlayer == nil {
-            uiView.layer.addSublayer(previewLayer)
-        }
-    }
-}
-
-// MARK: - Visual Elements
-
-struct ScanWindowMask: View {
-    var body: some View {
-        Rectangle()
-            .fill(Color.black.opacity(0.55))
-            .mask(
-                ZStack {
-                    Rectangle()
-                    RoundedRectangle(cornerRadius: 16)
-                        .frame(width: 260, height: 160)
-                        .blendMode(.destinationOut)
-                }
-                .compositingGroup()
+            vc.title = "Scan Barcode"
+            vc.navigationItem.leftBarButtonItem = UIBarButtonItem(
+                title: "Cancel", style: .plain,
+                target: self, action: #selector(cancelTapped)
             )
-            .ignoresSafeArea()
-    }
-}
 
-struct ScanCorners: View {
-    let size: CGFloat = 28
-    let thickness: CGFloat = 4
-    let radius: CGFloat = 12
+            let label = UILabel()
+            label.text = "Camera not available on this device.\nEnter the barcode manually instead."
+            label.textColor = .white
+            label.textAlignment = .center
+            label.numberOfLines = 0
+            label.translatesAutoresizingMaskIntoConstraints = false
+            vc.view.addSubview(label)
+            NSLayoutConstraint.activate([
+                label.centerXAnchor.constraint(equalTo: vc.view.centerXAnchor),
+                label.centerYAnchor.constraint(equalTo: vc.view.centerYAnchor),
+                label.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor, constant: 24),
+                label.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor, constant: -24)
+            ])
 
-    var body: some View {
-        ZStack {
-            // Top-left
-            cornerShape.rotationEffect(.degrees(0))   .offset(x: -115, y: -65)
-            // Top-right
-            cornerShape.rotationEffect(.degrees(90))  .offset(x:  115, y: -65)
-            // Bottom-right
-            cornerShape.rotationEffect(.degrees(180)) .offset(x:  115, y:  65)
-            // Bottom-left
-            cornerShape.rotationEffect(.degrees(270)) .offset(x: -115, y:  65)
+            var config = UIButton.Configuration.filled()
+            config.title = "Enter Manually"
+            config.cornerStyle = .large
+            config.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 24, bottom: 12, trailing: 24)
+            let btn = UIButton(configuration: config)
+            btn.addTarget(self, action: #selector(manualTapped), for: .touchUpInside)
+            btn.translatesAutoresizingMaskIntoConstraints = false
+            vc.view.addSubview(btn)
+            NSLayoutConstraint.activate([
+                btn.centerXAnchor.constraint(equalTo: vc.view.centerXAnchor),
+                btn.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 24)
+            ])
+
+            // Remember the inner VC so `manualTapped` can present from it
+            // even though `scanner` is nil on this code path.
+            fallbackPresenter = vc
+            return nav
         }
     }
-
-    var cornerShape: some View {
-        Path { path in
-            path.move(to: CGPoint(x: 0, y: size))
-            path.addLine(to: CGPoint(x: 0, y: radius))
-            path.addQuadCurve(to: CGPoint(x: radius, y: 0),
-                              control: CGPoint(x: 0, y: 0))
-            path.addLine(to: CGPoint(x: size, y: 0))
-        }
-        .stroke(Color.green, style: StrokeStyle(lineWidth: thickness, lineCap: .round))
-    }
-}
-
-struct ScanLine: View {
-    @State private var offset: CGFloat = -72
-
-    var body: some View {
-        Rectangle()
-            .fill(
-                LinearGradient(
-                    colors: [.green.opacity(0), .green, .green.opacity(0)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            .frame(width: 240, height: 2)
-            .offset(y: offset)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                    offset = 72
-                }
-            }
-    }
-}
-
-// MARK: - Manual Barcode Entry
-
-struct ManualBarcodeEntryView: View {
-    @Binding var barcode: String
-    let onConfirm: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationView {
-            Form {
-                Section {
-                    TextField("Enter barcode or SKU", text: $barcode)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.characters)
-                        .keyboardType(.asciiCapable)
-                } header: {
-                    Text("Manual Entry")
-                } footer: {
-                    Text("Enter a barcode number, EAN, UPC, or your own SKU code.")
-                }
-            }
-            .navigationTitle("Manual Barcode")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Use") {
-                        guard !barcode.isEmpty else { return }
-                        onConfirm(barcode)
-                        dismiss()
-                    }
-                    .disabled(barcode.isEmpty)
-                    .fontWeight(.semibold)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Preview
-
-#Preview {
-    BarcodeScannerView(
-        onScan: { value, format in print("Scanned: \(value) (\(format))") },
-        onCancel: {}
-    )
 }

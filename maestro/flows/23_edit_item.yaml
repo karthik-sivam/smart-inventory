@@ -1,0 +1,47 @@
+# Flow 23 — Edit Item
+# Tests editing an existing item's name, quantity and min quantity
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+
+# Navigate to Items tab and open edit for Low Stock Item
+- tapOn: "Items"
+- tapOn: "Search items..."
+- inputText: "Low Stock Item"
+- assertVisible: "Low Stock Item"
+
+# Swipe to reveal Edit action
+- swipe:
+    direction: LEFT
+    on: "Low Stock Item"
+- tapOn: "Edit"
+- assertVisible: "Edit Item"
+- assertVisible: "Category"
+
+# Quantities section is below Category / Expiry / Storage — scroll before tapping fields
+- scrollUntilVisible:
+    element:
+      id: "editItemCurrentQty"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 50
+- tapOn:
+    id: "editItemCurrentQty"
+- eraseText: 10
+- inputText: "25"
+
+- scrollUntilVisible:
+    element:
+      id: "editItemMinQty"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn:
+    id: "editItemMinQty"
+- eraseText: 10
+- inputText: "5"
+
+- tapOn: "Save"
+
+# Verify item still appears in Items tab with updated status
+- assertVisible: "Low Stock Item"

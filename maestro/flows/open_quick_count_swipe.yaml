@@ -1,0 +1,39 @@
+# Swipe-right → Count on a storage/items list row.
+# Falls back to Item Detail → Count Item when swipe action is not exposed.
+# env: ITEM_NAME (required), ITEM_SKU (optional)
+appId: com.vishuddhi.stoqly
+env:
+  ITEM_NAME: ""
+  ITEM_SKU: ""
+---
+- extendedWaitUntil:
+    visible: ${ITEM_NAME}
+    timeout: 10000
+- swipe:
+    direction: RIGHT
+    on: ${ITEM_NAME}
+    duration: 1000
+- tapOn:
+    id: "swipeCountAction"
+    optional: true
+    waitUntilVisible: true
+- swipe:
+    direction: RIGHT
+    on: ${ITEM_NAME}
+    duration: 800
+    optional: true
+- tapOn:
+    id: "swipeCountAction"
+    optional: true
+    waitUntilVisible: true
+- runFlow:
+    when:
+      notVisible: "Quick Count"
+    file: open_quick_count_detail.yaml
+    env:
+      ITEM_NAME: ${ITEM_NAME}
+      ITEM_SKU: ${ITEM_SKU}
+- runFlow: dismiss_count_tips.yaml
+- extendedWaitUntil:
+    visible: "Quick Count"
+    timeout: 15000

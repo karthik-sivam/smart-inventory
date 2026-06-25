@@ -1,0 +1,25 @@
+# Flow 78 — Bulk Import entry visible in Settings (Pro users)
+# Verifies the "Import Items (CSV / Excel)" row exists under Settings → Inventory
+# and that BulkImportView opens with the expected step-0 UI.
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- tapOn:
+    id: "gear"
+- scrollUntilVisible:
+    element: "Import Items (CSV / Excel)"
+    direction: DOWN
+    timeout: 10000
+- assertVisible: "Import Items (CSV / Excel)"
+- tapOn: "Import Items (CSV / Excel)"
+- extendedWaitUntil:
+    visible: "Import Items"
+    timeout: 8000
+- assertVisible: "Import Items"
+- assertVisible: "Default Storage"
+- assertVisible: "Supported formats"
+- assertVisible: "Choose File (CSV or Excel)"
+# Cancel back to Settings
+- tapOn: "Cancel"
+- assertVisible: "Settings"

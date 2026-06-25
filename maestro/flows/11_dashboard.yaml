@@ -1,6 +1,6 @@
 # Flow 11 — Dashboard
 # Tests that dashboard KPI cards and recent activity render correctly
-appId: com.vishuddhi.smartinventory
+appId: com.vishuddhi.stoqly
 ---
 - runFlow: 00_signin_helper.yaml
 - tapOn: "Dashboard"
@@ -8,9 +8,37 @@ appId: com.vishuddhi.smartinventory
 # KPI cards
 - assertVisible: "Total Storages"
 - assertVisible: "Total Items"
-- assertVisible: "Low Stock Items"
+- assertVisible: "Low Stock"
 - assertVisible: "Out of Stock"
 - assertVisible: "Total Value"
 
-# Recent activity section
+# New card added in Phase 1
+- assertVisible: "Expiring Soon"
+
+# Category chart + dashboard search affordance
+- scrollUntilVisible:
+    element:
+      text: "Items by Category"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 30
+- assertVisible: "Items by Category"
+- assertVisible: "Search"
+
+# Recent activity section (already asserted above — now also check scroll)
+- scrollUntilVisible:
+    element:
+      text: "Recent Activity"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 30
 - assertVisible: "Recent Activity"
+# Note: the "See All" button only appears when >10 events exist, so we don't
+# assert it here — fresh accounts would fail. Coverage lives in 33_activity_feed.
+- scrollUntilVisible:
+    element:
+      text: "Smart Insights"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 30
+- assertVisible: "Smart Insights"

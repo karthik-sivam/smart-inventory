@@ -1,17 +1,19 @@
 //
 //  AITestApp.swift
-//  AITest — Smart Inventory
+//  AITest — Stoqly
 //
 //  Created by Karthikeyan Paramasivam
 //
 
 import SwiftUI
 import SwiftData
+import CoreSpotlight
 import Firebase
 import FirebaseAuth
 import FirebaseMessaging
 import GoogleSignIn
 import UserNotifications
+import FirebaseFirestore
 
 // MARK: - Add these Firebase packages in Xcode (they're already in firebase-ios-sdk):
 //   Project → Package Dependencies → firebase-ios-sdk → already added ✓
@@ -25,7 +27,7 @@ import UserNotifications
 //   See XCODE_SETUP_GUIDE.md for step-by-step instructions.
 
 @main
-struct AITestApp: App {
+struct SmartInventoryApp: App {
 
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
@@ -36,7 +38,11 @@ struct AITestApp: App {
             Storage.self,
             InventoryItem.self,
             UOM.self,
-            InventoryCount.self
+            InventoryCount.self,
+            ActivityEvent.self,
+            InventoryBatch.self,
+            TeamMember.self,
+            ItemTemplate.self
         ])
         do {
             return try ModelContainer(for: schema)
@@ -54,6 +60,7 @@ struct AITestApp: App {
     @StateObject private var firestoreManager = FirestoreManager.shared
     @StateObject private var trackingManager = TrackingPermissionManager.shared
     @StateObject private var notificationManager = NotificationManager.shared
+    @StateObject private var teamManager = TeamManager.shared
 
     // MARK: - App Scene
 
@@ -66,6 +73,7 @@ struct AITestApp: App {
                 .environmentObject(firestoreManager)
                 .environmentObject(trackingManager)
                 .environmentObject(notificationManager)
+                .environmentObject(teamManager)
                 .onOpenURL { url in
                     // Handle Google Sign-In redirect URLs
                     GIDSignIn.sharedInstance.handle(url)
@@ -83,9 +91,21 @@ struct AITestApp: App {
                     // Refresh subscription status when app returns to foreground
                     Task { await subscriptionManager.refreshPurchaseStatus() }
                 }
+                .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                    guard let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String else { return }
+                    NotificationCenter.default.post(
+                        name: .spotlightItemSelected,
+                        object: nil,
+                        userInfo: ["itemID": id]
+                    )
+                }
         }
         .modelContainer(sharedModelContainer)
     }
+}
+
+extension Notification.Name {
+    static let spotlightItemSelected = Notification.Name("stoqly.spotlightItemSelected")
 }
 
 // MARK: - AppDelegate
@@ -104,6 +124,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // 1. Firebase — must be first
         FirebaseApp.configure()
 
+        // Enable offline persistence so writes queue locally when offline
+        // and sync automatically when connectivity is restored.
+        // Do not remove — required for Phase 4 multi-user sync.
+        let firestoreSettings = FirestoreSettings()
+        firestoreSettings.cacheSettings = PersistentCacheSettings()
+        Firestore.firestore().settings = firestoreSettings
+
         // 2. Google Sign-In
         if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
            let plist = NSDictionary(contentsOfFile: path),
@@ -114,8 +141,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
 
         // 3. Crashlytics — automatically captures crashes after FirebaseApp.configure()
-        //    No additional setup needed here. Ensure the Run Script build phase is added.
-        //    See XCODE_SETUP_GUIDE.md → Step 5.
+        //    No additional setup needed here. Ensure the Run Script build phase is added in Xcode:
+        //    Target → Build Phases → "+" → New Run Script Phase → paste:
+        //    "${BUILD_DIR%Build/*}SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"
+        //    Then add input files:
+        //      ${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}
+        //      $(SRCROOT)/$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)
+
+        // 4. Amplitude — product analytics
+        if let amplitudeKey = SecretsManager.amplitudeAPIKey {
+            AnalyticsManager.shared.configure(apiKey: amplitudeKey)
+        } else {
+            #if DEBUG
+            print("⚠️  Amplitude: AMPLITUDE_API_KEY missing from Secrets.plist — analytics disabled.")
+            #endif
+        }
+
         UNUserNotificationCenter.current().delegate = self
         Messaging.messaging().delegate = self
 
@@ -123,9 +164,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         print("🔥 Firebase configured. Crashlytics active (debug symbols uploaded on archive).")
         #endif
 
-        // 4. Firestore offline persistence
-        //    Firestore caches data locally so the app works offline.
-        //    This is enabled by default in the iOS SDK — no extra setup needed.
+        // 4. Firestore — persistence configured immediately after FirebaseApp.configure() above.
 
         return true
     }
@@ -158,7 +197,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
 }
 
-extension AppDelegate: @preconcurrency MessagingDelegate {
+extension AppDelegate: MessagingDelegate {
     nonisolated func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let fcmToken else { return }
         UserDefaults.standard.set(fcmToken, forKey: "fcmToken")
@@ -168,7 +207,7 @@ extension AppDelegate: @preconcurrency MessagingDelegate {
     }
 }
 
-extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
+extension AppDelegate: UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,

@@ -1,6 +1,6 @@
 # Flow 14 — Export PDF
 # Tests exporting a PDF report
-appId: com.vishuddhi.smartinventory
+appId: com.vishuddhi.stoqly
 ---
 - runFlow: 00_signin_helper.yaml
 - tapOn: "Items"

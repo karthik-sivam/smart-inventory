@@ -1,48 +1,35 @@
-# Flow 10 — Full Count (Count Tab)
-# Tests the full count flow from the Count tab
-# Prerequisite: "Test Product" item exists
-appId: com.vishuddhi.smartinventory
+# Flow 10 — Full Count (Audit tab)
+appId: com.vishuddhi.stoqly
+env:
+  ITEM_NAME: Test Product Maestro
 ---
 - runFlow: 00_signin_helper.yaml
-- tapOn: "Count"
-- assertVisible: "Inventory Count"
-
-# Search for the item
-- tapOn: "Search items to count…"
-- inputText: "Test Product"
-- assertVisible: "Test Product"
-
-# Tap Count button on item card — opens Quick Count sheet first
-- tapOn:
-    text: "Count"
-    index: 0
-- waitForAnimationToEnd
-- assertVisible: "Quick Count"
-
-# Navigate to full count form
+- tapOn: "Audit"
+- assertVisible: "Audit"
+- tapOn: "All"
+- tapOn: "Search items to audit…"
+- inputText: "Test Product Maestro"
+- tapOn: "All"
+- extendedWaitUntil:
+    visible: "Test Product Maestro"
+    timeout: 10000
+- scrollUntilVisible:
+    element: "Test Product Maestro"
+    direction: DOWN
+    timeout: 15000
+- runFlow: open_quick_count_audit.yaml
 - tapOn: "Change UOM or count type"
 - waitForAnimationToEnd
 - assertVisible: "Count Item"
 - assertVisible: "Current Quantity:"
 - assertVisible: "Counted Quantity"
-
-# Enter counted quantity
 - tapOn: "Counted Quantity"
 - eraseText: 10
 - inputText: "42"
-
-# Select adjustment reason
 - tapOn: "Select reason"
 - tapOn: "Physical Count"
-
-# Add notes
 - tapOn: "Notes (Optional)"
 - inputText: "Full physical count - April"
-
-# Check variance row is visible (appears after quantity is entered)
 - assertVisible: "Variance:"
-
 - tapOn: "Save"
-
-# Should return to count list
-- assertVisible: "Inventory Count"
+- assertVisible: "Audit"
