@@ -12,6 +12,7 @@ final class InventoryItem {
     var minQuantity: Double
     var maxQuantity: Double
     var unitCost: Double
+    var sellingPrice: Double = 0
     /// When > 0, overrides minQuantity for low-stock detection (percentage of maxQuantity).
     var reorderPercentage: Double = 0
     /// Price paid on the most recent purchase — separate from unitCost for variance tracking.
@@ -135,5 +136,17 @@ final class InventoryItem {
         } else {
             return "In Stock"
         }
+    }
+
+    /// Gross margin as a percentage. Returns nil if sellingPrice is 0.
+    var grossMarginPct: Double? {
+        guard sellingPrice > 0 else { return nil }
+        return (sellingPrice - unitCost) / sellingPrice * 100
+    }
+
+    /// Gross profit per unit. Returns nil if sellingPrice is 0.
+    var grossProfitPerUnit: Double? {
+        guard sellingPrice > 0 else { return nil }
+        return sellingPrice - unitCost
     }
 }

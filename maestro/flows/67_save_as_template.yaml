@@ -23,6 +23,8 @@ appId: com.vishuddhi.stoqly
 - tapOn: "Save"
 - tapOn: "Dashboard"
 - tapOn:
+    id: "dashboardGearButton"
+- tapOn:
     id: "gear"
 - scrollUntilVisible:
     element: "Item Templates"

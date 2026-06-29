@@ -7,5 +7,5 @@ appId: com.vishuddhi.stoqly
 - waitForAnimationToEnd
 - runFlow:
     when:
-      visible: "Total Storages"
+      visible: "Revenue"
     file: signout_steps.yaml

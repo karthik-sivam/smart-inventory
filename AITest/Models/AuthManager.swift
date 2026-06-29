@@ -52,7 +52,6 @@ class AuthManager: ObservableObject {
             isAuthenticated = true
 
             // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedUp)
             // Analytics
             AnalyticsManager.shared.track(.userSignedUp(method: "email"))
             AnalyticsManager.shared.identify(userId: result.user.uid, isPro: false, signupMethod: "email")
@@ -75,8 +74,6 @@ class AuthManager: ObservableObject {
             currentUser = result.user
             isAuthenticated = true
 
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedIn)
             // Analytics
             AnalyticsManager.shared.track(.userSignedIn(method: "email"))
             AnalyticsManager.shared.identify(userId: result.user.uid, isPro: false, signupMethod: "email")
@@ -111,8 +108,6 @@ class AuthManager: ObservableObject {
             currentUser = authResult.user
             isAuthenticated = true
 
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedIn)
             // Analytics
             AnalyticsManager.shared.track(.userSignedIn(method: "google"))
             AnalyticsManager.shared.identify(userId: authResult.user.uid, isPro: false, signupMethod: "google")
@@ -137,8 +132,6 @@ class AuthManager: ObservableObject {
             isAuthenticated = false
             TeamManager.shared.reset()
 
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedOut)
             // Analytics — reset before clearing userId so the event is attributed correctly
             AnalyticsManager.shared.track(.userSignedOut)
             AnalyticsManager.shared.reset()
@@ -158,9 +151,6 @@ class AuthManager: ObservableObject {
         
         do {
             try await user.sendEmailVerification()
-            
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.emailVerificationSent)
             
             print("Email verification sent to: \(user.email ?? "")")
         } catch {
@@ -190,9 +180,6 @@ class AuthManager: ObservableObject {
         do {
             try await Auth.auth().sendPasswordReset(withEmail: email)
             
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.passwordResetRequested)
-            
             print("Password reset email sent to: \(email)")
         } catch {
             handleAuthError(error)
@@ -212,9 +199,6 @@ class AuthManager: ObservableObject {
             try await user.delete()
             currentUser = nil
             isAuthenticated = false
-            
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.accountDeleted)
             
             print("Account deleted successfully")
         } catch {
@@ -241,9 +225,6 @@ class AuthManager: ObservableObject {
             }
             
             try await changeRequest.commitChanges()
-            
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.profileUpdated)
             
             print("Profile updated successfully")
         } catch {

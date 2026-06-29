@@ -301,6 +301,7 @@ class FirestoreManager: ObservableObject {
             "minQuantity": item.minQuantity,
             "maxQuantity": item.maxQuantity,
             "unitCost": item.unitCost,
+            "sellingPrice": item.sellingPrice,
             "reorderPercentage": item.reorderPercentage,
             "lastPurchasePrice": item.lastPurchasePrice,
             "isOutOfStock": item.currentQuantity <= 0,
@@ -420,6 +421,50 @@ class FirestoreManager: ObservableObject {
                 print("syncActivity failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    // MARK: - Sales & Movements (Phase 7A — push-only)
+
+    func pushSaleEvent(_ event: SaleEvent) async {
+        guard TeamManager.shared.effectiveUID != nil else { return }
+        guard let ref = try? userRef() else { return }
+        let docRef = ref.collection("saleEvents").document(event.id.uuidString)
+        let data: [String: Any] = [
+            "id": event.id.uuidString,
+            "itemName": event.itemName,
+            "itemSKU": event.itemSKU,
+            "storageName": event.storageName,
+            "category": event.category,
+            "quantitySold": event.quantitySold,
+            "pricePerUnit": event.pricePerUnit,
+            "costPerUnit": event.costPerUnit,
+            "notes": event.notes,
+            "occurredAt": Timestamp(date: event.occurredAt),
+            "createdAt": Timestamp(date: event.createdAt)
+        ]
+        try? await docRef.setData(data)
+    }
+
+    func pushInventoryMovement(_ movement: InventoryMovement) async {
+        guard TeamManager.shared.effectiveUID != nil else { return }
+        guard let ref = try? userRef() else { return }
+        let docRef = ref.collection("inventoryMovements").document(movement.id.uuidString)
+        let data: [String: Any] = [
+            "id": movement.id.uuidString,
+            "itemName": movement.itemName,
+            "itemSKU": movement.itemSKU,
+            "storageName": movement.storageName,
+            "category": movement.category,
+            "direction": movement.direction,
+            "movementType": movement.movementType,
+            "quantity": movement.quantity,
+            "pricePerUnit": movement.pricePerUnit,
+            "notes": movement.notes,
+            "occurredAt": Timestamp(date: movement.occurredAt),
+            "createdAt": Timestamp(date: movement.createdAt),
+            "linkedSaleEventId": movement.linkedSaleEventId?.uuidString ?? ""
+        ]
+        try? await docRef.setData(data)
     }
 
     // MARK: - Full Sync (Pull from Cloud → Local SwiftData)
@@ -705,6 +750,7 @@ class FirestoreManager: ObservableObject {
             "minQuantity": item.minQuantity,
             "maxQuantity": item.maxQuantity,
             "unitCost": item.unitCost,
+            "sellingPrice": item.sellingPrice,
             "reorderPercentage": item.reorderPercentage,
             "lastPurchasePrice": item.lastPurchasePrice,
             "isOutOfStock": item.currentQuantity <= 0,
@@ -769,6 +815,7 @@ class FirestoreManager: ObservableObject {
                 found.minQuantity = data["minQuantity"] as? Double ?? 0
                 found.maxQuantity = data["maxQuantity"] as? Double ?? 0
                 found.unitCost = data["unitCost"] as? Double ?? 0
+                found.sellingPrice = data["sellingPrice"] as? Double ?? 0
                 found.reorderPercentage = data["reorderPercentage"] as? Double ?? 0
                 found.lastPurchasePrice = data["lastPurchasePrice"] as? Double ?? 0
                 if let ts = data["lastPurchasedAt"] as? Timestamp {
@@ -821,6 +868,7 @@ class FirestoreManager: ObservableObject {
             }
             newItem.photoURL = data["photoURL"] as? String
             newItem.reorderPercentage = data["reorderPercentage"] as? Double ?? 0
+            newItem.sellingPrice = data["sellingPrice"] as? Double ?? 0
             newItem.lastPurchasePrice = data["lastPurchasePrice"] as? Double ?? 0
             if let ts = data["lastPurchasedAt"] as? Timestamp {
                 newItem.lastPurchasedAt = ts.dateValue()

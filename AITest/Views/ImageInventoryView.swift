@@ -17,6 +17,7 @@ import PhotosUI
 
 struct ImageInventoryView: View {
     var preselectedStorage: Storage? = nil
+    var onComplete: ((Int) -> Void)? = nil
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -568,7 +569,11 @@ struct ImageInventoryView: View {
 
         modelContext.safeSave(context: "ImageInventorySingleSave")
         AnalyticsManager.shared.track(.smartCountCompleted(mode: "photo", itemCount: 1))
-        dismiss()
+        if let onComplete {
+            onComplete(1)
+        } else {
+            dismiss()
+        }
     }
 
     // MARK: - Logic: Save (shelf scan — multiple products)
@@ -639,7 +644,11 @@ struct ImageInventoryView: View {
             }
         }
 
-        dismiss()
+        if let onComplete {
+            onComplete(itemsToSave.count)
+        } else {
+            dismiss()
+        }
     }
 }
 

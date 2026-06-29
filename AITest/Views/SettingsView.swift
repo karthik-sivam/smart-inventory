@@ -182,11 +182,12 @@ struct SettingsView: View {
                     .pickerStyle(NavigationLinkPickerStyle())
                     .accessibilityIdentifier("settingsCurrencyPicker")
                     .onChange(of: currencyManager.selectedCurrency) { _, _ in
-                        AdManager.shared.recordCompletion(event: .settingsChanged)
+                        currencyManager.markAsManuallySet()
                     }
                 }
 
-                // MARK: - Privacy & Ads
+                // MARK: - Privacy & Ads (debug builds only)
+                #if DEBUG
                 Section(header: Text("Privacy & Ads")) {
                     HStack {
                         Label("Ad Tracking", systemImage: "eye.slash")
@@ -213,6 +214,7 @@ struct SettingsView: View {
                         .foregroundColor(.stoqlyPrimary)
                     }
                 }
+                #endif
 
                 // MARK: - DEBUG: Advertisement Testing
                 #if DEBUG
@@ -246,12 +248,6 @@ struct SettingsView: View {
                         AdManager.shared.showTestAd(type: .banner)
                     } label: {
                         Label("Test Banner Ad", systemImage: "rectangle.bottomthird.inset.filled")
-                    }
-
-                    Button {
-                        AdManager.shared.showTestAd(type: .reward)
-                    } label: {
-                        Label("Test Reward Ad", systemImage: "gift")
                     }
 
                     // Test device IDs
@@ -301,8 +297,10 @@ struct SettingsView: View {
                 #endif
 
                 // MARK: - AI Features
-                Section(header: Text("AI Features")) {
-                    AIAPIKeyRow()
+                if SecretsManager.anthropicAPIKey == nil {
+                    Section(header: Text("AI Features")) {
+                        AIAPIKeyRow()
+                    }
                 }
 
                 // MARK: - About

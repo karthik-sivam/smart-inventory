@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 // Tracks how far the user has scrolled so the header can react
 private struct ScrollOffsetKey: PreferenceKey {
@@ -18,8 +19,10 @@ struct DashboardView: View {
     @Query private var items: [InventoryItem]
     @Query private var uoms: [UOM]
     @Query(sort: \ActivityEvent.occurredAt, order: .reverse) private var activityEvents: [ActivityEvent]
-    @StateObject private var currencyManager = CurrencyManager()
+    @Query(sort: \SaleEvent.occurredAt, order: .reverse) private var allSaleEvents: [SaleEvent]
+    @EnvironmentObject private var currencyManager: CurrencyManager
     @State private var showingSettings = false
+    @State private var showingProfile = false
     @State private var showingExport = false
     @State private var showingSearch = false
     @State private var showingCategoryExplorer = false
@@ -36,6 +39,15 @@ struct DashboardView: View {
     @State private var insightDetailItems: [InventoryItem] = []
     @State private var insightDetailTitle = ""
     @State private var scrollOffset: CGFloat = 0
+    @State private var dashboardSalesPeriod: DashboardSalesPeriod = .thisWeek
+    @State private var showingReports = false
+    @State private var localeChangeCurrency: Currency? = nil
+
+    enum DashboardSalesPeriod: String, CaseIterable {
+        case today = "Today"
+        case thisWeek = "This Week"
+        case thisMonth = "This Month"
+    }
 
     var body: some View {
         NavigationStack {
@@ -68,12 +80,13 @@ struct DashboardView: View {
                                     .foregroundColor(.stoqlyPrimary)
                             }
 
-                            Button(action: { showingSettings = true }) {
-                                Image(systemName: "gear")
+                            Button(action: { showingProfile = true }) {
+                                Image(systemName: "gearshape.fill")
                                     .font(.title2)
                                     .foregroundColor(.stoqlyPrimary)
                             }
-                            .accessibilityIdentifier("gear")
+                            .accessibilityLabel("Settings and Profile")
+                            .accessibilityIdentifier("dashboardGearButton")
                         }
                     }
                     .padding(.horizontal)
@@ -92,6 +105,53 @@ struct DashboardView: View {
                         .fill(.bar)
                         .ignoresSafeArea(edges: .top)
                 )
+
+                if !subscriptionManager.isPro {
+                    ProUpgradeStrip {
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("stoqly.showPaywall"),
+                            object: nil
+                        )
+                    }
+                }
+
+                if let newCurrency = localeChangeCurrency {
+                    HStack(spacing: 12) {
+                        Image(systemName: "location.circle.fill")
+                            .foregroundColor(.blue)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Your device region suggests \(newCurrency.name) (\(newCurrency.symbol))")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            Text("Switch currency?")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Button("Switch") {
+                            currencyManager.selectedCurrency = newCurrency
+                            currencyManager.markAsManuallySet()
+                            localeChangeCurrency = nil
+                        }
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.blue)
+                        .cornerRadius(8)
+                        Button("Keep") {
+                            currencyManager.dismissLocaleChangeBanner(for: newCurrency)
+                            localeChangeCurrency = nil
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(Color.blue.opacity(0.08))
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
 
                 if case .syncing = firestoreManager.syncState {
                     HStack(spacing: 6) {
@@ -150,23 +210,23 @@ struct DashboardView: View {
                         // KPI grid — 6 gradient cards, 2 columns
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 14) {
                             DashboardCard(
-                                title: "Total Storages",
-                                value: "\(storages.count)",
-                                icon: "archivebox.fill",
+                                title: "Revenue",
+                                value: currencyManager.formatPrice(dashboardPeriodRevenue),
+                                icon: "cart.fill",
                                 gradient: AppTheme.kpiGradients[0],
-                                deltaText: storagesAddedThisWeek > 0 ? "+\(storagesAddedThisWeek) this week" : nil,
-                                deltaPositive: storagesAddedThisWeek > 0 ? true : nil,
-                                action: { showingStorages = true }
+                                deltaText: "This \(dashboardSalesPeriod.rawValue.lowercased())",
+                                deltaPositive: dashboardPeriodRevenue > 0 ? true : nil,
+                                action: { showingReports = true }
                             )
 
                             DashboardCard(
-                                title: "Total Items",
-                                value: "\(items.count)",
-                                icon: "cube.box.fill",
+                                title: "Gross Profit",
+                                value: currencyManager.formatPrice(dashboardPeriodProfit),
+                                icon: "chart.line.uptrend.xyaxis",
                                 gradient: AppTheme.kpiGradients[1],
-                                deltaText: itemsAddedThisWeek > 0 ? "+\(itemsAddedThisWeek) this week" : nil,
-                                deltaPositive: itemsAddedThisWeek > 0 ? true : nil,
-                                action: { showingAllItems = true }
+                                deltaText: dashboardPeriodMarginText,
+                                deltaPositive: dashboardPeriodProfit >= 0 ? true : nil,
+                                action: { showingReports = true }
                             )
 
                             DashboardCard(
@@ -242,7 +302,7 @@ struct DashboardView: View {
                                 items: Array(items),
                                 onShowItems: { title, detailItems in
                                     insightDetailTitle = title
-                                    insightDetailItems = detailItems
+                                    insightDetailItems = Array(detailItems)
                                     showingInsightDetail = true
                                 }
                             )
@@ -253,6 +313,11 @@ struct DashboardView: View {
                             .padding(.horizontal)
                             .contentShape(Rectangle())
                             .onTapGesture { showingCategoryExplorer = true }
+
+                        if !items.isEmpty && (items.contains(where: { $0.sellingPrice > 0 }) || !allSaleEvents.isEmpty) {
+                            salesPerformanceSection
+                                .padding(.horizontal)
+                        }
 
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
@@ -309,6 +374,27 @@ struct DashboardView: View {
         .onAppear {
             initializeStandardUOMs()
             AnalyticsManager.shared.track(.dashboardViewed)
+            if let suggested = currencyManager.checkLocaleChange() {
+                withAnimation { localeChangeCurrency = suggested }
+            }
+            Task {
+                try? await Task.sleep(for: .seconds(8))
+                if localeChangeCurrency != nil {
+                    withAnimation { localeChangeCurrency = nil }
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            if let suggested = currencyManager.checkLocaleChange() {
+                withAnimation { localeChangeCurrency = suggested }
+            }
+        }
+        .sheet(isPresented: $showingProfile) {
+            ProfileView()
+                .environmentObject(currencyManager)
+                .environmentObject(firestoreManager)
+                .environmentObject(subscriptionManager)
+                .sheetStyle()
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
@@ -377,6 +463,160 @@ struct DashboardView: View {
                 .environmentObject(currencyManager)
                 .sheetStyle()
         }
+        .sheet(isPresented: $showingReports) {
+            ReportsView(selectedPeriod: dashboardPeriodAsReportPeriod)
+                .environmentObject(currencyManager)
+                .environmentObject(subscriptionManager)
+                .sheetStyle()
+        }
+    }
+
+    private var dashboardPeriodRange: ClosedRange<Date> {
+        let now = Date()
+        let cal = Calendar.current
+        switch dashboardSalesPeriod {
+        case .today:
+            return cal.startOfDay(for: now)...now
+        case .thisWeek:
+            let start = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
+            return start...now
+        case .thisMonth:
+            let start = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
+            return start...now
+        }
+    }
+
+    private var filteredDashboardSales: [SaleEvent] {
+        allSaleEvents.filter { dashboardPeriodRange.contains($0.occurredAt) }
+    }
+
+    private var dashboardPeriodRevenue: Double {
+        filteredDashboardSales.reduce(0) { $0 + $1.revenue }
+    }
+
+    private var dashboardPeriodProfit: Double {
+        filteredDashboardSales.reduce(0) { $0 + $1.grossProfit }
+    }
+
+    private var dashboardPeriodMargin: Double? {
+        guard dashboardPeriodRevenue > 0 else { return nil }
+        return dashboardPeriodProfit / dashboardPeriodRevenue * 100
+    }
+
+    private var dashboardPeriodMarginText: String? {
+        guard let margin = dashboardPeriodMargin else { return nil }
+        return String(format: "%.0f%% margin", margin)
+    }
+
+    private var dashboardPeriodAsReportPeriod: ReportsView.ReportPeriod {
+        switch dashboardSalesPeriod {
+        case .today: return .today
+        case .thisWeek: return .thisWeek
+        case .thisMonth: return .thisMonth
+        }
+    }
+
+    private var salesPerformanceSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Sales Performance")
+                .font(.headline)
+                .fontWeight(.semibold)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(DashboardSalesPeriod.allCases, id: \.self) { period in
+                        Button {
+                            dashboardSalesPeriod = period
+                        } label: {
+                            Text(period.rawValue)
+                                .font(.caption)
+                                .fontWeight(dashboardSalesPeriod == period ? .semibold : .regular)
+                                .lineLimit(1)
+                                .fixedSize()
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    dashboardSalesPeriod == period
+                                        ? Color.stoqlyPrimary.opacity(0.15)
+                                        : Color(.tertiarySystemGroupedBackground)
+                                )
+                                .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .padding(.horizontal, -16)
+
+            if allSaleEvents.isEmpty {
+                VStack(spacing: 8) {
+                    Text("No sales recorded yet.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Text("Start recording sales to see your profit insights here.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Button("Record Your First Sale →") {
+                        selectedTab = 1
+                    }
+                    .font(.caption)
+                    .foregroundColor(.stoqlyPrimary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 4) {
+                    GridRow {
+                        Text("Revenue")
+                            .font(.caption).foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("Profit")
+                            .font(.caption).foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if dashboardPeriodMargin != nil {
+                            Text("Margin")
+                                .font(.caption).foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    GridRow {
+                        Text(currencyManager.formatPrice(dashboardPeriodRevenue))
+                            .font(.subheadline).fontWeight(.semibold).foregroundColor(.blue)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(currencyManager.formatPrice(dashboardPeriodProfit))
+                            .font(.subheadline).fontWeight(.semibold)
+                            .foregroundColor(dashboardPeriodProfit >= 0 ? .green : .red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if let margin = dashboardPeriodMargin {
+                            Text(String(format: "%.0f%%", margin))
+                                .font(.subheadline).fontWeight(.semibold)
+                                .foregroundColor(margin >= 30 ? .green : margin >= 10 ? .orange : .red)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+
+                Divider()
+
+                Button {
+                    showingReports = true
+                } label: {
+                    HStack {
+                        Text("View Full Report →")
+                            .font(.subheadline)
+                            .foregroundColor(.stoqlyPrimary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(12)
     }
 
     private var lowStockItems: [InventoryItem] {
@@ -676,7 +916,7 @@ private struct HealthDetailView: View {
                     Section {
                         Button {
                             dismiss()
-                            selectedTab = 3
+                            selectedTab = 4
                         } label: {
                             Label("Go to Audit Tab", systemImage: "checkmark.shield")
                                 .foregroundColor(.stoqlyPrimary)
@@ -787,10 +1027,14 @@ private struct SmartInsightsCard: View {
         }
 
         let sixtyDaysAgo = Calendar.current.date(byAdding: .day, value: -60, to: Date()) ?? Date()
+        let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
         let deadStock = items.filter { item in
             guard item.currentQuantity > 0 else { return false }
-            guard let lastCount = item.countHistory.map(\.countDate).max() else { return true }
-            return lastCount < sixtyDaysAgo
+            guard item.createdAt < thirtyDaysAgo else { return false }
+            if let lastCount = item.countHistory.map(\.countDate).max() {
+                return lastCount < sixtyDaysAgo
+            }
+            return true
         }
         if !deadStock.isEmpty {
             result.append(Insight(
@@ -798,7 +1042,7 @@ private struct SmartInsightsCard: View {
                 iconColor: .indigo,
                 title: "Possible dead stock",
                 subtitle: "\(deadStock.count) item\(deadStock.count == 1 ? "" : "s") with stock haven't been touched in 60+ days",
-                relatedItems: deadStock
+                relatedItems: Array(deadStock)
             ))
         }
 
@@ -816,7 +1060,8 @@ private struct SmartInsightsCard: View {
             }
         }
 
-        let neverCounted = items.filter { $0.countHistory.isEmpty }
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let neverCounted = items.filter { $0.countHistory.isEmpty && $0.createdAt < sevenDaysAgo }
         if !neverCounted.isEmpty {
             result.append(Insight(
                 icon: "questionmark.circle",
@@ -875,9 +1120,8 @@ private struct SmartInsightsCard: View {
                     .padding(.vertical, 10)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if !insight.relatedItems.isEmpty {
-                            onShowItems(insight.title, insight.relatedItems)
-                        }
+                        guard !insight.relatedItems.isEmpty else { return }
+                        onShowItems(insight.title, Array(insight.relatedItems))
                     }
                 }
             }
@@ -897,29 +1141,35 @@ private struct InsightDetailView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(items, id: \.id) { item in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(item.name)
-                                .font(.subheadline).fontWeight(.medium)
-                            Text(item.storage?.name ?? "No Storage")
-                                .font(.caption).foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("\(item.currentQuantity.smartFormatted) \(item.uom?.symbol ?? "")")
-                                .font(.subheadline).fontWeight(.semibold)
-                            if item.totalValue > 0 {
-                                Text(currencyManager.formatPrice(item.totalValue))
-                                    .font(.caption).foregroundColor(.secondary)
+            Group {
+                if items.isEmpty {
+                    ContentUnavailableView("No Items", systemImage: "tray")
+                } else {
+                    List {
+                        ForEach(items, id: \.id) { item in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(item.name)
+                                        .font(.subheadline).fontWeight(.medium)
+                                    Text(item.storage?.name ?? "No Storage")
+                                        .font(.caption).foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text("\(item.currentQuantity.smartFormatted) \(item.uom?.symbol ?? "")")
+                                        .font(.subheadline).fontWeight(.semibold)
+                                    if item.totalValue > 0 {
+                                        Text(currencyManager.formatPrice(item.totalValue))
+                                            .font(.caption).foregroundColor(.secondary)
+                                    }
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2).foregroundColor(.secondary)
                             }
+                            .contentShape(Rectangle())
+                            .onTapGesture { selectedItem = item }
                         }
-                        Image(systemName: "chevron.right")
-                            .font(.caption2).foregroundColor(.secondary)
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture { selectedItem = item }
                 }
             }
             .navigationTitle(title)
@@ -939,5 +1189,9 @@ private struct InsightDetailView: View {
 
 #Preview {
     DashboardView(selectedTab: .constant(0))
-        .modelContainer(for: [Storage.self, InventoryItem.self, UOM.self, InventoryCount.self, ActivityEvent.self], inMemory: true)
+        .modelContainer(for: [Storage.self, InventoryItem.self, UOM.self, InventoryCount.self, ActivityEvent.self, SaleEvent.self, InventoryMovement.self], inMemory: true)
+        .environmentObject(CurrencyManager())
+        .environmentObject(SubscriptionManager.shared)
+        .environmentObject(FirestoreManager.shared)
 }
+

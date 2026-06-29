@@ -42,7 +42,9 @@ struct SmartInventoryApp: App {
             ActivityEvent.self,
             InventoryBatch.self,
             TeamMember.self,
-            ItemTemplate.self
+            ItemTemplate.self,
+            SaleEvent.self,
+            InventoryMovement.self
         ])
         do {
             return try ModelContainer(for: schema)

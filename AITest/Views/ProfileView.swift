@@ -3,10 +3,12 @@ import SwiftData
 import FirebaseAuth
 
 struct ProfileView: View {
-    @StateObject private var authManager = AuthManager.shared
-    @StateObject private var subscriptionManager = SubscriptionManager.shared
-    @StateObject private var firestoreManager = FirestoreManager.shared
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var currencyManager: CurrencyManager
+    @EnvironmentObject private var subscriptionManager: SubscriptionManager
+    @EnvironmentObject private var firestoreManager: FirestoreManager
+    @StateObject private var authManager = AuthManager.shared
 
     @State private var showSignOutAlert = false
     @State private var showDeleteAccountAlert = false
@@ -15,6 +17,7 @@ struct ProfileView: View {
     @State private var showEmailVerification = false
     @State private var showPrivacyPolicy = false
     @State private var showPaywall = false
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
@@ -231,6 +234,14 @@ struct ProfileView: View {
                     .foregroundColor(.primary)
                 }
 
+                // MARK: - App Settings
+                Section {
+                    Button { showSettings = true } label: {
+                        Label("Settings", systemImage: "gear")
+                    }
+                    .accessibilityIdentifier("gear")
+                }
+
                 // MARK: - Account Management
                 Section("Account") {
                     Button { showSignOutAlert = true } label: {
@@ -270,6 +281,11 @@ struct ProfileView: View {
             }
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
         // Alerts
         .alert("Sign Out", isPresented: $showSignOutAlert) {
@@ -294,6 +310,12 @@ struct ProfileView: View {
         .sheet(isPresented: $showEmailVerification) { EmailVerificationView().sheetStyle() }
         .sheet(isPresented: $showPrivacyPolicy) { PrivacyPolicyView().sheetStyle() }
         .sheet(isPresented: $showPaywall) { PaywallView(source: "pro_feature").sheetStyle() }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+                .environmentObject(currencyManager)
+                .environmentObject(firestoreManager)
+                .sheetStyle()
+        }
         .task {
             await subscriptionManager.loadProducts()
         }

@@ -1,7 +1,9 @@
-# Signs out via Profile tab
+# Signs out via Profile sheet (Dashboard gear icon)
 appId: com.vishuddhi.stoqly
 ---
-- tapOn: "Profile"
+- tapOn: "Dashboard"
+- tapOn:
+    id: "dashboardGearButton"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Sign Out"

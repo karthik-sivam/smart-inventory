@@ -16,6 +16,7 @@ import PhotosUI
 
 struct PaperInventoryView: View {
     var preselectedStorage: Storage? = nil
+    var onComplete: ((Int) -> Void)? = nil
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -449,7 +450,11 @@ struct PaperInventoryView: View {
             }
         }
 
-        dismiss()
+        if let onComplete {
+            onComplete(validItems.count)
+        } else {
+            dismiss()
+        }
     }
 }
 

@@ -97,6 +97,20 @@ env:
 - runFlow: flows/79_bulk_import_add_storage_autoselect.yaml
 - runFlow: flows/80_bulk_import_add_storage_color.yaml
 
+# ── Smart Count flows (81–87) ─────────────────────
+- runFlow: flows/81_smart_count_open.yaml
+- runFlow: flows/82_smart_count_voice_mode.yaml
+- runFlow: flows/83_smart_count_photo_mode.yaml
+- runFlow: flows/84_smart_count_sheet_mode.yaml
+- runFlow: flows/85_smart_count_back_nav.yaml
+- runFlow: flows/86_smart_count_pro_gate.yaml
+- runFlow: flows/87_post_login_onboarding_full.yaml
+
+# ── Smart Sales Entry (88–90) ─────────────────────
+- runFlow: flows/88_sales_tab_empty_state.yaml
+- runFlow: flows/89_sales_item_picker.yaml
+- runFlow: flows/90_smart_sales_pro_gate.yaml
+
 # ── Paywall flows (manual — need seeded data) ────
 # - runFlow: flows/17_paywall_storage_limit.yaml
 # - runFlow: flows/18_paywall_item_limit.yaml

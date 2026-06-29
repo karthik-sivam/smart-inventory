@@ -101,6 +101,13 @@ flows=(
   flows/74_health_card_drilldown.yaml
   flows/75_value_by_category.yaml
   flows/76_smart_insights.yaml
+  flows/81_smart_count_open.yaml
+  flows/82_smart_count_voice_mode.yaml
+  flows/83_smart_count_photo_mode.yaml
+  flows/84_smart_count_sheet_mode.yaml
+  flows/85_smart_count_back_nav.yaml
+  flows/86_smart_count_pro_gate.yaml
+  flows/87_post_login_onboarding_full.yaml
 )
 
 pass=0

@@ -1,0 +1,20 @@
+# Flow 85 — Smart Count: Back navigation from mode to mode picker
+# Voice mode uses Cancel (no Back button) to return to Smart Count picker.
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml
+- tapOn:
+    id: "smart-count-button"
+- assertVisible: "Smart Count"
+- tapOn: "Voice Inventory"
+- assertVisible: "Voice Inventory"
+- tapOn: "Cancel"
+- assertVisible: "Smart Count"
+- assertVisible: "Voice Inventory"
+- assertVisible: "Photo Inventory"
+- assertVisible: "Sheet Inventory"
+- tapOn: "Done"

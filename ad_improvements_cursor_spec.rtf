@@ -1,0 +1,344 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Helvetica;}}
+\f0\fs28
+
+AD SYSTEM IMPROVEMENTS — Cursor Spec
+Stoqly / AITest target
+=====================================
+
+CONTEXT
+-------
+The ad system lives in AITest/Models/AdManager.swift and is triggered via
+AdManager.shared.recordCompletion(event:) calls scattered across the codebase.
+
+The current setup has two problems:
+  1. Bad triggers fire ads at inappropriate moments (sign-in, sign-out, delete
+     account, password reset) — bad UX and a potential App Store review flag.
+  2. The app feels completely ad-free between ad appearances because there is
+     no persistent signal reminding free users that an upgrade exists.
+
+Your job is to fix both without making the app annoying.
+
+CRITICAL RULES (never violate):
+  - modelContext.safeSave(context:) — never use try? modelContext.save()
+  - Never set SubscriptionManager.isPro = true anywhere
+  - Never add NavigationStack inside a sheet that already has one
+  - Ad changes must respect the existing isPro guard: ads must never show
+    to Pro subscribers
+
+---
+
+CHANGE 1 — REMOVE BAD AD TRIGGERS FROM AuthManager.swift
+==========================================================
+
+File: AITest/Models/AuthManager.swift
+
+Remove ALL of these recordCompletion calls. They fire ads at moments that
+feel punishing or manipulative, which hurts trust and can trigger App Store
+rejection under guideline 4.7 (misleading ads).
+
+DELETE these lines:
+  - AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedUp)
+    (in signUp())
+  - AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedIn)
+    (in signIn() AND in signInWithGoogle() — remove from both)
+  - AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedOut)
+    (in signOut())
+  - AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.emailVerificationSent)
+    (in sendEmailVerification())
+  - AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.passwordResetRequested)
+    (in resetPassword())
+  - AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.accountDeleted)
+    (in deleteAccount())
+  - AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.profileUpdated)
+    (in updateProfile())
+
+Keep the Analytics calls (AnalyticsManager.shared.track(...)) — only remove
+the AdManager.shared.recordCompletion calls.
+
+---
+
+CHANGE 2 — REMOVE SETTINGS TRIGGER FROM SettingsView.swift
+============================================================
+
+File: AITest/Views/SettingsView.swift
+
+Find and DELETE the line:
+  AdManager.shared.recordCompletion(event: .settingsChanged)
+
+Settings is a support flow, not a productivity action. Showing a banner when
+the user toggles a switch is disruptive.
+
+---
+
+CHANGE 3 — CLEAN UP AdManager.swift
+=====================================
+
+File: AITest/Models/AdManager.swift
+
+3a. Remove orphaned event cases from CompletionEvent enum.
+    DELETE these cases (they now have no callers):
+      - userSignedUp
+      - userSignedIn
+      - userSignedOut
+      - passwordResetRequested
+      - accountDeleted
+      - profileUpdated
+      - emailVerificationSent
+      - settingsChanged
+
+3b. Update determineAdType(for:) to remove the cases you just deleted.
+    The new mapping should be:
+
+      case .inventoryCountCompleted, .exportCompleted, .barcodeScanned,
+           .itemAdded, .storageCreated, .bulkImportCompleted:
+          return .interstitial
+      case .storageUpdated, .itemUpdated:
+          return .banner
+
+    (bulkImportCompleted is added in Change 4 below — add it here now.)
+
+3c. Reduce actionsBeforeAd from 3 to 2.
+    Change:
+      private let actionsBeforeAd = 3
+    To:
+      private let actionsBeforeAd = 2
+
+    Rationale: with only workflow triggers remaining, users doing real inventory
+    work should see an ad roughly every 2 meaningful actions rather than 3.
+    The 5-minute cooldown (minTimeBetweenAds = 300) stays unchanged — it
+    prevents back-to-back ads in fast workflows.
+
+3d. Remove the reward ad infrastructure entirely. It is not implemented, falls
+    back to interstitial, and "watch an ad to unlock Pro for 24h" doesn't fit
+    a business inventory tool.
+
+    DELETE:
+      - private var rewardAd: GADRewardedAd? (and the simulator stub)
+      - private let rewardAdUnitID and testRewardUnitID properties
+      - func loadRewardAd()
+      - func showRewardAd(completion:)
+      - func showRewardForPremiumPreview(feature:completion:)
+      - The .reward case in AdType enum — replace with just .interstitial and .banner
+      - All .reward references in loadAndShowAd() — the reward branch already
+        falls back to interstitial so just remove it
+      - The RewardAdTrigger struct at the bottom of the file
+
+    After deletion, AdType enum should be:
+      enum AdType { case interstitial; case banner }
+
+---
+
+CHANGE 4 — ADD MISSING TRIGGERS
+=================================
+
+4a. Barcode scan — File: AITest/Views/BarcodeScannerView.swift
+
+    Find the callback where a successful barcode scan result is delivered to
+    the parent (look for where the scanned string is returned via a closure or
+    onScan callback). Add AFTER the successful scan is reported:
+      AdManager.shared.recordCompletion(event: .barcodeScanned)
+
+    Do NOT add it inside the scanner's continuous scan loop if one exists —
+    only fire it once per user-initiated scan session.
+
+4b. Bulk import completion — File: AITest/Views/BulkImportView.swift
+
+    Find the line:
+      AnalyticsManager.shared.track(.bulkImportCompleted(itemCount: imported, format: fmt))
+
+    Add AFTER it:
+      AdManager.shared.recordCompletion(event: .bulkImportCompleted)
+
+    Add bulkImportCompleted to the CompletionEvent enum in AdManager.swift
+    (you already referenced it in Change 3b above — make sure it's added).
+
+---
+
+CHANGE 5 — POST-INTERSTITIAL UPSELL CHIP
+==========================================
+
+File: AITest/Models/AdManager.swift — RealAdIntegrationView struct
+
+This is the highest-conversion placement: the user just dismissed an ad and
+is mildly frustrated. Show a small native upsell chip for 3 seconds right
+after the interstitial dismisses.
+
+In RealAdIntegrationView:
+  1. Add @State private var showUpgradeChip = false
+
+  2. Add a EnvironmentObject or ObservedObject for SubscriptionManager so
+     you can check isPro. If passing it via environment is complex in this
+     context, read it from SubscriptionManager.shared directly.
+
+  3. In the .fullScreenCover(isPresented: $showInterstitialOverlay) closure,
+     after the InterstitialAdTrigger dismisses (inside its onDismiss callback),
+     check if !SubscriptionManager.shared.isPro and if so set
+     showUpgradeChip = true, then DispatchQueue.main.asyncAfter(
+     deadline: .now() + 3.5) { showUpgradeChip = false }
+
+  4. Add this chip overlay inside the ZStack in RealAdIntegrationView, below
+     the banner overlay:
+
+     if showUpgradeChip && !SubscriptionManager.shared.isPro {
+         VStack {
+             Spacer()
+             HStack(spacing: 8) {
+                 Image(systemName: "sparkles")
+                     .font(.system(size: 13, weight: .semibold))
+                     .foregroundColor(.white)
+                 Text("Remove Ads — Go Pro")
+                     .font(.system(size: 13, weight: .semibold))
+                     .foregroundColor(.white)
+                 Spacer()
+                 Text("Upgrade")
+                     .font(.system(size: 12, weight: .bold))
+                     .foregroundColor(Color(red: 0.051, green: 0.580, blue: 0.533))
+                     .padding(.horizontal, 10)
+                     .padding(.vertical, 4)
+                     .background(Color.white)
+                     .clipShape(Capsule())
+             }
+             .padding(.horizontal, 16)
+             .padding(.vertical, 10)
+             .background(Color(red: 0.031, green: 0.098, blue: 0.173))
+             .clipShape(RoundedRectangle(cornerRadius: 12))
+             .padding(.horizontal, 12)
+             .padding(.bottom, 96) // clear tab bar
+             .onTapGesture {
+                 showUpgradeChip = false
+                 // Post a notification that InventoryAppView picks up to show
+                 // the paywall — same pattern used elsewhere in the app.
+                 NotificationCenter.default.post(
+                     name: NSNotification.Name("stoqly.showPaywall"),
+                     object: nil
+                 )
+             }
+         }
+         .transition(.move(edge: .bottom).combined(with: .opacity))
+         .animation(.easeInOut(duration: 0.3), value: showUpgradeChip)
+         .zIndex(10)
+     }
+
+  5. In InventoryAppView.body, add an .onReceive that listens for
+     "stoqly.showPaywall" and sets showPaywall = true:
+
+     .onReceive(NotificationCenter.default.publisher(
+         for: NSNotification.Name("stoqly.showPaywall"))) { _ in
+         showPaywall = true
+     }
+
+---
+
+CHANGE 6 — PERSISTENT NATIVE UPGRADE STRIP
+============================================
+
+This is a native SwiftUI view (NOT an AdMob banner) that appears for free
+users at all times. It keeps Pro on the user's radar even when no ad is
+showing — the highest driver of eventual conversion.
+
+6a. Create a reusable component.
+    Add this struct to a new file: AITest/Views/Components/ProUpgradeStrip.swift
+
+    import SwiftUI
+
+    struct ProUpgradeStrip: View {
+        let onTap: () -> Void
+
+        var body: some View {
+            Button(action: onTap) {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color(red: 0.051, green: 0.580, blue: 0.533))
+                    Text("Go Pro — Remove Ads & Unlock Everything")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Text("See Plans")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color(red: 0.051, green: 0.580, blue: 0.533))
+                        .clipShape(Capsule())
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color(red: 0.051, green: 0.580, blue: 0.533).opacity(0.08))
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(Color(red: 0.051, green: 0.580, blue: 0.533).opacity(0.2)),
+                    alignment: .bottom
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+6b. Add ProUpgradeStrip to DashboardView.swift
+
+    In DashboardView.body, find the outermost VStack or ScrollView that
+    contains the main dashboard content. Add ProUpgradeStrip as the FIRST
+    element (above the KPI cards / scroll content), but only for free users:
+
+      if !subscriptionManager.isPro {
+          ProUpgradeStrip {
+              // Notify parent to show paywall
+              NotificationCenter.default.post(
+                  name: NSNotification.Name("stoqly.showPaywall"),
+                  object: nil
+              )
+          }
+      }
+
+    Place it so it appears just below the navigation header, above the
+    scrollable content. It should NOT scroll away — if the dashboard uses
+    a ScrollView, place the strip OUTSIDE the ScrollView so it stays pinned.
+
+6c. Add ProUpgradeStrip to StorageListView.swift
+
+    In StorageListView.body, inside the NavigationStack, find the VStack
+    that wraps the storages list. Add ProUpgradeStrip as the first element
+    of that VStack, below the "Storages" header HStack but above the list:
+
+      if !subscriptionManager.isPro {
+          ProUpgradeStrip {
+              NotificationCenter.default.post(
+                  name: NSNotification.Name("stoqly.showPaywall"),
+                  object: nil
+              )
+          }
+      }
+
+    StorageListView already has @EnvironmentObject private var
+    subscriptionManager: SubscriptionManager so the isPro check works
+    without any new dependencies.
+
+---
+
+AFTER ALL CHANGES:
+
+1. Build the project (Cmd+B) — zero new errors or warnings.
+
+2. Verify ad triggers removed: search for recordCompletion across the
+   codebase. The only callers remaining should be:
+     - StorageViewModels.swift     (.storageUpdated)
+     - ItemViewModels.swift        (.itemAdded, .itemUpdated, .inventoryCountCompleted)
+     - ExportView.swift            (.exportCompleted)
+     - StorageListView.swift       (.storageCreated)
+     - BarcodeScannerView.swift    (.barcodeScanned)   ← new
+     - BulkImportView.swift        (.bulkImportCompleted) ← new
+     - StorageDetailView.swift     (.itemAdded)
+
+3. Verify isPro guard: search for shouldShowAd and ProUpgradeStrip and
+   confirm both paths check subscriptionManager.isPro or
+   SubscriptionManager.shared.isPro before showing anything.
+
+4. Confirm the post-interstitial chip dismisses after 3.5 seconds even if
+   the user does not tap it.
+
+5. Confirm that ProUpgradeStrip does NOT appear anywhere for Pro users by
+   testing with a Pro-subscribed account.
+}

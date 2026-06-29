@@ -83,3 +83,9 @@ build/
 # macOS
 .DS_Store
 **/.DS_Store
+
+# AI tool state — not project code
+.claude/
+
+# Backup files
+*_backup_*.rtf

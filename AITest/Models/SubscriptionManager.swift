@@ -57,7 +57,9 @@ class SubscriptionManager: ObservableObject {
 
     // MARK: - Published State
 
-    @Published var isPro = false
+    // ⚠️ TESTING ONLY — isPro hardcoded true for Phase 7B-B device testing.
+    // REVERT TO false BEFORE ANY APP STORE BUILD OR TESTFLIGHT SUBMISSION.
+    @Published var isPro = true
     @Published var hasRemovedAds = false
     @Published var products: [Product] = []
     @Published var purchaseState: PurchaseState = .idle
@@ -239,11 +241,12 @@ class SubscriptionManager: ObservableObject {
             }
         }
 
-        isPro = hasPro
+        // ⚠️ TESTING ONLY — isPro forced true. Remove both overrides before App Store build.
+        isPro = true // was: hasPro
         proSubscriptionExpirationDate = trialExpiry
         isOnProTrial = onTrial
         // Pro includes ad removal
-        hasRemovedAds = hasNoAds || hasPro
+        hasRemovedAds = true // was: hasNoAds || hasPro
 
         if hasRemovedAds {
             AdManager.shared.disableAds()
@@ -541,9 +544,11 @@ private struct ProFeatureList: View {
                 PaywallFeatureRow(icon: "cube.box.fill",            color: .blue,   text: "Unlimited items per storage",         note: "Free: 50 max")
                 PaywallFeatureRow(icon: "chart.line.uptrend.xyaxis",color: .green,  text: "Advanced analytics & full history",   note: "Free: 30 days")
                 PaywallFeatureRow(icon: "barcode.viewfinder",       color: .orange, text: "Barcode scanner pro (bulk, history)")
-                PaywallFeatureRow(icon: "mic.fill",                 color: .teal,   text: "Unlimited AI Voice Inventory",        note: "Free: 3/month")
-                PaywallFeatureRow(icon: "camera.fill",              color: .teal,   text: "Unlimited AI Photo & Shelf Scan",     note: "Free: 3/month")
-                PaywallFeatureRow(icon: "doc.text.viewfinder",      color: .teal,   text: "Unlimited AI Sheet Inventory",        note: "Free: 3/month")
+                PaywallFeatureRow(icon: "sparkles",                          color: .stoqlyAccent, text: "Smart Sales Entry — Voice, Photo, Text, CSV & PDF")
+                PaywallFeatureRow(icon: "arrow.down.doc.fill",               color: .orange,       text: "AI Purchase Invoice Import")
+                PaywallFeatureRow(icon: "mic.fill",                          color: .teal,         text: "AI Voice Inventory Count",   note: "Free: 3/month")
+                PaywallFeatureRow(icon: "camera.fill",                       color: .teal,         text: "AI Photo Inventory Scan",    note: "Free: 3/month")
+                PaywallFeatureRow(icon: "doc.text.viewfinder",               color: .teal,         text: "AI Sheet Inventory Import",  note: "Free: 3/month")
                 PaywallFeatureRow(icon: "square.and.arrow.down.on.square", color: .indigo, text: "Bulk CSV / Excel import")
                 PaywallFeatureRow(icon: "person.2.fill",            color: .cyan,   text: "Multi-user collaboration",            note: "Coming soon")
                 PaywallFeatureRow(icon: "xmark.circle.fill",        color: .gray,   text: "No ads")

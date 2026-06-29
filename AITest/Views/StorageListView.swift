@@ -52,6 +52,12 @@ struct StorageListView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 10)
 
+                if !subscriptionManager.isPro {
+                    ProUpgradeStrip {
+                        showingPaywall = true
+                    }
+                }
+
                 if teamManager.isInTeamWorkspace {
                     HStack(spacing: 4) {
                         Image(systemName: "person.2.fill")
@@ -289,7 +295,7 @@ struct StorageCard: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
     }

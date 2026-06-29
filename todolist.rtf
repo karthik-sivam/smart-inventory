@@ -155,4 +155,3509 @@ BUILD CHECK:
 After all changes, build the project in Xcode (Cmd+B).
 Confirm zero new errors and zero new warnings related to AnalyticsManager.
 Then update automation_results.rtf with results.
+
+---
+
+PHASE 7A — Sales, Profitability & Reports
+Engineering Cursor Spec
+Date: 2026-06-27
+Author: iOS + Backend Engineer role
+
+ARCHITECTURE DECISIONS (resolved before implementation):
+
+A. SaleEvent model — denormalized: stores itemName, itemSKU, storageName, category as strings at time of sale. Soft @Relationship to InventoryItem (optional, set to nil if item deleted). Historical data is never lost. Firestore path: users/{uid}/saleEvents/{saleId}
+
+B. InventoryMovement model — stores itemId (UUID as String), itemName, storageName at time of movement. @Relationship to InventoryItem (optional). Firestore path: users/{uid}/inventoryMovements/{movementId}
+
+C. sellingPrice on InventoryItem — added as var sellingPrice: Double = 0 (lightweight migration, SwiftData handles new field with default automatically, no VersionedSchema needed). Firestore sync: add sellingPrice to existing item push/pull payload.
+
+D. Firestore paths for new models:
+   users/{uid}/saleEvents/{saleId}
+   users/{uid}/inventoryMovements/{movementId}
+   (Both at top level under uid, not nested under storages, since they reference items cross-storage and need independent queryability for Reports.)
+
+E. CurrencyManager propagation fix — InventoryAppView already creates @StateObject private var currencyManager = CurrencyManager() and MainAppContent receives it as @StateObject. The fix is to propagate it via .environmentObject() to ALL tabs in MainAppContent, and to fix DashboardView which currently creates its OWN @StateObject private var currencyManager (line 21 of DashboardView.swift). DashboardView must be changed to @EnvironmentObject var currencyManager: CurrencyManager.
+
+F. Dead stock / never-audited grace periods — the fix lives in SmartInsightsCard or wherever the "dead stock" / "never audited" filter logic computes. Add createdAt guard: items must be > 30 days old for dead stock, > 7 days old for never-audited.
+
+CRITICAL RULES — include in every implementation step:
+- ALWAYS use modelContext.safeSave(context: "DescriptiveName") — NEVER try? modelContext.save()
+- When deleting items, INSERT ActivityEvent BEFORE calling modelContext.delete()
+- Barcode scanner uses .fullScreenCover NEVER .sheet
+- smartFormatted for quantities, %.2f for currency display only (or preferably currencyManager.formatPrice())
+- ItemDetailView must NOT have its own NavigationStack
+- AddStorageView already has its own NavigationStack — never double-wrap
+- New sheets use .sheetStyle()
+- NEVER include isPro = true in any spec item
+- All monetary display must use currencyManager.formatPrice(amount) — never hardcode "$"
+- SaleEvent.quantitySold and all price fields on new models must be Double, never Int
+
+---
+
+ITEM 14 — Add sellingPrice to InventoryItem SwiftData model
+File: AITest/Models/InventoryItem.swift
+Location: After the existing var unitCost: Double declaration (near line 14)
+Change: Add the following property on its own line:
+  var sellingPrice: Double = 0
+Also add a computed property after the existing computed properties (after stockStatus):
+  /// Gross margin as a percentage. Returns nil if sellingPrice is 0.
+  var grossMarginPct: Double? {
+      guard sellingPrice > 0 else { return nil }
+      return (sellingPrice - unitCost) / sellingPrice * 100
+  }
+  /// Gross profit per unit. Returns nil if sellingPrice is 0.
+  var grossProfitPerUnit: Double? {
+      guard sellingPrice > 0 else { return nil }
+      return sellingPrice - unitCost
+  }
+Note: Do NOT change the init() — Swift default values handle migration automatically.
+
+---
+
+ITEM 15 — Sync sellingPrice to Firestore in FirestoreManager
+File: AITest/Models/FirestoreManager.swift
+Location: Find the function that builds the Firestore dictionary for an InventoryItem (look for "unitCost" in a dictionary literal inside a push/upsert function). Add "sellingPrice" to that dictionary.
+Change: In the item Firestore push function, add:
+  "sellingPrice": item.sellingPrice,
+Also in the pull/decode function that reads item fields from Firestore, add:
+  item.sellingPrice = data["sellingPrice"] as? Double ?? 0
+This follows the exact same pattern as unitCost. Find unitCost in FirestoreManager.swift and mirror the pattern for sellingPrice.
+
+---
+
+ITEM 16 — Create SaleEvent SwiftData model
+File: AITest/Models/SaleEvent.swift (NEW FILE)
+Create this file with the following exact content:
+
+import Foundation
+import SwiftData
+
+/// Records a single sale transaction. Denormalized fields (itemName, itemSKU,
+/// storageName, category) are captured at time of sale so that deleting an item
+/// never erases historical revenue data.
+@Model
+final class SaleEvent {
+    var id: UUID
+    /// Soft reference — nil if the item was deleted after this sale.
+    @Relationship var item: InventoryItem?
+    // Denormalized at time of sale (never changes even if item is edited/deleted)
+    var itemName: String
+    var itemSKU: String
+    var storageName: String
+    var category: String
+    var quantitySold: Double
+    /// Price per unit at the time of the sale (may differ from item.sellingPrice if overridden).
+    var pricePerUnit: Double
+    /// Cost per unit at time of sale (snapshot of item.unitCost).
+    var costPerUnit: Double
+    var notes: String
+    var occurredAt: Date
+    var createdAt: Date
+
+    init(
+        item: InventoryItem?,
+        itemName: String,
+        itemSKU: String,
+        storageName: String,
+        category: String,
+        quantitySold: Double,
+        pricePerUnit: Double,
+        costPerUnit: Double,
+        notes: String = "",
+        occurredAt: Date = Date()
+    ) {
+        self.id = UUID()
+        self.item = item
+        self.itemName = itemName
+        self.itemSKU = itemSKU
+        self.storageName = storageName
+        self.category = category
+        self.quantitySold = quantitySold
+        self.pricePerUnit = pricePerUnit
+        self.costPerUnit = costPerUnit
+        self.notes = notes
+        self.occurredAt = occurredAt
+        self.createdAt = Date()
+    }
+
+    var revenue: Double { quantitySold * pricePerUnit }
+    var cogs: Double { quantitySold * costPerUnit }
+    var grossProfit: Double { revenue - cogs }
+    var grossMarginPct: Double? {
+        guard revenue > 0 else { return nil }
+        return grossProfit / revenue * 100
+    }
 }
+
+---
+
+ITEM 17 — Create InventoryMovement SwiftData model
+File: AITest/Models/InventoryMovement.swift (NEW FILE)
+Create this file with the following exact content:
+
+import Foundation
+import SwiftData
+
+/// Movement types for inventory IN flows.
+enum MovementTypeIn: String, CaseIterable, Codable {
+    case purchase       = "Purchase"
+    case transferIn     = "Transfer In"
+    case returnFromCustomer = "Return from Customer"
+    case adjustmentUp   = "Adjustment (Up)"
+    case openingStock   = "Opening Stock"
+}
+
+/// Movement types for inventory OUT flows.
+enum MovementTypeOut: String, CaseIterable, Codable {
+    case saleOut        = "Sale"
+    case waste          = "Waste / Spoilage"
+    case returnToSupplier = "Return to Supplier"
+    case transferOut    = "Transfer Out"
+    case adjustmentDown = "Adjustment (Down)"
+}
+
+/// Records a single inventory movement (stock in or out) with full audit trail.
+/// Denormalized itemName and storageName survive item deletion.
+@Model
+final class InventoryMovement {
+    var id: UUID
+    /// Soft reference — nil if item was deleted after this movement.
+    @Relationship var item: InventoryItem?
+    // Denormalized at time of movement
+    var itemName: String
+    var itemSKU: String
+    var storageName: String
+    var category: String
+    /// "IN" or "OUT"
+    var direction: String
+    /// The movement type string (use MovementTypeIn.rawValue or MovementTypeOut.rawValue)
+    var movementType: String
+    var quantity: Double
+    /// Optional: purchase price per unit, waste cost per unit, etc.
+    var pricePerUnit: Double
+    var notes: String
+    var occurredAt: Date
+    var createdAt: Date
+    /// Optional link to a SaleEvent if this movement was created by a Quick Sale.
+    var linkedSaleEventId: UUID?
+
+    init(
+        item: InventoryItem?,
+        itemName: String,
+        itemSKU: String,
+        storageName: String,
+        category: String,
+        direction: String,
+        movementType: String,
+        quantity: Double,
+        pricePerUnit: Double = 0,
+        notes: String = "",
+        occurredAt: Date = Date(),
+        linkedSaleEventId: UUID? = nil
+    ) {
+        self.id = UUID()
+        self.item = item
+        self.itemName = itemName
+        self.itemSKU = itemSKU
+        self.storageName = storageName
+        self.category = category
+        self.direction = direction
+        self.movementType = movementType
+        self.quantity = quantity
+        self.pricePerUnit = pricePerUnit
+        self.notes = notes
+        self.occurredAt = occurredAt
+        self.createdAt = Date()
+        self.linkedSaleEventId = linkedSaleEventId
+    }
+
+    var totalValue: Double { quantity * pricePerUnit }
+    var isIN: Bool { direction == "IN" }
+}
+
+---
+
+ITEM 18 — Register new models in SwiftData container
+File: AITest/AITestApp.swift (or wherever the ModelContainer/modelContainer(for:) is defined — search for "modelContainer" or ".modelContainer")
+Location: Find the array of model types passed to modelContainer(for:)
+Change: Add SaleEvent.self and InventoryMovement.self to the array.
+Example — if current code is:
+  .modelContainer(for: [Storage.self, InventoryItem.self, UOM.self, InventoryCount.self, ActivityEvent.self, ...])
+Change to include:
+  SaleEvent.self, InventoryMovement.self
+Also add safeDelete(SaleEvent.self) and safeDelete(InventoryMovement.self) to the clearLocalData() function in InventoryAppView.swift (in the sign-out data wipe), following the same safeDelete pattern used for other models there.
+
+---
+
+ITEM 19 — Add SaleEvent and InventoryMovement Firestore sync
+File: AITest/Models/FirestoreManager.swift
+Location: Add two new functions after the existing item sync functions.
+Change: Add these two functions, following the exact pattern of the existing push/pull functions:
+
+func pushSaleEvent(_ event: SaleEvent) async {
+    guard let uid = TeamManager.shared.effectiveUID else { return }
+    let ref = db.collection("users").document(uid)
+        .collection("saleEvents").document(event.id.uuidString)
+    let data: [String: Any] = [
+        "id": event.id.uuidString,
+        "itemName": event.itemName,
+        "itemSKU": event.itemSKU,
+        "storageName": event.storageName,
+        "category": event.category,
+        "quantitySold": event.quantitySold,
+        "pricePerUnit": event.pricePerUnit,
+        "costPerUnit": event.costPerUnit,
+        "notes": event.notes,
+        "occurredAt": Timestamp(date: event.occurredAt),
+        "createdAt": Timestamp(date: event.createdAt)
+    ]
+    try? await ref.setData(data)
+}
+
+func pushInventoryMovement(_ movement: InventoryMovement) async {
+    guard let uid = TeamManager.shared.effectiveUID else { return }
+    let ref = db.collection("users").document(uid)
+        .collection("inventoryMovements").document(movement.id.uuidString)
+    let data: [String: Any] = [
+        "id": movement.id.uuidString,
+        "itemName": movement.itemName,
+        "itemSKU": movement.itemSKU,
+        "storageName": movement.storageName,
+        "category": movement.category,
+        "direction": movement.direction,
+        "movementType": movement.movementType,
+        "quantity": movement.quantity,
+        "pricePerUnit": movement.pricePerUnit,
+        "notes": movement.notes,
+        "occurredAt": Timestamp(date: movement.occurredAt),
+        "createdAt": Timestamp(date: movement.createdAt),
+        "linkedSaleEventId": movement.linkedSaleEventId?.uuidString ?? ""
+    ]
+    try? await ref.setData(data)
+}
+
+Note: Pull-from-cloud for SaleEvents and InventoryMovements is deferred to Phase 7B (multi-device sync of historical sales). In Phase 7A, new records are pushed on creation (fire-and-forget) but pull restores only Storages/Items/Counts as before. This keeps the cloud-sync scope minimal and safe for the 7A deadline.
+
+---
+
+ITEM 20 — Add "SaleMade" and "MovementLogged" display handling to ActivityEvent
+File: AITest/Models/ActivityEvent.swift
+Location: In the displayDescription, displayIcon, and displayColor computed properties (the switch statements)
+Change: Add new cases to each switch:
+
+In displayDescription:
+  case "SaleMade":
+      let qty = quantityAfter.map { $0.smartFormatted } ?? "?"
+      return "Sale recorded: \(qty) sold from \(storageName)"
+  case "MovementLogged":
+      return "Movement logged in \(storageName)"
+
+In displayIcon:
+  case "SaleMade": return "cart.fill"
+  case "MovementLogged": return "arrow.up.arrow.down.circle.fill"
+
+In displayColor:
+  case "SaleMade": return "green"
+  case "MovementLogged": return "blue"
+
+---
+
+ITEM 21 — Add "Selling Price" field and live margin display to EditItemView
+File: AITest/Views/EditItemView.swift
+Location: Inside the "Cost" Section, after the existing "Last Purchase Price" HStack (around line 178)
+Change: Add the following inside the Cost section, after Last Purchase Price:
+
+  HStack {
+      Text("Selling Price")
+      Spacer()
+      TextField("0.00", text: $formVM.sellingPrice)
+          .keyboardType(.decimalPad)
+          .multilineTextAlignment(.trailing)
+          .accessibilityLabel("Selling price per unit")
+  }
+  // Live margin display
+  if let sp = Double(formVM.sellingPrice), sp > 0 {
+      let cost = Double(formVM.unitCost) ?? 0
+      let margin = sp > 0 ? (sp - cost) / sp * 100 : 0
+      HStack {
+          Text(cost > sp ? "Selling below cost" : String(format: "Margin: %.0f%%", margin))
+              .font(.caption)
+              .foregroundColor(cost > sp ? .red : margin >= 30 ? .green : margin >= 10 ? .orange : .red)
+          Spacer()
+      }
+  }
+
+Also update ItemFormViewModel (search for ItemFormViewModel.swift):
+  - Add @Published var sellingPrice: String = ""
+  - In the load(from item:) function, add: sellingPrice = item.sellingPrice > 0 ? String(format: "%.2f", item.sellingPrice) : ""
+  - In the save(to item:) function, add: item.sellingPrice = Double(sellingPrice) ?? 0
+
+---
+
+ITEM 22 — Add .sellingPrice case to ImportField enum in BulkImportView
+File: AITest/Views/BulkImportView.swift
+Location: In the ImportField enum (around line 9), add after the existing cases:
+Change:
+  case sellingPrice = "Selling Price"
+
+Also add to the icon computed property:
+  case .sellingPrice: return "tag.circle"
+
+Also in the BulkImportViewModel.performImport (or equivalent import execution function), where item fields are mapped from column values, add handling for .sellingPrice:
+  case .sellingPrice:
+      item.sellingPrice = Double(value) ?? 0
+
+Also update the auto-detection logic where column headers are guessed (search for where csvHeaders are matched to ImportField cases). Add detection for: "selling price", "sale price", "mrp", "retail price", "price" → maps to .sellingPrice.
+
+---
+
+ITEM 23 — Create QuickSaleSheet.swift
+File: AITest/Views/QuickSaleSheet.swift (NEW FILE)
+Create a new SwiftUI view with the following structure and behavior:
+
+struct QuickSaleSheet: View {
+    let item: InventoryItem
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var currencyManager: CurrencyManager
+
+    @State private var quantityText: String = "1"
+    @State private var sellingPriceText: String = ""
+    @State private var saleDate: Date = Date()
+    @State private var notes: String = ""
+    @State private var showDatePicker: Bool = false
+    @State private var showNotes: Bool = false
+    @State private var isSaving: Bool = false
+    @State private var showOverstockWarning: Bool = false
+
+    // Pre-fill selling price from item
+    private var defaultPrice: Double { item.sellingPrice }
+    private var qty: Double { Double(quantityText) ?? 0 }
+    private var price: Double { Double(sellingPriceText) ?? 0 }
+    private var revenue: Double { qty * price }
+    private var cost: Double { qty * item.unitCost }
+    private var profit: Double { revenue - cost }
+    private var margin: Double? {
+        guard revenue > 0 else { return nil }
+        return profit / revenue * 100
+    }
+
+Layout (top-down in a VStack inside a ScrollView):
+1. Custom header: HStack with "Cancel" (left, .blue, calls dismiss()), "Record Sale" (center title, bold), "Save" (right, .blue, disabled when qty == 0 or isSaving)
+2. Divider
+3. Item info section: item name (.title2, bold), storage name (.caption, secondary), "In Stock: X [unit]  ·  SKU: XXXXXX" (.caption)
+4. "QUANTITY" section header, then: HStack with minus stepper button ("–"), TextField (quantityText, .decimalPad, centered), plus stepper button ("+"). Unit abbreviation label below (item.uom?.abbreviation ?? "units").
+5. If qty > item.currentQuantity: orange warning banner Text "Selling more than in stock (have: [item.currentQuantity.smartFormatted]). Sale will record a negative stock."
+6. "SELLING PRICE" section header, then: HStack with currency symbol Text (currencyManager.selectedCurrency.symbol) + TextField (sellingPriceText, .decimalPad).
+7. If item.sellingPrice > 0 and sellingPriceText is empty or differs: Button "Use default price (\(currencyManager.formatPrice(item.sellingPrice)))" → sets sellingPriceText = String(format: "%.2f", item.sellingPrice)
+8. If sellingPriceText is empty or price == 0: caption Text "No selling price — profit won't be tracked" in .secondary
+9. DATE section: tappable row showing formatted saleDate → toggles showDatePicker. If showDatePicker: DatePicker inline.
+10. Live profit preview (only if price > 0): RoundedRectangle card with .blue.opacity(0.12) background showing:
+    "Revenue: [currencyManager.formatPrice(revenue)]   Profit: [currencyManager.formatPrice(profit)]   Margin: [formatted margin]%"
+    Accessibility: .accessibilityElement(children: .combine) .accessibilityLabel("Revenue ..., Profit ..., Margin ...%")
+11. "NOTES (optional)" — toggle row. If showNotes: TextField for notes.
+
+Save action (called when Save tapped):
+    guard !isSaving else { return }
+    isSaving = true
+    let soldQty = qty
+    let unitPrice = price > 0 ? price : item.sellingPrice
+    let unitCost = item.unitCost
+    let storageName = item.storage?.name ?? "Unknown"
+
+    // 1. Insert ActivityEvent BEFORE modifying item (convention rule)
+    let event = ActivityEvent(
+        eventType: "SaleMade",
+        itemName: item.name,
+        storageName: storageName,
+        quantityBefore: item.currentQuantity,
+        quantityAfter: item.currentQuantity - soldQty,
+        notes: "Sale: \(soldQty.smartFormatted) @ \(currencyManager.formatPrice(unitPrice))"
+    )
+    modelContext.insert(event)
+
+    // 2. Create SaleEvent
+    let sale = SaleEvent(
+        item: item,
+        itemName: item.name,
+        itemSKU: item.sku,
+        storageName: storageName,
+        category: item.category,
+        quantitySold: soldQty,
+        pricePerUnit: unitPrice,
+        costPerUnit: unitCost,
+        notes: notes,
+        occurredAt: saleDate
+    )
+    modelContext.insert(sale)
+
+    // 3. Create InventoryMovement linked to the sale
+    let movement = InventoryMovement(
+        item: item,
+        itemName: item.name,
+        itemSKU: item.sku,
+        storageName: storageName,
+        category: item.category,
+        direction: "OUT",
+        movementType: MovementTypeOut.saleOut.rawValue,
+        quantity: soldQty,
+        pricePerUnit: unitPrice,
+        notes: "Quick Sale",
+        occurredAt: saleDate,
+        linkedSaleEventId: sale.id
+    )
+    modelContext.insert(movement)
+
+    // 4. Deduct stock
+    item.currentQuantity -= soldQty
+    item.updatedAt = Date()
+
+    // 5. Save
+    modelContext.safeSave(context: "QuickSaleSheet")
+
+    // 6. Push to Firestore (fire-and-forget)
+    Task {
+        await FirestoreManager.shared.pushSaleEvent(sale)
+        await FirestoreManager.shared.pushInventoryMovement(movement)
+        // Re-push updated item so sellingPrice and currentQuantity sync
+        await FirestoreManager.shared.pushItem(item, in: item.storage)
+    }
+
+    // 7. Track analytics
+    AnalyticsManager.shared.track(.saleRecorded(
+        itemId: item.id.uuidString,
+        qty: soldQty,
+        sellingPrice: unitPrice,
+        costPrice: unitCost,
+        profit: (unitPrice - unitCost) * soldQty,
+        storageId: item.storage?.id.uuidString ?? ""
+    ))
+
+    isSaving = false
+    dismiss()
+
+onAppear: set sellingPriceText = item.sellingPrice > 0 ? String(format: "%.2f", item.sellingPrice) : ""
+
+Note: The save button's label shows a ProgressView() when isSaving = true.
+Note: AnalyticsManager.saleRecorded event — add this case to StoqlyEvent enum in AnalyticsManager.swift if it does not already exist.
+Note: FirestoreManager.pushItem(item, in:) — use the existing function signature. Look for the existing function that pushes an InventoryItem to Firestore and call it with the same signature.
+
+---
+
+ITEM 24 — Add "Record Sale" button and "Add Movement" link to ItemDetailView
+File: AITest/Views/ItemDetailView.swift (wherever ItemDetailView is defined — search for "struct ItemDetailView")
+Note: ItemDetailView must NOT add a NavigationStack. Sheet callers provide it.
+Changes:
+  1. Add state variables:
+       @State private var showingQuickSale = false
+       @State private var showingMovement = false
+  2. Find the existing action buttons area (Edit button, Quick Count button). Add a "Record Sale" button in the same row or immediately below:
+       Button {
+           showingQuickSale = true
+       } label: {
+           Label("Record Sale", systemImage: "cart.fill")
+               .font(.subheadline)
+               .fontWeight(.semibold)
+               .foregroundColor(.white)
+               .frame(maxWidth: .infinity)
+               .padding(.vertical, 10)
+               .background(Color.green)
+               .cornerRadius(10)
+       }
+     If item.currentQuantity == 0:
+       Add caption below: Text("Out of stock — sale will create negative stock").font(.caption).foregroundColor(.secondary)
+       The button is still tappable (allow backorders per PRD).
+  3. Add "Add Movement" as a text link below the action buttons:
+       Button("Add Movement ↗") { showingMovement = true }
+           .font(.caption)
+           .foregroundColor(.stoqlyPrimary)
+  4. Add sheet modifiers at the bottom of the view body:
+       .sheet(isPresented: $showingQuickSale) {
+           QuickSaleSheet(item: item)
+               .environmentObject(currencyManager)
+               .sheetStyle()
+       }
+       .sheet(isPresented: $showingMovement) {
+           MovementSheet(item: item)
+               .environmentObject(currencyManager)
+               .sheetStyle()
+       }
+  5. Add "Profitability" section (see ITEM 29 below for full spec).
+  6. If ItemDetailView does not already have @EnvironmentObject var currencyManager: CurrencyManager, add it.
+
+---
+
+ITEM 25 — Add "Sale" leading swipe action to StorageDetailView item rows
+File: AITest/Views/StorageDetailView.swift
+Location: In the .swipeActions(edge: .leading) modifier on each item row (around line 198-208 in StorageDetailView.swift). Currently has one button: "Count" (green).
+Change: Add a second leading swipe action button AFTER the existing Count button (so Count remains the outermost / first-revealed action):
+  Button {
+      showingQuickSaleItem = item
+  } label: {
+      Label("Sale", systemImage: "cart.fill")
+  }
+  .tint(.teal)
+
+Also add state variable:
+  @State private var showingQuickSaleItem: InventoryItem? = nil
+
+Add sheet:
+  .sheet(item: $showingQuickSaleItem) { item in
+      QuickSaleSheet(item: item)
+          .environmentObject(currencyManager)
+          .sheetStyle()
+  }
+
+Note: StorageDetailView already receives currencyManager as @EnvironmentObject from its callers. Verify this. If not, add .environmentObject(currencyManager) at the call site in DashboardView and StorageListView.
+
+---
+
+ITEM 26 — Create MovementSheet.swift
+File: AITest/Views/MovementSheet.swift (NEW FILE)
+Create a new SwiftUI view with the following structure:
+
+struct MovementSheet: View {
+    let item: InventoryItem
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var currencyManager: CurrencyManager
+
+    @State private var direction: String = "IN"   // "IN" or "OUT"
+    @State private var movementTypeIn: MovementTypeIn = .purchase
+    @State private var movementTypeOut: MovementTypeOut = .waste
+    @State private var quantityText: String = ""
+    @State private var pricePerUnitText: String = ""
+    @State private var movementDate: Date = Date()
+    @State private var notes: String = ""
+    @State private var showDatePicker: Bool = false
+    @State private var showingQuickSale: Bool = false   // when user picks "Sale" type
+    @State private var isSaving: Bool = false
+
+Layout (top-down in ScrollView):
+1. Custom header: "Cancel" (left, .blue), "Add Movement" (center, bold), "Add" (right, .blue, disabled when quantityText is empty or Double(quantityText) == 0 or isSaving)
+2. Divider
+3. "DIRECTION" header + Picker(selection: $direction) with segmented style, options "IN" / "OUT"
+4. "TYPE" header + Picker showing:
+    If direction == "IN": ForEach(MovementTypeIn.allCases) { Text($0.rawValue).tag($0) }
+    If direction == "OUT": ForEach(MovementTypeOut.allCases) { Text($0.rawValue).tag($0) }
+    Use .pickerStyle(.menu)
+    If direction == "OUT" and movementTypeOut == .saleOut: show info Text "Tap Add to open Quick Sale instead." in .secondary caption.
+5. "QUANTITY" header + HStack: TextField(quantityText, .decimalPad) + Text(item.uom?.abbreviation ?? "units")
+6. "PRICE PER UNIT (optional)" header + label that changes by type:
+    .purchase → "Purchase Price per Unit"
+    .waste → "Wasted Value per Unit"
+    others → "Price per Unit (optional)"
+   TextField(pricePerUnitText, .decimalPad). Pre-fill when type changes:
+    .purchase → pricePerUnitText = String(format: "%.2f", item.unitCost) if item.unitCost > 0
+    .waste → pricePerUnitText = String(format: "%.2f", item.unitCost) if item.unitCost > 0
+    other types → clear pricePerUnitText
+7. DATE header + tappable row showing formatted movementDate → toggles showDatePicker. If showDatePicker: inline DatePicker.
+8. "NOTES" TextField (optional, single line).
+
+Add action:
+    If direction == "OUT" and movementTypeOut == .saleOut:
+        dismiss()
+        // Caller must open QuickSaleSheet. Pass this via a callback:
+        onOpenQuickSale?()
+        return
+
+    guard !isSaving else { return }
+    isSaving = true
+    let qty = Double(quantityText) ?? 0
+    let price = Double(pricePerUnitText) ?? 0
+    let storageName = item.storage?.name ?? "Unknown"
+    let movType = direction == "IN" ? movementTypeIn.rawValue : movementTypeOut.rawValue
+
+    // ActivityEvent FIRST
+    let qBefore = item.currentQuantity
+    let qAfter = direction == "IN" ? qBefore + qty : qBefore - qty
+    let event = ActivityEvent(
+        eventType: "MovementLogged",
+        itemName: item.name,
+        storageName: storageName,
+        quantityBefore: qBefore,
+        quantityAfter: qAfter,
+        notes: "\(direction) \(movType): \(qty.smartFormatted)"
+    )
+    modelContext.insert(event)
+
+    // Create InventoryMovement
+    let movement = InventoryMovement(
+        item: item,
+        itemName: item.name,
+        itemSKU: item.sku,
+        storageName: storageName,
+        category: item.category,
+        direction: direction,
+        movementType: movType,
+        quantity: qty,
+        pricePerUnit: price,
+        notes: notes,
+        occurredAt: movementDate
+    )
+    modelContext.insert(movement)
+
+    // Adjust stock
+    if direction == "IN" {
+        item.currentQuantity += qty
+    } else {
+        item.currentQuantity -= qty
+    }
+    item.updatedAt = Date()
+    modelContext.safeSave(context: "MovementSheet")
+
+    Task {
+        await FirestoreManager.shared.pushInventoryMovement(movement)
+        await FirestoreManager.shared.pushItem(item, in: item.storage)
+    }
+
+    AnalyticsManager.shared.track(.movementLogged(
+        itemId: item.id.uuidString,
+        movementType: movType,
+        qty: qty,
+        pricePerUnit: price
+    ))
+
+    isSaving = false
+    dismiss()
+
+Signature: Add optional callback property var onOpenQuickSale: (() -> Void)? = nil
+
+Note: AnalyticsManager.movementLogged — add this case to StoqlyEvent enum if it doesn't exist.
+Note: When MovementSheet is presented from ItemDetailView, the caller sets onOpenQuickSale to dismiss MovementSheet and open QuickSaleSheet. Update ItemDetailView's .sheet(isPresented: $showingMovement) to pass this callback.
+
+---
+
+ITEM 27 — Create ReportsView.swift
+File: AITest/Views/ReportsView.swift (NEW FILE)
+Presentation: Opened as .sheet from DashboardView. Uses .sheetStyle().
+Note: ReportsView must NOT have its own NavigationStack at the top level (it is presented as a sheet; the sheet caller does NOT wrap it in NavigationStack here because ReportsView hosts its own internal NavigationStack for the MovementsListView link).
+Actually EXCEPTION: ReportsView does need a NavigationStack because it hosts a NavigationLink to MovementsListView. Wrap the body in NavigationStack.
+
+Create this view with:
+
+struct ReportsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var currencyManager: CurrencyManager
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @Query(sort: \SaleEvent.occurredAt, order: .reverse) private var allSales: [SaleEvent]
+    @Query(sort: \InventoryMovement.occurredAt, order: .reverse) private var allMovements: [InventoryMovement]
+
+    // Period selection — matches DashboardView period if passed in
+    enum ReportPeriod: String, CaseIterable {
+        case today = "Today"
+        case thisWeek = "This Week"
+        case thisMonth = "This Month"
+        case last30Days = "Last 30 Days"
+        case custom = "Custom"
+    }
+    @State var selectedPeriod: ReportPeriod = .thisMonth
+    @State private var customStart: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+    @State private var customEnd: Date = Date()
+    @State private var showingPaywall: Bool = false
+    @State private var showCustomDatePicker: Bool = false
+
+    // Filtered data for selected period
+    private var periodRange: ClosedRange<Date> {
+        let now = Date()
+        let cal = Calendar.current
+        switch selectedPeriod {
+        case .today:
+            let start = cal.startOfDay(for: now)
+            return start...now
+        case .thisWeek:
+            let start = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
+            return start...now
+        case .thisMonth:
+            let start = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
+            return start...now
+        case .last30Days:
+            let start = cal.date(byAdding: .day, value: -30, to: now) ?? now
+            return start...now
+        case .custom:
+            return customStart...customEnd
+        }
+    }
+
+    private var filteredSales: [SaleEvent] {
+        allSales.filter { periodRange.contains($0.occurredAt) }
+    }
+
+    private var filteredMovements: [InventoryMovement] {
+        allMovements.filter { periodRange.contains($0.occurredAt) }
+    }
+
+    private var totalRevenue: Double { filteredSales.reduce(0) { $0 + $1.revenue } }
+    private var totalCOGS: Double { filteredSales.reduce(0) { $0 + $1.cogs } }
+    private var totalProfit: Double { filteredSales.reduce(0) { $0 + $1.grossProfit } }
+    private var totalMarginPct: Double? {
+        guard totalRevenue > 0 else { return nil }
+        return totalProfit / totalRevenue * 100
+    }
+    private var totalUnitsSold: Double { filteredSales.reduce(0) { $0 + $1.quantitySold } }
+
+Layout (NavigationStack wrapping ScrollView):
+1. Custom header inside NavigationStack toolbar or as inline HStack: "Reports" title (bold) + "Done" button (right, calls dismiss()).
+   Use .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+   And .navigationTitle("Reports")
+2. Period picker: horizontal ScrollView of PeriodPicker pills (one per ReportPeriod.allCases except .custom for free users).
+   "Custom" pill: if !subscriptionManager.isPro → show lock icon → tap opens paywall.
+   Pro users: "Custom" shows DatePicker when tapped.
+3. If selectedPeriod == .custom and subscriptionManager.isPro: show two DatePicker rows (Start/End).
+4. SUMMARY CARD (RoundedRectangle, Color(.secondarySystemGroupedBackground), cornerRadius 14):
+   4-column grid: Revenue / COGS / Profit / Margin
+   If filteredSales.isEmpty: show empty state inside this card area.
+5. REVENUE TREND CHART section: "Revenue Trend" header + bar chart using Swift Charts.
+   Use Chart { ForEach(dailyRevenue) { day in BarMark(x: .value("Date", day.date), y: .value("Revenue", day.revenue)) .foregroundStyle(Color.blue) } }
+   dailyRevenue is a computed [DailyRevenue] struct grouped by day from filteredSales.
+6. TOP ITEMS BY REVENUE section: top 5 items ranked by total revenue in period. Show item name, qty sold, revenue.
+7. MARGIN ALERTS section (only if any items have sellingPrice > 0): show items from filteredSales where grossMarginPct < 10. Group by item name. Show "Selling below cost" in red if margin < 0.
+8. MOVEMENTS SECTION: collapsible. Show total IN qty, total OUT qty, OUT breakdown (Sales: X, Waste: Y). "View All Movements →" as NavigationLink to MovementsListView(movements: filteredMovements).
+9. Empty state (no sales): ContentUnavailableView { Label("No Sales This Period", systemImage: "cart.badge.minus") } description: { Text("Record sales from any item to see revenue and profit here.") }
+10. Paywall sheet: .sheet(isPresented: $showingPaywall) { PaywallView(source: "custom_reports").sheetStyle() }
+
+struct DailyRevenue: Identifiable {
+    let id = UUID()
+    let date: Date
+    let revenue: Double
+}
+
+Analytics: .onAppear { AnalyticsManager.shared.track(.reportViewed(period: selectedPeriod.rawValue)) }
+Note: Add .reportViewed(period:) to StoqlyEvent enum if not present.
+
+---
+
+ITEM 28 — Create MovementsListView.swift
+File: AITest/Views/MovementsListView.swift (NEW FILE)
+Presentation: NavigationLink destination inside ReportsView.
+
+struct MovementsListView: View {
+    let movements: [InventoryMovement]
+    @EnvironmentObject var currencyManager: CurrencyManager
+
+Layout:
+1. NavigationTitle "Movements" (uses standard .navigationTitle since it's inside ReportsView's NavigationStack).
+2. List grouped by date section (group movements by Calendar.current.startOfDay(for: movement.occurredAt)).
+   Section headers: "Today" / "Yesterday" / date formatted with .medium style.
+3. Each row: HStack — icon (arrow.up.circle.fill green for IN, arrow.down.circle.fill red for OUT), VStack (movementType + " · " + qty.smartFormatted + " " + unit, itemName + " · " + formatted date), Spacer, price (if pricePerUnit > 0: currencyManager.formatPrice(movement.totalValue))
+4. Empty state: ContentUnavailableView { Label("No Movements", systemImage: "arrow.up.arrow.down.circle") } description: { Text("Movements recorded from Item Detail will appear here.") }
+5. .listStyle(.insetGrouped)
+
+---
+
+ITEM 29 — Add "Profitability" section to ItemDetailView
+File: AITest/Views/ItemDetailView.swift
+Location: Find the existing sections in ItemDetailView. Add a new section after the "Stock Details" or "Item Information" section, before count history.
+Change: Add a new VStack or List section (match the existing card style in ItemDetailView):
+
+If item.sellingPrice > 0:
+  Show a card with title "Profitability" (label "dollarsign.circle.fill" + text):
+    Row: "Cost"         → currencyManager.formatPrice(item.unitCost)
+    Row: "Selling Price" → currencyManager.formatPrice(item.sellingPrice)
+    Divider
+    Row: "Profit/unit"  → currencyManager.formatPrice(item.grossProfitPerUnit ?? 0)  colored: green/orange/red by margin
+    Row: "Gross Margin" → String(format: "%.0f%%", item.grossMarginPct ?? 0)  same color
+  Color logic: margin > 30 → .green, 10...30 → .orange, else → .red (negative also red)
+
+If item.sellingPrice == 0:
+  Show a card with title "Profitability":
+    Text "Set a selling price to track your profit margin for this item."
+      .font(.caption).foregroundColor(.secondary)
+    Button("Set Selling Price →") { /* open edit view */ }
+      .font(.caption).foregroundColor(.stoqlyPrimary)
+    The button should set showingEditItem = true (if that state variable exists in ItemDetailView) or call dismiss then navigate to edit. If ItemDetailView has an edit button that sets a state var, reuse that pattern.
+
+---
+
+ITEM 30 — Add "Sales Performance" section to DashboardView
+File: AITest/Views/DashboardView.swift
+Location: Inside the ScrollView VStack, after the SmartInsightsCard and CategoryBarChart blocks (around line 260), before the "Recent Activity" section.
+Change: Add a new section:
+
+@State private var dashboardSalesPeriod: String = "This Week"
+@State private var showingReports = false
+@Query(sort: \SaleEvent.occurredAt, order: .reverse) private var allSaleEvents: [SaleEvent]
+
+// Computed: sales for selected dashboard period
+private var dashboardPeriodRevenue: Double { ... (filter allSaleEvents by dashboardSalesPeriod range, sum revenue) }
+private var dashboardPeriodProfit: Double { ... (filter allSaleEvents by dashboardSalesPeriod range, sum grossProfit) }
+private var dashboardPeriodMargin: Double? { ... }
+
+Section view (only show if items is not empty AND (any item has sellingPrice > 0 OR allSaleEvents is not empty)):
+
+VStack(alignment: .leading, spacing: 12) {
+    HStack {
+        Text("Sales Performance")
+            .font(.headline).fontWeight(.semibold)
+        Spacer()
+        // Period picker: "Today" / "This Week" / "This Month" as segmented or pill picker
+        // Use a simple Picker with .segmented style or inline pills matching FilterChip
+        // Keep it compact — 3 options only (Today, This Week, This Month)
+    }
+
+    if allSaleEvents.isEmpty {
+        // Empty state
+        VStack(spacing: 8) {
+            Text("No sales recorded yet.")
+                .font(.subheadline).foregroundColor(.secondary)
+            Text("Start recording sales to see your profit insights here.")
+                .font(.caption).foregroundColor(.secondary)
+            Button("Record Your First Sale →") { /* open item picker then QuickSaleSheet */ }
+                .font(.caption).foregroundColor(.stoqlyPrimary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(12)
+    } else {
+        // Mini chart (optional — use CountTrendChart pattern if time allows, else skip chart)
+        // Inline stats row
+        HStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Revenue").font(.caption).foregroundColor(.secondary)
+                Text(currencyManager.formatPrice(dashboardPeriodRevenue))
+                    .font(.subheadline).fontWeight(.semibold).foregroundColor(.blue)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Profit").font(.caption).foregroundColor(.secondary)
+                Text(currencyManager.formatPrice(dashboardPeriodProfit))
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(dashboardPeriodProfit >= 0 ? .green : .red)
+            }
+            if let margin = dashboardPeriodMargin {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Margin").font(.caption).foregroundColor(.secondary)
+                    Text(String(format: "%.0f%%", margin))
+                        .font(.subheadline).fontWeight(.semibold)
+                        .foregroundColor(margin >= 30 ? .green : margin >= 10 ? .orange : .red)
+                }
+            }
+            Spacer()
+        }
+
+        Divider()
+
+        Button {
+            showingReports = true
+        } label: {
+            HStack {
+                Text("View Full Report →")
+                    .font(.subheadline).foregroundColor(.stoqlyPrimary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption2).foregroundColor(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+.padding()
+.background(Color(.secondarySystemGroupedBackground))
+.cornerRadius(12)
+.padding(.horizontal)
+
+Add sheet:
+.sheet(isPresented: $showingReports) {
+    ReportsView(selectedPeriod: dashboardPeriodAsReportPeriod)
+        .environmentObject(currencyManager)
+        .environmentObject(subscriptionManager)
+        .sheetStyle()
+}
+
+Note: dashboardPeriodAsReportPeriod maps the dashboard's period string to ReportsView.ReportPeriod enum so the Reports screen opens to the same period the dashboard is showing.
+
+Note — KPI GRID CHANGE (approved in prototype mockup):
+Swap 2 existing KPI cards to keep the grid at exactly 6 cards (2-column, 3 rows):
+  - "Total Storages" card → replaced by "Revenue" KPI card
+  - "Total Items" card → replaced by "Gross Profit" KPI card
+  DO NOT add new cards — just replace these two existing slots.
+
+Revenue KPI card:
+  - Default period: "This Week" (matches Sales Performance section default)
+  - Delta text: "vs last week" (period-adaptive — changes when period picker changes)
+  - Value: sum of SaleEvent.totalRevenue for the selected period
+  - Period is LINKED to the Sales Performance section's period picker — when the user switches the period pills (Today / This Week / This Month / Custom), BOTH the Sales Performance section AND the Revenue + Gross Profit KPI cards update together. Use a single @State var selectedPeriod that both sections read from.
+
+Gross Profit KPI card:
+  - Default period: "This Week" (same linked period as Revenue)
+  - Delta text: show margin % as static annotation — e.g., "38% margin" — NOT a period-over-period comparison
+  - Value: sum of SaleEvent.grossProfit for the selected period
+  - Color-code the margin %: >30% = green, 10-30% = orange, <10% = red, negative = red
+  - Gross Profit = Revenue - (costPerUnit x quantitySold) — already stored in SaleEvent.grossProfit snapshot
+
+Implementation note: The 6 KPI cards in DashboardView are in a LazyVGrid. Current order left-to-right, top-to-bottom: Total Value, Low Stock, Expiring Soon, Out of Stock, [Total Storages -> Revenue], [Total Items -> Gross Profit]. Remove the old data-source variables for Total Storages and Total Items if they become unused after this swap.
+
+Revenue and Gross Profit also appear inline in the Sales Performance section as larger summary stats — those are NOT removed. The KPI grid cards are additional at-a-glance visibility on the main dashboard screen.
+
+---
+
+BUG FIX ITEM 31 — Fix CurrencyManager propagation (currency inconsistency bug)
+Files: AITest/Views/DashboardView.swift, AITest/Views/InventoryAppView.swift
+Problem: DashboardView creates its own @StateObject private var currencyManager = CurrencyManager() on line ~21. This creates a second independent CurrencyManager instance, breaking the single source of truth.
+
+Fix in DashboardView.swift:
+  1. Remove this line: @StateObject private var currencyManager = CurrencyManager()
+  2. Add instead: @EnvironmentObject var currencyManager: CurrencyManager
+  3. Remove .environmentObject(currencyManager) from DashboardView's sheet calls that pass currencyManager — it now comes automatically from parent.
+     EXCEPTION: SettingsView still needs .environmentObject(currencyManager) explicitly if it does not inherit from the environment automatically (check: SettingsView already uses @EnvironmentObject var currencyManager: CurrencyManager, so the propagation from parent is sufficient).
+  4. Keep all other sheet calls that pass .environmentObject(currencyManager) — they are needed for sheets that may not automatically inherit.
+
+Fix in InventoryAppView.swift / MainAppContent:
+  MainAppContent already passes currencyManager via .environmentObject() to DashboardView (line ~292). This is correct. Verify that StorageDetailView receives currencyManager. Looking at StorageDetailView — it is presented as a NavigationLink destination from StorageListView. StorageListView already receives currencyManager from MainAppContent. Verify StorageListView passes currencyManager to StorageDetailView. If StorageDetailView uses @EnvironmentObject var currencyManager, it should inherit automatically from the environment chain. Add .environmentObject(currencyManager) to any NavigationLink or sheet presentation of StorageDetailView that does not currently pass it.
+
+Also audit these files — replace any @StateObject private var currencyManager = CurrencyManager() with @EnvironmentObject var currencyManager: CurrencyManager:
+  - AITest/Views/StorageDetailView.swift
+  - AITest/Views/ValueByCategoryView.swift
+  - AITest/Views/StorageListView.swift
+  - AITest/Views/ItemListView.swift
+(grep for "CurrencyManager()" in Views/ — each instance other than the one in InventoryAppView/MainAppContent is a bug)
+
+Also audit all monetary display in Views/ — grep for hardcoded "$" or String(format: "%.2f", somePrice) without a currency symbol. Replace with currencyManager.formatPrice(amount).
+
+---
+
+BUG FIX ITEM 32 — Add locale auto-detect to CurrencyManager.init()
+File: AITest/Models/Currency.swift
+Location: In CurrencyManager.init(), in the else branch (when no saved currency found)
+Change: Replace:
+  selectedCurrency = Currency.currencies.first(where: { $0.code == "USD" }) ?? Currency.currencies[0]
+With:
+  // Locale auto-detect: map device region to currency on first install
+  let localeCode = Locale.current.currency?.identifier ?? ""
+  if let match = Currency.currencies.first(where: { $0.code == localeCode }) {
+      selectedCurrency = match
+  } else {
+      selectedCurrency = Currency.currencies.first(where: { $0.code == "USD" }) ?? Currency.currencies[0]
+  }
+
+Also add locale-change detection support: add two new stored values and a method:
+  private let localeAtLastLaunchKey = "stoqly_localeAtLastLaunch"
+  private let dismissedLocaleChangeKey = "stoqly_dismissedLocaleChangeFor"
+
+  /// Returns (localeCurrencyCode, shouldShowBanner) — call on app foreground.
+  /// Returns nil if no banner should be shown.
+  func checkLocaleChange() -> Currency? {
+      guard let savedCurrency = try? JSONDecoder().decode(Currency.self, from: userDefaults.data(forKey: currencyKey) ?? Data()) else { return nil }
+      let localeCode = Locale.current.currency?.identifier ?? ""
+      guard !localeCode.isEmpty, localeCode != savedCurrency.code else { return nil }
+      let dismissedKey = dismissedLocaleChangeKey + localeCode
+      guard !userDefaults.bool(forKey: dismissedKey) else { return nil }
+      return Currency.currencies.first(where: { $0.code == localeCode })
+  }
+
+  func dismissLocaleChangeBanner(for currency: Currency) {
+      userDefaults.set(true, forKey: dismissedLocaleChangeKey + currency.code)
+  }
+
+---
+
+BUG FIX ITEM 33 — Add locale-change banner to DashboardView
+File: AITest/Views/DashboardView.swift
+Location: Inside the NavigationStack body VStack, after the ProUpgradeStrip and before the ScrollView.
+Change:
+  1. Add state: @State private var localeChangeCurrency: Currency? = nil
+  2. Add banner view (only when localeChangeCurrency != nil):
+       if let newCurrency = localeChangeCurrency {
+           HStack(spacing: 12) {
+               Image(systemName: "location.circle.fill").foregroundColor(.blue)
+               VStack(alignment: .leading, spacing: 2) {
+                   Text("Your region uses \(newCurrency.name) (\(newCurrency.symbol))")
+                       .font(.caption).fontWeight(.semibold)
+                   Text("Switch to \(newCurrency.symbol)?")
+                       .font(.caption2).foregroundColor(.secondary)
+               }
+               Spacer()
+               Button("Switch") {
+                   currencyManager.selectedCurrency = newCurrency
+                   localeChangeCurrency = nil
+               }
+               .font(.caption).fontWeight(.semibold).foregroundColor(.white)
+               .padding(.horizontal, 10).padding(.vertical, 5)
+               .background(Color.blue).cornerRadius(8)
+               Button("Keep") {
+                   currencyManager.dismissLocaleChangeBanner(for: newCurrency)
+                   localeChangeCurrency = nil
+               }
+               .font(.caption).foregroundColor(.secondary)
+           }
+           .padding(.horizontal).padding(.vertical, 8)
+           .background(Color.blue.opacity(0.08))
+           .transition(.opacity.combined(with: .move(edge: .top)))
+       }
+  3. Check for locale change on foreground using onReceive(didBecomeActiveNotification):
+     In the existing .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) block (or add a new one), add:
+       if let suggestedCurrency = currencyManager.checkLocaleChange() {
+           withAnimation { localeChangeCurrency = suggestedCurrency }
+       }
+  4. Auto-dismiss after 8 seconds using .onAppear + Task { try? await Task.sleep(for: .seconds(8)); if localeChangeCurrency != nil { withAnimation { localeChangeCurrency = nil } } }
+
+---
+
+BUG FIX ITEM 34 — Fix dead stock and never-audited grace periods
+File: Wherever the "dead stock" and "never audited" insight logic lives. Search for "dead stock" or "updatedAt" and "60" in the Views/ folder. Likely in a SmartInsightsCard view, an InventoryHealthCard, or a computed property in DashboardView.
+If found in a View file (SmartInsightsCard or similar), apply these changes to the filter predicates:
+
+Dead stock (items not touched in 60+ days):
+CURRENT filter: items.filter { item.updatedAt < thirtyDaysAgo (or sixtyDaysAgo) }
+FIX: items.filter { item.updatedAt < sixtyDaysAgo && item.createdAt < thirtyDaysAgo }
+(Grace period: new items excluded for 30 days after creation from dead stock alert)
+
+Never audited (items with no count history):
+CURRENT filter: items.filter { item.countHistory.isEmpty }
+FIX: items.filter { item.countHistory.isEmpty && item.createdAt < sevenDaysAgo }
+where sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+(Grace period: new items have 7 days before appearing in "never audited")
+
+---
+
+BUG FIX ITEM 35 — Fix ValueByCategoryView empty state
+File: AITest/Views/ValueByCategoryView.swift
+Location: Find where the view renders when items are empty or all items have unitCost == 0.
+Change: Replace the blank/minimal current state with:
+  ContentUnavailableView {
+      Label("No Category Values", systemImage: "chart.pie")
+  } description: {
+      Text("Add items with a unit cost to see your inventory value by category.")
+  }
+Also verify the sheet background uses .background(Color(.systemGroupedBackground)) — not a hardcoded gray. Remove any explicit .background(Color.gray.opacity(...)) or similar that causes dark mode mismatch.
+
+---
+
+BUG FIX ITEM 36 — Fix dark mode card backgrounds in StorageListView and StorageDetailView
+File 1: AITest/Views/StorageListView.swift
+Location: Each storage card/row background.
+Change: Replace any .background(Color.white) or .background(Color(.systemBackground)) on storage card rows with:
+  .background(Color(.secondarySystemGroupedBackground))
+If the card uses .listRowBackground modifier: .listRowBackground(Color(.secondarySystemGroupedBackground))
+
+File 2: AITest/Views/StorageDetailView.swift
+Location: Item rows inside the List (line ~193, the .listRowBackground modifier).
+Current: .listRowBackground(Color.clear) (line 193 in StorageDetailView.swift)
+Change: .listRowBackground(Color(.secondarySystemGroupedBackground))
+This ensures item rows have elevated surface color in dark mode (not pure black = indistinguishable from background).
+
+---
+
+BUG FIX ITEM 37 — Hide Ad Tracking rows in SettingsView
+File: AITest/Views/SettingsView.swift
+Location: The "Privacy & Ads" section (around line 187–212).
+Change: Wrap the ENTIRE "Privacy & Ads" Section in #if DEBUG ... #endif:
+  #if DEBUG
+  Section(header: Text("Privacy & Ads")) {
+      // ... existing HStack and Button content
+  }
+  #endif
+This hides the "Ad Tracking" and "Ad Tracking Settings" rows entirely from production builds. The Debug — Ads section (line 215–264) is already inside #if DEBUG, which is correct.
+
+---
+
+BUG FIX ITEM 38 — Move/hide Anthropic API Key row in SettingsView
+File: AITest/Views/SettingsView.swift
+Location: The "AI Features" section (around line 294–297) containing AIAPIKeyRow().
+Change:
+  Replace:
+    Section(header: Text("AI Features")) {
+        AIAPIKeyRow()
+    }
+  With:
+    // Show "AI Features" section only if the API key is NOT already configured via Secrets.plist
+    // This prevents confusing end users who have the key pre-baked in the build.
+    if SecretsManager.anthropicAPIKey == nil {
+        Section(header: Text("AI Features")) {
+            AIAPIKeyRow()
+        }
+    }
+Note: SecretsManager is the class that reads Secrets.plist. Check the actual class/struct name — search for "anthropicAPIKey" in the codebase to find the right access pattern. Use the exact same property access pattern that other parts of the app use for the Anthropic key.
+
+---
+
+BUILD CHECK — PHASE 7A:
+After all Phase 7A items are implemented:
+1. Add SaleEvent.self and InventoryMovement.self to the ModelContainer registration (ITEM 18).
+2. Build the project (Cmd+B). Confirm zero new errors.
+3. Run on a device with EXISTING data to verify SwiftData migration works (new sellingPrice field defaults to 0, no data loss).
+4. Test QuickSaleSheet: record a sale, verify stock decreases, SaleEvent appears in ReportsView.
+5. Test MovementSheet: log a Purchase (IN), verify stock increases.
+6. Test ReportsView: open from Dashboard → Sales Performance → View Full Report.
+7. Verify CurrencyManager: change currency in Settings, verify all views update (no remaining "$" hardcodes).
+8. Test dark mode: StorageListView and StorageDetailView rows must be visible (elevated surface).
+9. Test Settings: "Privacy & Ads" section must NOT appear in Release build. "AI Features" must hide if key is configured.
+10. Update automation_results.rtf with Phase 7A build results.
+}
+
+---
+
+BUG SPRINT 2 — Phase 7A Device Testing Findings
+Run these items IN ORDER. Build and verify after ITEM S2-10 using the BUILD CHECK below.
+
+CRITICAL RULES (same as always):
+- Use modelContext.safeSave(context:) — never try? modelContext.save()
+- Insert ActivityEvent BEFORE modelContext.delete(item)
+- Never set isPro = true in any code
+- All monetary values must go through currencyManager.formatPrice()
+
+---
+
+ITEM S2-1 — Fix "Record a Sale" button styling in QuickSaleSheet
+File: AITest/Views/QuickSaleSheet.swift (or wherever the primary confirm button lives)
+Problem: The "Record Sale" / confirm button looks visually inconsistent with the rest of the app — different size, colour, or shape.
+Fix: Find the primary action button in QuickSaleSheet. Replace its style with the app's standard primary button pattern:
+  Button("Record Sale") { ... }
+      .buttonStyle(.borderedProminent)
+      .tint(.stoqlyAccent)       // use stoqlyAccent — same as all other primary actions in the app
+      .controlSize(.large)
+      .frame(maxWidth: .infinity)
+  If .stoqlyAccent is not defined, use Color.accentColor. Also check that the button has consistent horizontal padding (16pt) and sits at the bottom of the sheet with a safe-area-aware padding: .padding(.bottom, 8).
+
+---
+
+ITEM S2-2 — Fix Sales Performance card alignment + period pill trimming
+File: AITest/Views/DashboardView.swift
+Problem: The "Sales Performance" section on Dashboard has alignment issues, and the period filter pills (Today / This Week / This Month / Custom) are getting clipped/trimmed.
+Fix:
+  1. Period pill ScrollView: Wrap the HStack of period pills in:
+     ScrollView(.horizontal, showsIndicators: false) {
+         HStack(spacing: 8) {
+             ForEach(SalesPeriod.allCases) { period in
+                 PeriodPillView(...)
+             }
+         }
+         .padding(.horizontal, 16)
+     }
+     This allows pills to be fully visible without clipping on smaller screens.
+  2. Period pill text: Add .lineLimit(1) and .fixedSize() to each pill's Text label so they don't wrap or truncate.
+  3. Alignment: Ensure the Sales Performance card's VStack uses .alignment(.leading) and consistent 16pt horizontal padding. Revenue and Gross Profit stat rows should align labels left and values right using Spacer().
+  4. Verify the card's background uses Color(.secondarySystemGroupedBackground) (dark-mode safe).
+
+---
+
+ITEM S2-3 — Fix revenue bar chart in ReportsView (one big box + wrong axis labels)
+File: AITest/Views/ReportsView.swift
+Problem: When only one day has a sale, the bar fills the entire chart area (one big blue box). The x-axis shows time components (e.g. "12:00") instead of day names (Mon, Tue, etc.).
+Fix:
+  1. Populate ALL days in the selected period with zero-revenue entries where no sales occurred:
+     // Before building the Chart, generate a complete date range for the period:
+     let allDays: [DailyRevenue] = stride(from: periodStart, through: periodEnd, by: 86400).map { date in
+         let dayStart = Calendar.current.startOfDay(for: date)
+         let existing = dailyRevenue.first { Calendar.current.isDate($0.date, inSameDayAs: dayStart) }
+         return existing ?? DailyRevenue(date: dayStart, revenue: 0)
+     }
+     Use allDays in the Chart's ForEach instead of dailyRevenue directly.
+  2. Fix x-axis labels — add after the Chart closing brace:
+     .chartXAxis {
+         AxisMarks(values: .stride(by: .day, count: 1)) { value in
+             AxisGridLine()
+             AxisValueLabel(format: .dateTime.weekday(.abbreviated))
+         }
+     }
+     For "This Month" (>7 days), use .weekday → .day format to show day numbers instead.
+  3. Cap bar width so a single bar doesn't fill the entire chart:
+     BarMark(x: ..., y: ...)
+         .foregroundStyle(Color.stoqlyAccent)  // use accent not raw .blue
+  4. If dailyRevenue is empty, the "No data" Text is already shown — make sure allDays also falls back to this when the entire period has zero sales.
+
+---
+
+ITEM S2-4 — Fix remaining hardcoded "$" currency symbols in StorageDetailView
+File: AITest/Views/StorageDetailView.swift
+Problem: At least two places still use hardcoded "$" instead of currencyManager.formatPrice():
+  - Line ~396: Text("$\(String(format: "%.2f", item.totalValue))")
+  - Line ~1003: DetailRow(label: "Unit Cost", value: "$\(String(format: "%.2f", item.unitCost))")
+Fix:
+  1. Replace line ~396:
+     Text(currencyManager.formatPrice(item.totalValue))
+  2. Replace line ~1003:
+     DetailRow(label: "Unit Cost", value: currencyManager.formatPrice(item.unitCost))
+  3. Search StorageDetailView.swift for ALL occurrences of "$\(" or "\"$\"" — fix each one the same way.
+  4. Also search ALL other view files (ItemDetailView.swift, EditItemView.swift, ReorderListView.swift, ExpiryTimelineView.swift, CategoryExplorerView.swift) for any remaining "$\(" patterns and replace them all with currencyManager.formatPrice().
+  Verify: @EnvironmentObject var currencyManager: CurrencyManager must be declared in any view that uses formatPrice(). Do NOT create a new @StateObject for currencyManager — only @EnvironmentObject.
+
+---
+
+ITEM S2-5 — Fix green tick appearing in Audit tab after cancelling count sheet
+File: AITest/Views/InventoryAppView.swift
+Problem: In the Audit tab (CountView), if user opens a count sheet for an item and cancels without saving, the item still shows a green checkmark as if it was counted this session.
+Root cause: In InventoryAppView.swift, the .sheet(item: $showingQuickCount, onDismiss:) callback (around line 461-464) calls viewModel.markCounted(item.id) unconditionally when lastCountedItem is set — even when the count was cancelled. The green tick should ONLY appear when a count was actually saved.
+Fix:
+  1. Add a new @State flag:
+     @State private var lastCountWasSaved = false
+  2. Reset to false when the sheet opens — in the button/action that sets showingQuickCount:
+     lastCountWasSaved = false
+     showingQuickCount = item
+  3. Pass an onSaved callback into QuickCountView:
+     QuickCountView(item: item, onSaved: {
+         lastCountWasSaved = true
+     }, onOpenFullCount: { ... })
+  4. Inside QuickCountView, call onSaved() only when the user taps the save/confirm button and the count is successfully persisted (after safeSave). Do NOT call it in onDismiss or onCancel.
+  5. In the .sheet onDismiss, only mark counted if the save flag is true:
+     .sheet(item: $showingQuickCount, onDismiss: {
+         if lastCountWasSaved, let item = lastCountedItem {
+             viewModel.markCounted(item.id)
+         }
+         lastCountWasSaved = false
+         // existing pendingFullCountItem logic stays the same
+     })
+  If QuickCountView already has an onSaved callback or similar mechanism, use that. Search for the save/confirm action inside QuickCountView and identify where countHistory is appended and safeSave is called — the onSaved() call goes immediately after the safeSave.
+
+---
+
+ITEM S2-6 — Fix dead stock tap showing empty detail view
+File: AITest/Views/DashboardView.swift
+Problem: Dashboard badge shows "Possible dead stock: 1" but tapping it opens an empty InsightDetailView.
+Root cause: The deadStock array is computed inside SmartInsightsCard.insights (a computed property). When the user taps and onShowItems is called, SwiftData may have refreshed the items array between the last render (showing count=1) and the tap execution, causing the relatedItems captured in the insight to be empty or stale.
+Fix:
+  1. Snapshot the items at the moment the insight is tapped. Change the onShowItems callback in DashboardView from:
+     insightDetailItems = detailItems
+     showingInsightDetail = true
+     To:
+     insightDetailItems = Array(detailItems)  // force a value-type copy
+     showingInsightDetail = true
+  2. In SmartInsightsCard, change the tap action to guard against empty relatedItems:
+     Button(action: {
+         guard !insight.relatedItems.isEmpty else { return }
+         onShowItems(insight.title, insight.relatedItems)
+     })
+  3. Also add a defensive empty state inside InsightDetailView for the case where items is empty (even if this shouldn't happen):
+     if items.isEmpty {
+         ContentUnavailableView("No Items", systemImage: "tray")
+     } else {
+         List { ForEach(items, id: \.id) { ... } }
+     }
+  4. Verify the dead stock filter itself: the deadStock predicate uses two thresholds (30-day grace period, 60-day inactivity). Confirm that both thresholds are being applied consistently — specifically that `item.createdAt < thirtyDaysAgo` AND (`lastCount == nil` OR `lastCount < sixtyDaysAgo`) are both required. If an item has no count history AND was created less than 30 days ago, it must be excluded.
+
+---
+
+ITEM S2-7 — Fix currency locale banner showing wrong suggestion after manual currency change
+File: AITest/Models/Currency.swift, AITest/Views/SettingsView.swift
+Problem A (Bug 7): New users expect automatic currency detection from device locale, but it defaults to USD even in India. This happens because the device's "Region" setting (Settings → General → Language & Region) may be set to "United States" even on Indian devices — especially by users who do this for App Store access. Locale.current.currency returns what the device region reports, not the user's physical location.
+Problem B (Bug 8): After manually changing currency to INR in Settings, the Dashboard shows "Your region uses US Dollar ($). Switch to $?" — this is actively wrong and confusing. Once the user has explicitly chosen their currency, the auto-suggest banner must never appear.
+Fix for Problem B (priority):
+  1. In Currency.swift, add a new UserDefaults key:
+     private let manuallySetCurrencyKey = "stoqly_hasManuallySetCurrency"
+  2. Add a method:
+     func markAsManuallySet() {
+         userDefaults.set(true, forKey: manuallySetCurrencyKey)
+     }
+     var hasBeenManuallySet: Bool {
+         userDefaults.bool(forKey: manuallySetCurrencyKey)
+     }
+  3. In checkLocaleChange():
+     func checkLocaleChange() -> Currency? {
+         guard !hasBeenManuallySet else { return nil }  // Add this guard at the top
+         // ... existing logic unchanged ...
+     }
+  4. In SettingsView (or wherever the currency picker saves the user's selection), call:
+     currencyManager.markAsManuallySet()
+     Call this only when the user actively confirms a currency selection — not on auto-detect.
+Fix for Problem A (cosmetic improvement):
+  5. In DashboardView, update the locale banner message to be less assertive:
+     Change: "Your region uses \(newCurrency.name) (\(newCurrency.symbol))"
+     To: "Your device region suggests \(newCurrency.name) (\(newCurrency.symbol))"
+     And: "Switch to \(newCurrency.symbol)?" → "Switch currency?"
+     This makes it clear it's a device setting suggestion, not a definitive claim about the user's region.
+
+---
+
+ITEM S2-8 — Fix voice Smart Count completion: show toast and return to storage items list
+File: AITest/Views/StorageDetailView.swift, AITest/Views/SmartCountView.swift (or VoiceInventoryView.swift)
+Problem: After completing a voice count session (voice → review → save all), the view dismisses back to the SmartCount mode picker sheet instead of returning directly to StorageDetailView with a success toast.
+Fix:
+  1. In StorageDetailView, add an onComplete callback to SmartCountView:
+     .sheet(isPresented: $showingSmartCount) {
+         SmartCountView(
+             preselectedStorage: storage,
+             onComplete: { savedCount in
+                 showingSmartCount = false
+                 toastMessage = "\(savedCount) item\(savedCount == 1 ? "" : "s") updated"
+             }
+         )
+         .sheetStyle()
+     }
+     StorageDetailView already has @State private var toastMessage: String? and .toast(message: $toastMessage).
+  2. In SmartCountView (or VoiceInventoryView), add an onComplete: ((Int) -> Void)? parameter. Call it after ALL items have been saved (after the batch safeSave), passing the count of items that were updated.
+  3. The onComplete call must happen BEFORE dismiss() — call the callback first, then let the sheet dismiss naturally when showingSmartCount becomes false from the caller's side. Do NOT call dismiss() from within SmartCountView if using the onComplete pattern (avoid double-dismiss).
+  4. If SmartCountView has multiple layers (mode picker → voice → review), the onComplete bubbles up through each layer. The innermost save confirmation calls onComplete up the chain.
+
+---
+
+ITEM S2-9 — Prevent adding item when no storage exists
+File: AITest/Views/ItemListView.swift (the Add Item button), and any other entry points that open EditItemView
+Problem: When a new user has no storage areas, they can tap "Add Item" and begin filling in the form. But the storage picker in EditItemView is empty, so they cannot save and get stuck. They must go back and create a storage first — with no guidance.
+Fix:
+  1. In ItemListView (or wherever the Add Item button/toolbar action exists), before opening EditItemView, check if any storages exist:
+     // In the view, add a @Query for storages:
+     @Query private var storages: [Storage]
+     // In the Add Item action:
+     if storages.isEmpty {
+         showingNoStorageAlert = true
+     } else {
+         showingAddItem = true
+     }
+  2. Add the alert:
+     @State private var showingNoStorageAlert = false
+     .alert("Create a Storage First", isPresented: $showingNoStorageAlert) {
+         Button("Cancel", role: .cancel) {}
+         Button("Go to Storages") {
+             // Post a notification or use a binding to switch to the Storages tab
+             NotificationCenter.default.post(name: NSNotification.Name("stoqly.switchToStoragesTab"), object: nil)
+         }
+     } message: {
+         Text("You need at least one storage area before adding items. Create a storage in the Storages tab first.")
+     }
+  3. In InventoryAppView (or wherever the TabView selection is managed), observe "stoqly.switchToStoragesTab" notification and set the selectedTab to the Storages tab index (currently 1).
+  4. Apply the same guard to any other "Add Item" entry points (e.g., from the Dashboard if it has an add action, or from the empty state CTAs). Do NOT apply this guard inside EditItemView itself — only at the call sites that open it.
+
+---
+
+ITEM S2-10 — Fix SmartCount (non-voice) sheet not dismissing after items saved
+File: AITest/Views/SmartCountView.swift (or wherever the SmartCount mode picker and sub-sheets live)
+Problem: After any Smart Count session (not just voice — also image, paper), on completion the view returns to the SmartCount mode picker screen (SmartCountView root) rather than dismissing the whole sheet to show StorageDetailView.
+This is the same root as S2-8 but affects all Smart Count modes.
+Fix:
+  This is handled by the onComplete callback added in S2-8. Make sure the onComplete propagation works for ALL modes in SmartCountView (voice, image, paper), not just voice. Each mode's completion → calls onComplete at the SmartCountView root level → StorageDetailView receives it → dismisses sheet + shows toast.
+  If each mode uses a separate sub-view (VoiceInventoryView, ImageInventoryView, PaperCountView), each one must bubble the completion up to SmartCountView via its own callback, and SmartCountView then calls the root onComplete.
+
+---
+
+BUILD CHECK — BUG SPRINT 2:
+After all S2 items are implemented:
+1. Build (Cmd+B). Zero new errors or warnings.
+2. Test S2-1: QuickSaleSheet "Record Sale" button matches app theme (accent colour, full width, correct size).
+3. Test S2-2: Sales Performance period pills are fully visible and not clipped on iPhone 14 mini / SE screen size.
+4. Test S2-3: ReportsView bar chart with 1 sale shows a narrow bar (not full-width box). X-axis shows day names (Mon, Tue…), not times. Empty period shows zero bars for all days.
+5. Test S2-4: Change currency to INR. Every view in the app must show ₹ — no remaining "$" anywhere.
+6. Test S2-5: Open count sheet in Audit tab, cancel without saving → NO green tick appears. Open count sheet, save a count → green tick appears. Correct.
+7. Test S2-6: Dashboard "Possible dead stock" shows count. Tapping it shows the correct items in the detail sheet (not empty).
+8. Test S2-7: Change currency manually to INR in Settings. Return to Dashboard. Currency locale banner must NOT appear.
+9. Test S2-8 + S2-10: Complete a voice count session. After confirmation, SmartCount sheet fully dismisses (returns to StorageDetailView) and a toast "X items updated" appears.
+10. Test S2-9: Fresh install with no storages → tap Add Item → alert appears directing user to create storage first. Tapping "Go to Storages" switches to Storages tab.
+11. Update automation_results.rtf with Bug Sprint 2 results.
+
+---
+
+PHASE 7B-A — Sales Tab, SalesView, DatePicker Cap, ReportsView CTA
+Run items 7BA-1 through 7BA-6 IN ORDER. These are purely structural (no AI).
+UX spec reference: smart-inventory/phase7b-ux-spec.md
+
+CRITICAL RULES (same as always):
+- Use modelContext.safeSave(context:) — never try? modelContext.save()
+- Never set isPro = true in any code
+- All monetary values through currencyManager.formatPrice()
+- Never nest NavigationStack inside a sheet that already has one
+- New sheets must use .sheetStyle()
+
+---
+
+ITEM 7BA-1 — Tab bar restructure: add Sales tab, move Profile to gear icon
+File 1: AITest/Views/InventoryAppView.swift
+File 2: AITest/Views/DashboardView.swift
+
+PART A — InventoryAppView.swift tab order change:
+The current 5 tabs are (0) Dashboard, (1) Storages, (2) Items, (3) Audit/Count, (4) Profile.
+Change to: (0) Dashboard, (1) Storages, (2) Items, (3) Sales [NEW], (4) Audit/Count.
+Remove the Profile tab entirely from the TabView.
+
+New tab structure:
+  DashboardView()
+      .tabItem { Label("Dashboard", systemImage: "house.fill") }
+      .tag(0)
+  StorageListView()
+      .tabItem { Label("Storages", systemImage: "archivebox.fill") }
+      .tag(1)
+  ItemListView()
+      .tabItem { Label("Items", systemImage: "cube.box.fill") }
+      .tag(2)
+  SalesView()                          // NEW — created in ITEM 7BA-2
+      .tabItem { Label("Sales", systemImage: "cart.fill") }
+      .tag(3)
+  CountView()
+      .tabItem { Label("Audit", systemImage: "list.clipboard.fill") }
+      .tag(4)
+
+Pass all required environmentObjects to SalesView that it needs (currencyManager, subscriptionManager).
+
+PART B — DashboardView.swift: add gear icon for Profile access:
+In DashboardView, add a toolbar button that opens ProfileView as a sheet.
+1. Add state: @State private var showingProfile = false
+2. Add toolbar item (alongside any existing toolbar items):
+   ToolbarItem(placement: .topBarTrailing) {
+       Button {
+           showingProfile = true
+       } label: {
+           Image(systemName: "gearshape.fill")
+               .foregroundColor(.stoqlyPrimary)
+       }
+       .accessibilityLabel("Settings and Profile")
+       .accessibilityIdentifier("dashboardGearButton")
+   }
+3. Add sheet:
+   .sheet(isPresented: $showingProfile) {
+       ProfileView()
+           .environmentObject(firestoreManager)
+           .environmentObject(subscriptionManager)
+           .sheetStyle()
+   }
+   IMPORTANT: ProfileView already has its own NavigationStack — do NOT add another one here.
+4. Search DashboardView for any existing ProfileView sheet or navigation link. If one exists, replace it with this pattern. Do not duplicate.
+
+After this change: Profile is accessible via the gear icon on Dashboard only (no tab).
+
+---
+
+ITEM 7BA-2 — Create SalesView.swift (new file)
+File: AITest/Views/SalesView.swift (CREATE NEW, ~220 lines)
+
+This is a top-level tab view with its own NavigationStack. Never nest NavigationStack inside any sheet opened from SalesView.
+
+Full implementation:
+
+struct SalesView: View {
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var currencyManager: CurrencyManager
+    @EnvironmentObject private var subscriptionManager: SubscriptionManager
+
+    @Query(sort: \SaleEvent.occurredAt, order: .reverse) private var allSales: [SaleEvent]
+
+    @State private var showingItemPicker  = false
+    @State private var showingSmartSales  = false
+    @State private var showingReports     = false
+    @State private var showingQuickSale   = false
+    @State private var preselectedItem: InventoryItem? = nil
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if allSales.isEmpty { emptyState }
+                else { salesList }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { toolbarContent }
+        }
+        .sheet(isPresented: $showingItemPicker) {
+            SaleItemPickerSheet { item in
+                preselectedItem = item
+                showingItemPicker = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    showingQuickSale = true
+                }
+            }
+            .sheetStyle()
+        }
+        .sheet(isPresented: $showingQuickSale) {
+            if let item = preselectedItem {
+                QuickSaleSheet(item: item)
+                    .environmentObject(currencyManager)
+                    .sheetStyle()
+            }
+        }
+        .sheet(isPresented: $showingSmartSales) {
+            SmartSalesEntryView()
+                .environmentObject(currencyManager)
+                .environmentObject(subscriptionManager)
+                .sheetStyle()
+        }
+        .sheet(isPresented: $showingReports) {
+            ReportsView()
+                .environmentObject(currencyManager)
+                .environmentObject(subscriptionManager)
+                .sheetStyle()
+        }
+    }
+
+    // MARK: - Toolbar
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            HStack(spacing: 4) {
+                Text("Sales").font(.title2).fontWeight(.bold)
+                Spacer()
+            }
+        }
+        if !allSales.isEmpty {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { showingSmartSales = true } label: {
+                    Label("Smart Entry", systemImage: "sparkles")
+                        .foregroundColor(.stoqlyAccent)
+                }
+                .accessibilityIdentifier("smartSalesEntryToolbarButton")
+            }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            HStack(spacing: 12) {
+                Button {
+                    showingReports = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("Reports").font(.caption).fontWeight(.semibold)
+                        Image(systemName: "chart.bar.xaxis").font(.caption)
+                    }
+                    .foregroundColor(.stoqlyPrimary)
+                }
+                .accessibilityIdentifier("salesViewReportsButton")
+                if !allSales.isEmpty {
+                    Button { showingItemPicker = true } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityIdentifier("salesAddButton")
+                }
+            }
+        }
+    }
+
+    // MARK: - Empty state
+    private var emptyState: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                Spacer(minLength: 60)
+                Image(systemName: "cart.badge.plus")
+                    .font(.system(size: 64))
+                    .foregroundStyle(Color.stoqlyPrimary.opacity(0.3))
+                Text("No sales yet")
+                    .font(.title3).fontWeight(.semibold)
+                Text("Record a sale to start tracking your revenue and profit.")
+                    .font(.subheadline).foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+                Button("Record a Sale") { showingItemPicker = true }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.stoqlyAccent)
+                    .controlSize(.large)
+                    .accessibilityIdentifier("salesEmptyRecordButton")
+                Button {
+                    showingSmartSales = true
+                } label: {
+                    Label("Smart Sales Entry", systemImage: "sparkles")
+                }
+                .tint(.stoqlyPrimary)
+                .accessibilityIdentifier("salesEmptySmartEntryButton")
+                Spacer()
+            }
+            .padding()
+        }
+    }
+
+    // MARK: - Sales list (grouped by date)
+    private var salesList: some View {
+        List {
+            ForEach(groupedSales, id: \.title) { group in
+                Section(group.title) {
+                    ForEach(group.sales, id: \.id) { sale in
+                        SaleEventRow(sale: sale)
+                    }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    // MARK: - Grouping logic
+    private var groupedSales: [(title: String, sales: [SaleEvent])] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
+        var buckets: [String: [SaleEvent]] = [:]
+        for sale in allSales {
+            let day = cal.startOfDay(for: sale.occurredAt)
+            let label: String
+            if day == today           { label = "Today" }
+            else if day == yesterday  { label = "Yesterday" }
+            else { label = sale.occurredAt.formatted(date: .abbreviated, time: .omitted) }
+            buckets[label, default: []].append(sale)
+        }
+        let priority = ["Today", "Yesterday"]
+        let sorted = buckets.keys.sorted { a, b in
+            let ai = priority.firstIndex(of: a) ?? Int.max
+            let bi = priority.firstIndex(of: b) ?? Int.max
+            if ai != bi { return ai < bi }
+            return a > b
+        }
+        return sorted.map { (title: $0, sales: buckets[$0]!) }
+    }
+
+    private var todayRevenue: Double {
+        allSales.filter { Calendar.current.isDateInToday($0.occurredAt) }
+                .reduce(0) { $0 + $1.revenue }
+    }
+}
+
+// MARK: - SaleEventRow
+struct SaleEventRow: View {
+    let sale: SaleEvent
+    @EnvironmentObject var currencyManager: CurrencyManager
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "cart.fill")
+                .font(.callout).foregroundColor(.stoqlyPrimary)
+                .frame(width: 32, height: 32)
+                .background(Color.stoqlyPrimary.opacity(0.12))
+                .cornerRadius(8)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(sale.itemName).font(.subheadline).fontWeight(.medium)
+                Text("\(sale.quantitySold.smartFormatted) sold · \(sale.occurredAt.formatted(date: .omitted, time: .shortened))")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(currencyManager.formatPrice(sale.revenue))
+                    .font(.subheadline).fontWeight(.semibold)
+                if sale.pricePerUnit > 0 && sale.costPerUnit > 0 {
+                    Text(currencyManager.formatPrice(sale.grossProfit))
+                        .font(.caption2)
+                        .foregroundColor(sale.grossProfit >= 0 ? .green : .red)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+Note: SmartSalesEntryView is a placeholder reference here — it will be created in Phase 7B-B. For now, if the file doesn't exist, create a stub:
+  struct SmartSalesEntryView: View {
+      var body: some View { Text("Coming soon") }
+  }
+This stub will be replaced in 7B-B without affecting 7B-A's build.
+
+---
+
+ITEM 7BA-3 — Create SaleItemPickerSheet.swift (new file)
+File: AITest/Views/SaleItemPickerSheet.swift (CREATE NEW, ~90 lines)
+
+struct SaleItemPickerSheet: View {
+    let onItemSelected: (InventoryItem) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Query(sort: \InventoryItem.name) private var allItems: [InventoryItem]
+    @State private var searchText = ""
+
+    private var filteredItems: [InventoryItem] {
+        let t = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return allItems }
+        return allItems.filter {
+            $0.name.localizedCaseInsensitiveContains(t) ||
+            $0.sku.localizedCaseInsensitiveContains(t) ||
+            ($0.storage?.name.localizedCaseInsensitiveContains(t) ?? false)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if allItems.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Items Yet", systemImage: "cube.box")
+                    } description: {
+                        Text("Add items to your inventory first, then you can record sales against them.")
+                    }
+                } else if filteredItems.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
+                } else {
+                    List(filteredItems, id: \.id) { item in
+                        Button {
+                            onItemSelected(item)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 12) {
+                                Circle()
+                                    .fill(Color(hex: item.storage?.color ?? "#007AFF") ?? .blue)
+                                    .frame(width: 10, height: 10)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.name).font(.subheadline).fontWeight(.medium)
+                                    Text("\(item.storage?.name ?? "No Storage")\(item.sku.isEmpty ? "" : " · \(item.sku)")")
+                                        .font(.caption2).foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 1) {
+                                    Text(item.currentQuantity.smartFormatted)
+                                        .font(.caption).fontWeight(.semibold)
+                                        .foregroundColor(item.isOutOfStock ? .red : item.isLowStock ? .orange : .secondary)
+                                    Text(item.uom?.symbol ?? "units").font(.caption2).foregroundColor(.secondary)
+                                }
+                                Image(systemName: "chevron.right").font(.caption2).foregroundColor(.secondary)
+                            }
+                            .contentShape(Rectangle())
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .accessibilityIdentifier("saleItemRow_\(item.sku)")
+                    }
+                    .listStyle(.insetGrouped)
+                }
+            }
+            .navigationTitle("Select Item")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .searchable(text: $searchText, prompt: "Search items or storages…")
+        }
+    }
+}
+
+Note: Out-of-stock items still appear in the list (red quantity). QuickSaleSheet handles the oversell warning. Do not filter them out here.
+
+---
+
+ITEM 7BA-4 — Cap DatePicker at today (no future dates) in QuickSaleSheet and MovementSheet
+Files: AITest/Views/QuickSaleSheet.swift, AITest/Views/MovementSheet.swift
+
+Problem: Both sheets already have DatePicker implemented (great!) but no upper bound — users can accidentally select future dates.
+Fix: Add an in: range to both DatePickers.
+
+In QuickSaleSheet.swift, find:
+  DatePicker("", selection: $saleDate, displayedComponents: .date)
+Replace with:
+  DatePicker("", selection: $saleDate, in: ...Date(), displayedComponents: .date)
+  // ...Date() means: any date up to and including today. No future dates.
+
+In MovementSheet.swift, find:
+  DatePicker("", selection: $movementDate, displayedComponents: .date)
+Replace with:
+  DatePicker("", selection: $movementDate, in: ...Date(), displayedComponents: .date)
+
+No other changes needed. Both files already save the user-selected date into occurredAt correctly.
+
+---
+
+ITEM 7BA-5 — ReportsView empty state: add "Record a Sale" CTA
+File: AITest/Views/ReportsView.swift
+Problem: When there are no SaleEvents, ReportsView shows a ContentUnavailableView with no action, leaving the user stuck.
+Fix: Find the ContentUnavailableView in ReportsView that renders when filteredSales is empty (or allSales is empty). Add an .actions block:
+  ContentUnavailableView {
+      Label("No Sales Yet", systemImage: "chart.bar")
+  } description: {
+      Text("Record your first sale to see revenue and profit reports here.")
+  } actions: {
+      Button("Record a Sale") {
+          // Post notification for SalesView to open item picker
+          NotificationCenter.default.post(
+              name: NSNotification.Name("stoqly.recordSaleFromReports"),
+              object: nil
+          )
+          dismiss()
+      }
+      .buttonStyle(.borderedProminent)
+      .tint(.stoqlyAccent)
+  }
+In SalesView, observe this notification in .onAppear or .onReceive and open the item picker:
+  .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("stoqly.recordSaleFromReports"))) { _ in
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+          showingItemPicker = true
+      }
+  }
+Note: The dismiss() call in ReportsView closes the Reports sheet first; the 0.3s delay gives the sheet time to fully dismiss before the item picker opens in SalesView.
+
+---
+
+ITEM 7BA-6 — Update Maestro flows for tab index changes
+Directory: maestro/flows/
+Problem: The tab bar restructure in 7BA-1 changes tab indices:
+  - Old index 3 = Audit/Count → New index 4
+  - Old index 4 = Profile → No longer a tab (gear icon on Dashboard)
+  - New index 3 = Sales (new)
+Any Maestro flows that tap tab bar items by index or accessibilityIdentifier for Audit or Profile need updating.
+
+Search ALL .yaml files in maestro/flows/ for:
+  - Tab index 3 references (these now point to Sales, not Audit)
+  - Tab index 4 references (Profile is no longer a tab)
+  - Any "audit" or "count" tab navigation
+  - Any "profile" or "settings" tab navigation
+
+For each affected flow:
+  - Audit/Count flows: change from tapping index 3 → tap index 4
+  - Profile flows: change from tapping index 4 → navigate to Dashboard first, then tap the gear icon (accessibilityIdentifier: "dashboardGearButton")
+  - Add new flows for Sales tab (tag 3) as needed
+
+Also update run_all.yaml if it references specific flows that need reordering.
+
+---
+
+BUILD CHECK — PHASE 7B-A:
+After all 7BA items are implemented:
+1. Build (Cmd+B). Zero errors.
+2. Tab bar shows 5 tabs: Dashboard, Storages, Items, Sales, Audit. No Profile tab.
+3. Dashboard toolbar shows gear icon (top right). Tapping it opens ProfileView as a sheet. Settings work normally.
+4. Sales tab (index 3) — empty state: shows "No sales yet" + "Record a Sale" button + "Smart Sales Entry" button.
+5. Sales tab — non-empty state (after recording a sale): shows sales grouped by date (Today/Yesterday/dates), each row shows item name, qty, revenue, profit.
+6. Tap "Record a Sale" → SaleItemPickerSheet opens. Select item → picker dismisses → QuickSaleSheet opens pre-filled with that item. No double-sheet crash.
+7. QuickSaleSheet DatePicker: cannot select a future date. Today is the max.
+8. MovementSheet DatePicker: same — cannot select a future date.
+9. ReportsView empty state shows "Record a Sale" button. Tapping it dismisses Reports and opens the item picker in SalesView.
+10. Audit tab still works (item S2-5 green tick behaviour preserved).
+11. Maestro: run audit-related flows — they navigate to the correct (new index 4) tab.
+12. Update automation_results.rtf with Phase 7B-A results.
+
+---
+
+BUG SPRINT 3 — Phase 7B-A Device Testing Fixes (S3-0 through S3-5)
+
+CRITICAL RULES (never violate):
+- Use modelContext.safeSave(context:) — never try? modelContext.save()
+- Insert ActivityEvent BEFORE modelContext.delete(item)
+- Never set isPro = true in any code
+- All monetary values through currencyManager.formatPrice() — never hardcode "$" or "₹"
+
+---
+
+ITEM S3-0 — Remove timestamp from SaleEventRow
+File: AITest/Views/SalesView.swift
+
+Problem: SaleEventRow subtitle shows "2 sold · 3:45 PM". The time is redundant — the date context already comes from the section header ("Today", "Yesterday", etc.). Showing time clutters the row and the user doesn't need it.
+
+Find (around line 192):
+  Text("\(sale.quantitySold.smartFormatted) sold · \(sale.occurredAt.formatted(date: .omitted, time: .shortened))")
+
+Replace with:
+  Text("\(sale.quantitySold.smartFormatted) sold")
+
+No other changes needed. The .font(.caption).foregroundColor(.secondary) modifiers on this Text stay as-is.
+
+---
+
+ITEM S3-1 — Record Sale button style inconsistency in StorageDetailView/ItemDetailView
+File: AITest/Views/StorageDetailView.swift
+
+Problem: The "Record Sale" button (lines ~956-968) uses a fully custom style:
+  .foregroundColor(.white)
+  .frame(maxWidth: .infinity).padding(.vertical, 10)
+  .background(Color.green).cornerRadius(10)
+
+This looks visually inconsistent with the adjacent "Count Item" button which uses .buttonStyle(.borderedProminent). The custom green button also doesn't adapt to dark mode correctly and uses a hardcoded corner radius instead of the system style.
+
+Find (the Record Sale button block in the quickActionsRow area or nearby):
+  Button {
+      showingQuickSale = true
+  } label: {
+      Label("Record Sale", systemImage: "cart.fill")
+          .font(.subheadline)
+          .fontWeight(.semibold)
+          .foregroundColor(.white)
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 10)
+          .background(Color.green)
+          .cornerRadius(10)
+  }
+  .padding(.horizontal)
+
+Replace with:
+  Button {
+      showingQuickSale = true
+  } label: {
+      Label("Record Sale", systemImage: "cart.fill")
+          .frame(maxWidth: .infinity)
+  }
+  .buttonStyle(.bordered)
+  .tint(.green)
+  .controlSize(.large)
+  .padding(.horizontal)
+  .accessibilityIdentifier("recordSaleButton")
+
+Note: Use .bordered (not .borderedProminent) so "Count Item" (prominent/filled) stays visually primary and "Record Sale" (outlined green) reads as secondary. This matches the hierarchy pattern used in the out-of-stock and low-stock button pairs.
+
+---
+
+ITEM S3-2 — Misleading 100% margin when item has no unit cost set
+File: AITest/Views/QuickSaleSheet.swift
+
+Problem: profitPreview (line ~164) computes margin = revenue > 0 ? profit / revenue * 100 : 0. When item.unitCost == 0, profit equals revenue, so margin shows 100%. This is mathematically correct but misleading — the user hasn't entered a cost, so 100% means "no cost tracked" not a real margin.
+
+Find the profitPreview computed var (around line 164):
+  private var profitPreview: some View {
+      let margin = revenue > 0 ? profit / revenue * 100 : 0
+      return VStack(alignment: .leading, spacing: 6) {
+          Text("Revenue: \(currencyManager.formatPrice(revenue))")
+          Text("Profit: \(currencyManager.formatPrice(profit))")
+          Text("Margin: \(String(format: "%.0f", margin))%")
+      }
+      .font(.subheadline)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding()
+      .background(Color.blue.opacity(0.12))
+      .cornerRadius(12)
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel("Revenue \(currencyManager.formatPrice(revenue)), Profit \(currencyManager.formatPrice(profit)), Margin \(String(format: "%.0f", margin)) percent")
+  }
+
+Replace with:
+  private var profitPreview: some View {
+      let hasCost = item.unitCost > 0
+      let margin = (hasCost && revenue > 0) ? profit / revenue * 100 : 0
+      return VStack(alignment: .leading, spacing: 6) {
+          Text("Revenue: \(currencyManager.formatPrice(revenue))")
+          if hasCost {
+              Text("Profit: \(currencyManager.formatPrice(profit))")
+              Text("Margin: \(String(format: "%.0f", margin))%")
+          } else {
+              HStack(spacing: 4) {
+                  Image(systemName: "info.circle")
+                      .font(.caption)
+                  Text("Set unit cost in item details to see profit margin")
+                      .font(.caption)
+              }
+              .foregroundColor(.secondary)
+          }
+      }
+      .font(.subheadline)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding()
+      .background(Color.blue.opacity(0.12))
+      .cornerRadius(12)
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel(hasCost
+          ? "Revenue \(currencyManager.formatPrice(revenue)), Profit \(currencyManager.formatPrice(profit)), Margin \(String(format: "%.0f", margin)) percent"
+          : "Revenue \(currencyManager.formatPrice(revenue)). No unit cost set."
+      )
+  }
+
+---
+
+ITEM S3-3 — Storage color dot invisible for dark storage colors in SaleItemPickerSheet
+File: AITest/Views/SaleItemPickerSheet.swift
+
+Problem: The 10×10 Circle (line ~38) showing the storage color is invisible when the storage's hex color is dark or near-black. There is no border separating the dot from the list cell background, so dark colors vanish entirely in light mode and all colors vanish in dark mode.
+
+Find (inside the itemRow label, the Circle block):
+  Circle()
+      .fill(Color(hex: item.storage?.color ?? "#007AFF") ?? .blue)
+      .frame(width: 10, height: 10)
+
+Replace with:
+  Circle()
+      .fill(Color(hex: item.storage?.color ?? "#007AFF") ?? .blue)
+      .frame(width: 10, height: 10)
+      .overlay(
+          Circle()
+              .stroke(Color(.systemBackground), lineWidth: 1.5)
+      )
+
+The white stroke ring ensures the dot is always visible regardless of the storage color or system appearance mode.
+
+---
+
+ITEM S3-4 — SalesView toolbar: "•••" overflow button and oval backgrounds on empty state buttons
+File: AITest/Views/SalesView.swift
+
+Two separate sub-issues:
+
+Sub-issue A — Toolbar overflow "•••" button:
+The toolbar currently has two ToolbarItems at .topBarLeading (the "Sales" title and the sparkles button for Smart Entry). When multiple items share the same leading position, iOS collapses them into a "•••" overflow menu, which is what the user is seeing as the "3-dot" button. That overflow button does nothing useful because the Smart Entry action is buried inside it.
+
+Find the toolbarContent:
+  @ToolbarContentBuilder
+  private var toolbarContent: some ToolbarContent {
+      ToolbarItem(placement: .topBarLeading) {
+          HStack(spacing: 4) {
+              Text("Sales").font(.title2).fontWeight(.bold)
+              Spacer()
+          }
+      }
+      if !allSales.isEmpty {
+          ToolbarItem(placement: .topBarLeading) {
+              Button { showingSmartSales = true } label: {
+                  Label("Smart Entry", systemImage: "sparkles")
+                      .foregroundColor(.stoqlyAccent)
+              }
+              .accessibilityIdentifier("smartSalesEntryToolbarButton")
+          }
+      }
+      ToolbarItem(placement: .topBarTrailing) {
+          HStack(spacing: 12) {
+              Button {
+                  showingReports = true
+              } label: {
+                  HStack(spacing: 4) {
+                      Text("Reports").font(.caption).fontWeight(.semibold)
+                      Image(systemName: "chart.bar.xaxis").font(.caption)
+                  }
+                  .foregroundColor(.stoqlyPrimary)
+              }
+              .accessibilityIdentifier("salesViewReportsButton")
+              if !allSales.isEmpty {
+                  Button { showingItemPicker = true } label: {
+                      Image(systemName: "plus")
+                  }
+                  .accessibilityIdentifier("salesAddButton")
+              }
+          }
+      }
+  }
+
+Replace with:
+  @ToolbarContentBuilder
+  private var toolbarContent: some ToolbarContent {
+      // Title in leading — single item only to avoid iOS overflow collapse
+      ToolbarItem(placement: .topBarLeading) {
+          Text("Sales").font(.title2).fontWeight(.bold)
+      }
+      // Trailing: Smart Entry (sparkles) + Reports link + Plus
+      ToolbarItem(placement: .topBarTrailing) {
+          HStack(spacing: 16) {
+              if !allSales.isEmpty {
+                  Button { showingSmartSales = true } label: {
+                      Image(systemName: "sparkles")
+                          .foregroundColor(.stoqlyAccent)
+                  }
+                  .accessibilityIdentifier("smartSalesEntryToolbarButton")
+              }
+              Button { showingReports = true } label: {
+                  Image(systemName: "chart.bar.xaxis")
+                      .foregroundColor(.stoqlyPrimary)
+              }
+              .accessibilityIdentifier("salesViewReportsButton")
+              if !allSales.isEmpty {
+                  Button { showingItemPicker = true } label: {
+                      Image(systemName: "plus")
+                  }
+                  .accessibilityIdentifier("salesAddButton")
+              }
+          }
+      }
+  }
+
+Sub-issue B — Oval background on Smart Sales Entry button in empty state:
+The Label("Smart Sales Entry") button in emptyState has only .tint(.stoqlyPrimary) with no explicit buttonStyle. SwiftUI treats the tint modifier on a button-without-style as a trigger for the bordered/capsule style, producing an unwanted oval background.
+
+Find (in the emptyState computed var):
+  Button {
+      showingSmartSales = true
+  } label: {
+      Label("Smart Sales Entry", systemImage: "sparkles")
+  }
+  .tint(.stoqlyPrimary)
+  .accessibilityIdentifier("salesEmptySmartEntryButton")
+
+Replace with:
+  Button {
+      showingSmartSales = true
+  } label: {
+      Label("Smart Sales Entry", systemImage: "sparkles")
+          .foregroundColor(.stoqlyPrimary)
+  }
+  .buttonStyle(.plain)
+  .accessibilityIdentifier("salesEmptySmartEntryButton")
+
+---
+
+ITEM S3-5 — Sales Performance metrics misaligned in Dashboard
+File: AITest/Views/DashboardView.swift
+
+Problem: The salesPerformanceSection (around line 568) uses HStack(spacing: 20) containing three nested HStack { label Spacer() value } elements. The inner Spacers fight with the outer HStack's flexible layout, causing uneven column widths and clipped text — especially when all three metrics (Revenue, Profit, Margin) are visible. The same data looks correct in ReportsView because it uses a different layout container.
+
+Find the metrics HStack (inside the else branch of "if allSaleEvents.isEmpty", around line 568):
+  HStack(spacing: 20) {
+      HStack {
+          Text("Revenue")
+              .font(.caption)
+              .foregroundColor(.secondary)
+          Spacer()
+          Text(currencyManager.formatPrice(dashboardPeriodRevenue))
+              .font(.subheadline)
+              .fontWeight(.semibold)
+              .foregroundColor(.blue)
+      }
+      HStack {
+          Text("Profit")
+              .font(.caption)
+              .foregroundColor(.secondary)
+          Spacer()
+          Text(currencyManager.formatPrice(dashboardPeriodProfit))
+              .font(.subheadline)
+              .fontWeight(.semibold)
+              .foregroundColor(dashboardPeriodProfit >= 0 ? .green : .red)
+      }
+      if let margin = dashboardPeriodMargin {
+          HStack {
+              Text("Margin")
+                  .font(.caption)
+                  .foregroundColor(.secondary)
+              Spacer()
+              Text(String(format: "%.0f%%", margin))
+                  .font(.subheadline)
+                  .fontWeight(.semibold)
+                  .foregroundColor(margin >= 30 ? .green : margin >= 10 ? .orange : .red)
+          }
+      }
+  }
+
+Replace with (Grid layout for guaranteed column alignment, iOS 16+):
+  Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 4) {
+      GridRow {
+          Text("Revenue")
+              .font(.caption).foregroundColor(.secondary)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          Text("Profit")
+              .font(.caption).foregroundColor(.secondary)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          if dashboardPeriodMargin != nil {
+              Text("Margin")
+                  .font(.caption).foregroundColor(.secondary)
+                  .frame(maxWidth: .infinity, alignment: .leading)
+          }
+      }
+      GridRow {
+          Text(currencyManager.formatPrice(dashboardPeriodRevenue))
+              .font(.subheadline).fontWeight(.semibold).foregroundColor(.blue)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          Text(currencyManager.formatPrice(dashboardPeriodProfit))
+              .font(.subheadline).fontWeight(.semibold)
+              .foregroundColor(dashboardPeriodProfit >= 0 ? .green : .red)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          if let margin = dashboardPeriodMargin {
+              Text(String(format: "%.0f%%", margin))
+                  .font(.subheadline).fontWeight(.semibold)
+                  .foregroundColor(margin >= 30 ? .green : margin >= 10 ? .orange : .red)
+                  .frame(maxWidth: .infinity, alignment: .leading)
+          }
+      }
+  }
+
+---
+
+BUILD CHECK — BUG SPRINT 3:
+After all S3 items:
+1. Build (Cmd+B). Zero errors.
+2. SalesView sale rows show "2 sold" — no time shown.
+3. StorageDetailView / ItemDetailView: "Record Sale" uses bordered outlined green style, visually secondary to "Count Item" (filled primary).
+4. QuickSaleSheet: item with unitCost 0 → shows "Set unit cost in item details to see profit margin" instead of "Margin: 100%".
+5. QuickSaleSheet: item with unitCost > 0 → shows Revenue + Profit + Margin as before.
+6. SaleItemPickerSheet: storage color dots always visible (white ring outline around each circle).
+7. SalesView toolbar: sparkles + chart + plus all visible in trailing area. No "•••" overflow button.
+8. SalesView empty state: Smart Sales Entry label has no oval/capsule background.
+9. Dashboard Sales Performance: Revenue / Profit / Margin columns align cleanly in a Grid. No clipping.
+10. Update automation_results.rtf with Bug Sprint 3 results.
+
+---
+
+PHASE 7B-B — Smart Sales Entry (5 AI Modes) + Purchase Invoice Import
+
+Reference: phase7b-ux-spec.md (sections 4-6 and the Invoice Import addition)
+This phase replaces the "Coming soon" SmartSalesEntryView stub with the full implementation.
+
+CRITICAL RULES (in addition to the standard rules above):
+- Single modelContext.safeSave(context:) after ALL inserts in a batch — NEVER inside a loop
+- ActivityEvent inserted BEFORE any model.delete — not applicable in this phase (inserts only), but maintain convention in any edits
+- All monetary values through currencyManager.formatPrice() — never hardcode "$" or "₹"
+- All quantity display through .smartFormatted — never String(format: "%.2f", qty)
+- Never set isPro = true in any code
+- Never nest NavigationStack inside a sheet that already contains one
+- SmartSalesEntryView, SaleEntryReviewView, and each mode sub-view each contain their own NavigationStack — do NOT add an extra one at call sites
+- Barcode scanner uses .fullScreenCover (not relevant here, but remember for any future edits to these files)
+
+---
+
+ITEM 7BB-0 — Extract XLSX parser to shared utility
+File: AITest/Utilities/XLSXParser.swift (new file)
+
+Problem: BulkImportView.swift contains ~200 lines of pure-Swift XLSX decompression and parsing logic (using zlib with windowBits = -15 for raw DEFLATE, plus XML parsing for both sharedStrings and inlineStr types). SmartSalesCSVView (7BB-5) needs identical XLSX parsing. Duplicating this code would be a maintenance liability.
+
+Action: Extract the XLSX parsing functions from BulkImportView into a standalone XLSXParser struct/enum in AITest/Utilities/XLSXParser.swift. The public API should be:
+  struct XLSXParser {
+      // Returns rows as [[String]] — outer array = rows, inner = cell values in column order
+      static func parse(url: URL) throws -> [[String]]
+      static func parse(data: Data) throws -> [[String]]
+  }
+
+Update BulkImportView to call XLSXParser.parse(...) instead of its inline implementation. The behaviour and output format must be identical — no regression in BulkImportView.
+
+Key implementation notes from existing BulkImportView:
+- ZIP decompression: use inflateInit2_(&strm, -15, ...) for raw DEFLATE (method 8)
+- Handle both type="s" (shared strings index) and type="inlineStr" (openpyxl format)
+- inlineStr cells look like: <c r="A1" t="inlineStr"><is><t>value</t></is></c>
+
+---
+
+ITEM 7BB-1 — SmartSalesEntryView: replace stub with full mode-selection screen
+File: AITest/Views/SalesView.swift → extract SmartSalesEntryView to AITest/Views/SmartSalesEntryView.swift
+
+The bottom of SalesView.swift currently has a stub:
+  struct SmartSalesEntryView: View {
+      var body: some View {
+          Text("Coming soon")
+      }
+  }
+
+Remove this stub. Create a new file AITest/Views/SmartSalesEntryView.swift with the full implementation:
+
+  import SwiftUI
+
+  struct SmartSalesEntryView: View {
+      @Environment(\.dismiss) private var dismiss
+      @EnvironmentObject private var subscriptionManager: SubscriptionManager
+      @EnvironmentObject var currencyManager: CurrencyManager
+
+      @State private var showingVoice   = false
+      @State private var showingPhoto   = false
+      @State private var showingText    = false
+      @State private var showingCSV     = false
+      @State private var showingPDF     = false
+      @State private var showingPaywall = false
+
+      var body: some View {
+          NavigationStack {
+              ScrollView {
+                  VStack(spacing: 16) {
+                      headerSection
+                      modeCards
+                      if !subscriptionManager.isPro { proUpsellBanner }
+                      Spacer(minLength: 40)
+                  }
+                  .padding(.horizontal)
+                  .padding(.bottom)
+              }
+              .navigationTitle("Smart Sales Entry")
+              .navigationBarTitleDisplayMode(.inline)
+              .toolbar {
+                  ToolbarItem(placement: .topBarTrailing) {
+                      Button("Done") { dismiss() }
+                  }
+              }
+          }
+          .sheet(isPresented: $showingVoice)   { SmartSalesVoiceView().environmentObject(currencyManager).sheetStyle() }
+          .sheet(isPresented: $showingPhoto)   { SmartSalesPhotoView().environmentObject(currencyManager).sheetStyle() }
+          .sheet(isPresented: $showingText)    { SmartSalesTextView().environmentObject(currencyManager).sheetStyle() }
+          .sheet(isPresented: $showingCSV)     { SmartSalesCSVView().environmentObject(currencyManager).sheetStyle() }
+          .sheet(isPresented: $showingPDF)     { SmartSalesPDFView().environmentObject(currencyManager).sheetStyle() }
+          .sheet(isPresented: $showingPaywall) { PaywallView(source: "smart_sales").sheetStyle() }
+      }
+
+      private var headerSection: some View {
+          VStack(spacing: 8) {
+              Image(systemName: "sparkles")
+                  .font(.system(size: 36))
+                  .foregroundStyle(Color.stoqlyPrimary)
+              Text("Smart Sales Entry")
+                  .font(.title2).fontWeight(.bold)
+              Text("Record multiple sales at once using voice, photo, text, or file import. AI parses the input — you review before anything is saved.")
+                  .font(.subheadline).foregroundColor(.secondary)
+                  .multilineTextAlignment(.center)
+          }
+          .padding(.top, 8)
+      }
+
+      private var modeCards: some View {
+          VStack(spacing: 12) {
+              modeCard(icon: "mic.fill",      iconColor: .stoqlyPrimary, title: "Voice",      description: "Say what you sold. \"5 chips, 2 waters, 1 sandwich\". AI parses into a sale list.", action: { showingVoice = true })
+              modeCard(icon: "camera.fill",   iconColor: .stoqlyAccent,  title: "Photo",      description: "Photograph a handwritten chit, receipt, or invoice. AI reads every line.",          action: { showingPhoto = true })
+              modeCard(icon: "text.alignleft",iconColor: .blue,           title: "Text",       description: "Type or paste a free-form sales list. AI structures it for you.",                   action: { showingText = true })
+              modeCard(icon: "tablecells",    iconColor: .green,          title: "CSV / Excel",description: "Import a spreadsheet of sales. Map columns then confirm.",                          action: { showingCSV = true })
+              modeCard(icon: "doc.fill",      iconColor: .orange,         title: "PDF",        description: "Upload a PDF invoice or sales report. AI extracts the sale rows.",                  action: { showingPDF = true })
+          }
+      }
+
+      private func modeCard(icon: String, iconColor: Color, title: String, description: String, action: @escaping () -> Void) -> some View {
+          let isPro = subscriptionManager.isPro
+          return Button(action: isPro ? action : { showingPaywall = true }) {
+              HStack(spacing: 16) {
+                  ZStack {
+                      Circle().fill(iconColor.opacity(isPro ? 0.12 : 0.06)).frame(width: 52, height: 52)
+                      Image(systemName: icon).font(.title3).foregroundColor(isPro ? iconColor : .secondary)
+                  }
+                  VStack(alignment: .leading, spacing: 5) {
+                      HStack(spacing: 6) {
+                          Text(title).font(.subheadline).fontWeight(.semibold).foregroundColor(isPro ? .primary : .secondary)
+                          if !isPro {
+                              Text("PRO").font(.caption2).fontWeight(.bold).foregroundColor(.white)
+                                  .padding(.horizontal, 5).padding(.vertical, 2)
+                                  .background(Color.orange).cornerRadius(4)
+                          }
+                      }
+                      Text(description).font(.caption).foregroundColor(.secondary)
+                          .fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.leading)
+                  }
+                  Spacer()
+                  Image(systemName: isPro ? "chevron.right" : "lock.fill")
+                      .font(.caption).foregroundColor(isPro ? .secondary : .orange)
+              }
+              .padding(16)
+              .background(Color(.secondarySystemGroupedBackground))
+              .cornerRadius(12)
+              .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+              .opacity(isPro ? 1.0 : 0.7)
+          }
+          .buttonStyle(PlainButtonStyle())
+          .accessibilityIdentifier("smartSalesMode_\(title.lowercased().replacingOccurrences(of: " ", with: "_"))")
+      }
+
+      private var proUpsellBanner: some View {
+          HStack(spacing: 12) {
+              Image(systemName: "crown.fill").foregroundColor(.orange)
+              VStack(alignment: .leading, spacing: 3) {
+                  Text("Smart Sales Entry is a Pro feature").font(.subheadline).fontWeight(.semibold)
+                  Text("Upgrade to record bulk sales with AI — saves hours of manual entry.").font(.caption).foregroundColor(.secondary)
+              }
+              Spacer()
+              Button("Upgrade") { showingPaywall = true }.font(.caption).fontWeight(.semibold).foregroundColor(.orange)
+          }
+          .padding(14)
+          .background(Color.orange.opacity(0.1))
+          .cornerRadius(12)
+          .padding(.horizontal)
+      }
+  }
+
+Analytics: In the .onAppear of SmartSalesEntryView, call:
+  AnalyticsManager.shared.track(.smartSalesOpened)
+
+---
+
+ITEM 7BB-2 — ParsedSaleRow model + SaleEntryReviewView (unified review step for all 5 modes)
+Files: AITest/Models/ParsedSaleRow.swift (new), AITest/Views/SaleEntryReviewView.swift (new)
+
+First, create ParsedSaleRow.swift:
+  import Foundation
+  import SwiftData
+
+  // ParsedSaleRow is a transient (non-SwiftData) struct used only at review time.
+  // It is NOT a @Model — it lives in memory only until the user confirms.
+  struct ParsedSaleRow: Identifiable {
+      let id: UUID = UUID()
+      var itemName: String
+      var quantitySold: Double
+      var pricePerUnit: Double       // 0 if AI could not detect a price
+      var notes: String = ""
+      var resolvedItem: InventoryItem? = nil   // nil = unresolved (no matching inventory item found)
+      var isSkipped: Bool = false
+  }
+
+Then create SaleEntryReviewView.swift:
+
+  import SwiftUI
+  import SwiftData
+
+  struct SaleEntryReviewView: View {
+      @Binding var rows: [ParsedSaleRow]
+      let onConfirm: () -> Void    // caller handles dismiss + toast after save
+      let onCancel: () -> Void
+
+      @Environment(\.modelContext) private var modelContext
+      @EnvironmentObject var currencyManager: CurrencyManager
+      @Query private var allItems: [InventoryItem]
+
+      @State private var isSaving = false
+
+      private var confirmableRows: [ParsedSaleRow] { rows.filter { !$0.isSkipped } }
+      private var unresolvedCount: Int { confirmableRows.filter { $0.resolvedItem == nil }.count }
+
+      var body: some View {
+          NavigationStack {
+              VStack(spacing: 0) {
+                  if unresolvedCount > 0 {
+                      HStack(spacing: 8) {
+                          Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
+                          Text("\(unresolvedCount) item\(unresolvedCount == 1 ? "" : "s") not matched to inventory")
+                              .font(.caption).fontWeight(.medium)
+                          Spacer()
+                          Text("Tap row to link").font(.caption2).foregroundColor(.secondary)
+                      }
+                      .padding(12)
+                      .background(Color.orange.opacity(0.1))
+                      .cornerRadius(10)
+                      .padding([.horizontal, .top])
+                  }
+
+                  List {
+                      ForEach($rows) { $row in
+                          SaleReviewRow(row: $row, allItems: allItems, currencyManager: currencyManager)
+                      }
+                      .onDelete { rows.remove(atOffsets: $0) }
+                  }
+                  .listStyle(.plain)
+
+                  Divider()
+                  VStack(spacing: 10) {
+                      if unresolvedCount > 0 {
+                          Text("\(unresolvedCount) unresolved item\(unresolvedCount == 1 ? "" : "s") will still be saved — stock will not be deducted until linked.")
+                              .font(.caption).foregroundColor(.secondary).multilineTextAlignment(.center).padding(.horizontal)
+                      }
+                      Button(isSaving ? "Saving…" : "Confirm \(confirmableRows.count) Sale\(confirmableRows.count == 1 ? "" : "s")") {
+                          Task { await saveAllSales() }
+                      }
+                      .buttonStyle(.borderedProminent)
+                      .tint(.stoqlyAccent)
+                      .controlSize(.large)
+                      .disabled(isSaving || confirmableRows.isEmpty)
+                      .padding(.horizontal)
+                      Button("Cancel") { onCancel() }
+                          .font(.subheadline).foregroundColor(.secondary)
+                  }
+                  .padding(.vertical, 16)
+              }
+              .navigationTitle("Review Sales")
+              .navigationBarTitleDisplayMode(.inline)
+              .toolbar {
+                  ToolbarItem(placement: .topBarLeading) {
+                      Button("Cancel") { onCancel() }
+                  }
+              }
+          }
+          .onAppear { autoResolveRows() }
+      }
+
+      // Auto-match parsed names to inventory items using a simple case-insensitive substring match.
+      // Only auto-links if there is exactly one candidate that contains the parsed name (or vice versa).
+      private func autoResolveRows() {
+          for index in rows.indices where rows[index].resolvedItem == nil {
+              let query = rows[index].itemName.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+              let candidates = allItems.filter {
+                  $0.name.lowercased().contains(query) || query.contains($0.name.lowercased())
+              }
+              if candidates.count == 1 {
+                  rows[index].resolvedItem = candidates.first
+              }
+          }
+      }
+
+      // CRITICAL: Single safeSave after ALL inserts — never inside the loop
+      private func saveAllSales() async {
+          isSaving = true
+          let now = Date()
+
+          for row in confirmableRows {
+              let unitCost    = row.resolvedItem?.unitCost ?? 0
+              let storageName = row.resolvedItem?.storage?.name ?? ""
+              let category    = row.resolvedItem?.category ?? ""
+
+              // ActivityEvent FIRST (before any potential deletes — convention)
+              let event = ActivityEvent(eventType: "SaleMade", itemName: row.itemName, storageName: storageName, notes: "Smart Sales Entry batch")
+              modelContext.insert(event)
+
+              let sale = SaleEvent(
+                  item: row.resolvedItem,
+                  itemName: row.resolvedItem?.name ?? row.itemName,
+                  itemSKU: row.resolvedItem?.sku ?? "",
+                  storageName: storageName,
+                  category: category,
+                  quantitySold: row.quantitySold,
+                  pricePerUnit: row.pricePerUnit,
+                  costPerUnit: unitCost,
+                  notes: row.notes,
+                  occurredAt: now
+              )
+              modelContext.insert(sale)
+
+              if let item = row.resolvedItem {
+                  let movement = InventoryMovement(
+                      item: item, itemName: item.name, itemSKU: item.sku,
+                      storageName: storageName, category: item.category ?? "",
+                      direction: "OUT", movementType: MovementTypeOut.saleOut.rawValue,
+                      quantity: row.quantitySold, pricePerUnit: row.pricePerUnit,
+                      notes: "Smart Sales Entry", occurredAt: now,
+                      linkedSaleEventId: sale.id
+                  )
+                  modelContext.insert(movement)
+                  item.currentQuantity -= row.quantitySold
+                  item.updatedAt = now
+              }
+          }
+
+          // CRITICAL: ONE safeSave for the entire batch
+          modelContext.safeSave(context: "SmartSalesEntryBatch")
+
+          Task {
+              for row in confirmableRows {
+                  if let item = row.resolvedItem { FirestoreManager.shared.syncItem(item) }
+              }
+          }
+
+          AnalyticsManager.shared.track(.smartSalesCompleted(mode: "batch", saleCount: confirmableRows.count))
+
+          isSaving = false
+          onConfirm()
+      }
+  }
+
+  // MARK: - SaleReviewRow
+
+  struct SaleReviewRow: View {
+      @Binding var row: ParsedSaleRow
+      let allItems: [InventoryItem]
+      let currencyManager: CurrencyManager
+      @State private var showingItemPicker = false
+
+      var isUnresolved: Bool { row.resolvedItem == nil && !row.isSkipped }
+
+      var body: some View {
+          VStack(alignment: .leading, spacing: 8) {
+              HStack(spacing: 8) {
+                  if isUnresolved { Circle().fill(Color.orange).frame(width: 8, height: 8) }
+                  TextField("Item name", text: $row.itemName).font(.subheadline).fontWeight(.medium)
+                  Spacer()
+                  Button(row.isSkipped ? "Undo" : "Skip") { row.isSkipped.toggle() }
+                      .font(.caption2).foregroundColor(.secondary)
+              }
+              if !row.isSkipped {
+                  HStack(spacing: 8) {
+                      if let linked = row.resolvedItem {
+                          Text("→ \(linked.name)").font(.caption2).fontWeight(.medium).foregroundColor(.stoqlyPrimary)
+                              .padding(.horizontal, 8).padding(.vertical, 3).background(Color.stoqlyPrimary.opacity(0.1)).cornerRadius(10)
+                          Button("Change") { showingItemPicker = true }.font(.caption2).foregroundColor(.secondary)
+                      } else {
+                          Button("Link to inventory item →") { showingItemPicker = true }
+                              .font(.caption2).foregroundColor(.orange)
+                              .padding(.horizontal, 8).padding(.vertical, 3).background(Color.orange.opacity(0.1)).cornerRadius(10)
+                      }
+                      Spacer()
+                  }
+                  HStack(spacing: 16) {
+                      HStack(spacing: 4) {
+                          Text("Qty").font(.caption).foregroundColor(.secondary)
+                          TextField("0", value: $row.quantitySold, format: .number).font(.caption).keyboardType(.decimalPad).frame(width: 60)
+                      }
+                      HStack(spacing: 4) {
+                          Text(currencyManager.selectedCurrency.symbol).font(.caption).foregroundColor(.secondary)
+                          TextField("0.00", value: $row.pricePerUnit, format: .number).font(.caption).keyboardType(.decimalPad).frame(width: 70)
+                          if row.pricePerUnit == 0 { Text("(no price)").font(.caption2).foregroundColor(.orange) }
+                      }
+                      Spacer()
+                      if row.pricePerUnit > 0 && row.quantitySold > 0 {
+                          Text(currencyManager.formatPrice(row.quantitySold * row.pricePerUnit))
+                              .font(.caption).fontWeight(.semibold).foregroundColor(.stoqlyPrimary)
+                      }
+                  }
+              }
+          }
+          .padding(.vertical, 4)
+          .opacity(row.isSkipped ? 0.4 : 1.0)
+          .sheet(isPresented: $showingItemPicker) {
+              SaleItemPickerSheet { item in
+                  row.resolvedItem = item
+              }
+              .sheetStyle()
+          }
+      }
+  }
+
+---
+
+ITEM 7BB-3 — SmartSalesVoiceView (Voice mode — adapted from VoiceInventoryView)
+File: AITest/Views/SmartSalesVoiceView.swift (new file)
+
+Adapt VoiceInventoryView with these key changes:
+- No storage picker (sales are not storage-scoped)
+- State machine: .recording → .analyzing → .review (replaces .recording → .analyzing → .editing)
+- After AI analysis, transition to SaleEntryReviewView (not EditableItem list)
+- AI call: AIInventoryService.shared.parseSalesTranscript(transcript: String) async throws -> [ParsedSaleRow]
+  (new method — see ITEM 7BB-6 for AIInventoryService extensions)
+- Claude prompt for voice: "You are parsing a spoken sales log. Extract each item sold: name, quantity sold, and price per unit if mentioned. Return JSON array: [{\"itemName\": \"...\", \"quantitySold\": 1.0, \"pricePerUnit\": 0.0, \"notes\": \"\"}]. If price not mentioned, use 0. Transcript: \(transcript)"
+
+Full view structure:
+  struct SmartSalesVoiceView: View {
+      @Environment(\.dismiss) private var dismiss
+      @EnvironmentObject var currencyManager: CurrencyManager
+      @State private var step: VoiceStep = .record
+      @State private var transcript = ""
+      @State private var parsedRows: [ParsedSaleRow] = []
+      @State private var isAnalyzing = false
+      @State private var error: String? = nil
+
+      enum VoiceStep { case record, analyzing, review }
+
+      var body: some View {
+          NavigationStack {
+              Group {
+                  switch step {
+                  case .record:    recordView
+                  case .analyzing: analyzingView
+                  case .review:
+                      SaleEntryReviewView(
+                          rows: $parsedRows,
+                          onConfirm: { dismiss() },
+                          onCancel: { step = .record }
+                      )
+                      .environmentObject(currencyManager)
+                  }
+              }
+              .navigationTitle("Voice Sales Entry")
+              .navigationBarTitleDisplayMode(.inline)
+              .toolbar {
+                  ToolbarItem(placement: .topBarLeading) {
+                      Button("Cancel") { dismiss() }
+                  }
+              }
+          }
+      }
+
+      // recordView: microphone button + live transcript TextEditor + tip card + "Parse Sales" button
+      // Use existing VoiceRecordingController from VoiceInventoryView — same audio infrastructure
+      // "Parse Sales" button calls analyzeTranscript() which sets step = .analyzing then .review
+      // analyzingView: ProgressView + "Parsing your sales…"
+  }
+
+  // In the analyze function:
+  private func analyzeTranscript() {
+      step = .analyzing
+      Task {
+          do {
+              parsedRows = try await AIInventoryService.shared.parseSalesTranscript(transcript: transcript)
+              AnalyticsManager.shared.track(.smartSalesModeSelected(mode: "voice"))
+              step = .review
+          } catch {
+              self.error = error.localizedDescription
+              step = .record
+          }
+      }
+  }
+
+---
+
+ITEM 7BB-4 — SmartSalesPhotoView (Photo mode — adapted from ImageInventoryView)
+File: AITest/Views/SmartSalesPhotoView.swift (new file)
+
+Adapt ImageInventoryView with these changes:
+- No storage picker
+- AI prompt targets sales data: "Extract all sale items from this image. Look for item names, quantities sold, and prices. This may be a receipt, handwritten chit, or sales sheet. Return JSON: [{\"itemName\": \"...\", \"quantitySold\": 1.0, \"pricePerUnit\": 0.0, \"notes\": \"\"}]"
+- After analysis, transition to SaleEntryReviewView(rows:) instead of EditableItem list
+- AI call: AIInventoryService.shared.parseSalesImage(imageData: Data) async throws -> [ParsedSaleRow]
+  (new method — see ITEM 7BB-6)
+- Reuse the exact same camera/photo picker capture UI from ImageInventoryView (no new picker infrastructure needed)
+
+State machine: .capture → .analyzing → .review (same as VoiceView pattern)
+
+---
+
+ITEM 7BB-5 — SmartSalesTextView (Text mode — new lightweight view)
+File: AITest/Views/SmartSalesTextView.swift (new file)
+
+New view (no existing analog to adapt from — simpler than Voice/Photo):
+  struct SmartSalesTextView: View {
+      @Environment(\.dismiss) private var dismiss
+      @EnvironmentObject var currencyManager: CurrencyManager
+      @State private var inputText = ""
+      @State private var parsedRows: [ParsedSaleRow] = []
+      @State private var step: TextStep = .input
+      @State private var error: String? = nil
+
+      enum TextStep { case input, analyzing, review }
+
+      var body: some View {
+          NavigationStack {
+              Group {
+                  switch step {
+                  case .input: inputView
+                  case .analyzing:
+                      VStack(spacing: 16) {
+                          ProgressView()
+                          Text("Parsing your text…").font(.subheadline).foregroundColor(.secondary)
+                      }
+                  case .review:
+                      SaleEntryReviewView(rows: $parsedRows, onConfirm: { dismiss() }, onCancel: { step = .input })
+                          .environmentObject(currencyManager)
+                  }
+              }
+              .navigationTitle("Text Sales Entry")
+              .navigationBarTitleDisplayMode(.inline)
+              .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } } }
+          }
+      }
+
+      private var inputView: some View {
+          VStack(spacing: 16) {
+              TextEditor(text: $inputText)
+                  .font(.body)
+                  .frame(minHeight: 160)
+                  .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray4)))
+                  .overlay(alignment: .topLeading) {
+                      if inputText.isEmpty {
+                          Text("Type or paste a sales list, e.g.:\n5 chips ₹10\n2 waters ₹20\n1 sandwich ₹45")
+                              .foregroundColor(.secondary).font(.body).padding(8).allowsHitTesting(false)
+                      }
+                  }
+              // Tip card
+              HStack(spacing: 8) {
+                  Image(systemName: "lightbulb.fill").foregroundColor(.stoqlyAccent)
+                  Text("Include quantity and price. One item per line works best.")
+                      .font(.caption).foregroundColor(.secondary)
+              }
+              .padding(12).background(Color(.tertiarySystemGroupedBackground)).cornerRadius(10)
+              Button("Parse Sales") { parseText() }
+                  .buttonStyle(.borderedProminent).tint(.stoqlyAccent).controlSize(.large)
+                  .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                  .frame(maxWidth: .infinity)
+          }
+          .padding()
+      }
+
+      private func parseText() {
+          step = .analyzing
+          Task {
+              do {
+                  parsedRows = try await AIInventoryService.shared.parseSalesText(text: inputText)
+                  AnalyticsManager.shared.track(.smartSalesModeSelected(mode: "text"))
+                  step = .review
+              } catch { self.error = error.localizedDescription; step = .input }
+          }
+      }
+  }
+
+---
+
+ITEM 7BB-6 — AIInventoryService: add parseSalesTranscript, parseSalesText, parseSalesImage, parseSalesPDF methods
+File: AITest/Services/AIInventoryService.swift (modify existing file)
+
+Add these 4 new methods to AIInventoryService. Use the existing Claude API call pattern from parseSalesTranscript/parseSalesImage already in the file — look at how VoiceInventoryView's "Analyse with AI" sends data and follow the same request structure.
+
+New method signatures:
+  func parseSalesTranscript(transcript: String) async throws -> [ParsedSaleRow]
+  func parseSalesText(text: String) async throws -> [ParsedSaleRow]
+  func parseSalesImage(imageData: Data) async throws -> [ParsedSaleRow]
+  func parseSalesPDF(pages: [UIImage]) async throws -> [ParsedSaleRow]  // pages already rasterized
+
+JSON response format expected from Claude for all 4 methods:
+  [{"itemName": "Chips", "quantitySold": 5.0, "pricePerUnit": 10.0, "notes": ""},
+   {"itemName": "Water", "quantitySold": 2.0, "pricePerUnit": 20.0, "notes": ""}]
+
+Claude system prompt (same for all modes, vary the user message):
+  System: "You are a sales log parser for an inventory management app. Extract sale items from the input. Return ONLY a valid JSON array. Each object: {\"itemName\": string, \"quantitySold\": number, \"pricePerUnit\": number (0 if unknown), \"notes\": string}. No markdown, no explanation — just the JSON array."
+
+For parseSalesImage and parseSalesPDF: Send images as base64 in the messages array using the same multimodal format already used in ImageInventoryView's AI call.
+
+JSON parsing: decode the response string to [ParsedSaleRow] using JSONDecoder. If parsing fails, throw a descriptive error. Strip any markdown code fences (``` or ```json) from the response before decoding.
+
+Also add analytics events to AnalyticsManager (wherever .smartCountCompleted is defined):
+  case smartSalesOpened
+  case smartSalesModeSelected(mode: String)
+  case smartSalesCompleted(mode: String, saleCount: Int)
+
+---
+
+ITEM 7BB-7 — SmartSalesCSVView (CSV/Excel mode — adapted from BulkImportView)
+File: AITest/Views/SmartSalesCSVView.swift (new file)
+
+Adapt BulkImportView's 4-step flow (file picker → column mapping → preview → result) for sales import:
+
+New SalesImportField enum (add inside SmartSalesCSVView.swift):
+  enum SalesImportField: String, CaseIterable, Identifiable {
+      case itemName     = "Item Name"
+      case quantity     = "Quantity"
+      case pricePerUnit = "Price Per Unit"
+      case date         = "Date"
+      case notes        = "Notes"
+      case skip         = "— Skip —"
+      var id: String { rawValue }
+  }
+
+Auto-detect column header keywords:
+  "item", "name", "product", "description" → .itemName
+  "qty", "quantity", "count", "units" → .quantity
+  "price", "rate", "unit price", "selling price", "amount" → .pricePerUnit
+  "date", "time", "when" → .date
+  "notes", "remarks", "comment" → .notes
+  (anything else) → .skip
+
+Step 0 — File picker: .fileImporter for CSV (.commaSeparatedText) and XLSX (.xlsx). No storage picker (sales are not storage-scoped). After file selection, auto-detect headers and jump to Step 1.
+
+Step 1 — Column mapping: same drag-and-drop UI as BulkImportView. Show first row as header, remaining rows as preview.
+
+Step 2 — Preview: first 5 data rows displayed as a table.
+
+Step 3 — Instead of ImportResult summary, call:
+  let rows = importedData.map { row -> ParsedSaleRow in
+      ParsedSaleRow(
+          itemName: row[mappedIndex(for: .itemName)] ?? "",
+          quantitySold: Double(row[mappedIndex(for: .quantity)] ?? "0") ?? 0,
+          pricePerUnit: Double(row[mappedIndex(for: .pricePerUnit)] ?? "0")
+                          .flatMap { $0 } ?? 0,
+          notes: row[mappedIndex(for: .notes)] ?? ""
+      )
+  }
+  // Then present SaleEntryReviewView(rows: $rows, ...)
+
+XLSX parsing: Use XLSXParser.parse(url:) from ITEM 7BB-0 — do NOT duplicate parsing logic.
+CSV parsing: Use the existing CSV line/field splitting logic from BulkImportView.
+
+---
+
+ITEM 7BB-8 — SmartSalesPDFView (PDF mode)
+File: AITest/Views/SmartSalesPDFView.swift (new file)
+
+  import SwiftUI
+  import PDFKit
+  import UniformTypeIdentifiers
+
+  struct SmartSalesPDFView: View {
+      @Environment(\.dismiss) private var dismiss
+      @EnvironmentObject var currencyManager: CurrencyManager
+      @State private var step: PDFStep = .pick
+      @State private var pdfURL: URL? = nil
+      @State private var pdfName = ""
+      @State private var parsedRows: [ParsedSaleRow] = []
+      @State private var analyzeProgress = ""
+      @State private var error: String? = nil
+      @State private var showingFilePicker = false
+
+      enum PDFStep { case pick, analyzing, review }
+
+      var body: some View {
+          NavigationStack {
+              Group {
+                  switch step {
+                  case .pick:     pickView
+                  case .analyzing: analyzingView
+                  case .review:
+                      SaleEntryReviewView(rows: $parsedRows, onConfirm: { dismiss() }, onCancel: { step = .pick })
+                          .environmentObject(currencyManager)
+                  }
+              }
+              .navigationTitle("PDF Sales Entry")
+              .navigationBarTitleDisplayMode(.inline)
+              .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } } }
+          }
+          .fileImporter(isPresented: $showingFilePicker, allowedContentTypes: [.pdf]) { result in
+              if case .success(let url) = result {
+                  pdfURL = url
+                  pdfName = url.lastPathComponent
+              }
+          }
+      }
+
+      private var pickView: some View {
+          VStack(spacing: 20) {
+              Image(systemName: "doc.fill").font(.system(size: 48)).foregroundColor(.orange.opacity(0.7))
+              Text("Select a PDF").font(.title3).fontWeight(.semibold)
+              Text("Works with invoices, supplier sales sheets, or any PDF with item names and quantities.")
+                  .font(.subheadline).foregroundColor(.secondary).multilineTextAlignment(.center)
+              Button("Choose PDF") { showingFilePicker = true }
+                  .buttonStyle(.bordered).tint(.orange).controlSize(.large)
+              if let name = pdfURL?.lastPathComponent {
+                  HStack(spacing: 8) {
+                      Image(systemName: "doc.fill").foregroundColor(.orange)
+                      Text(name).font(.subheadline).lineLimit(1)
+                  }
+                  .padding(12).background(Color.orange.opacity(0.08)).cornerRadius(10)
+                  Button("Analyse PDF") { analyzePDF() }
+                      .buttonStyle(.borderedProminent).tint(.orange).controlSize(.large).frame(maxWidth: .infinity)
+              }
+          }
+          .padding()
+      }
+
+      private var analyzingView: some View {
+          VStack(spacing: 16) {
+              ProgressView()
+              Text("Reading your PDF…").font(.subheadline).foregroundColor(.secondary)
+              if !analyzeProgress.isEmpty { Text(analyzeProgress).font(.caption).foregroundColor(.secondary) }
+          }
+      }
+
+      private func analyzePDF() {
+          guard let url = pdfURL else { return }
+          step = .analyzing
+          Task {
+              do {
+                  guard url.startAccessingSecurityScopedResource() else { throw URLError(.fileDoesNotExist) }
+                  defer { url.stopAccessingSecurityScopedResource() }
+                  guard let pdf = PDFDocument(url: url) else { throw URLError(.cannotOpenFile) }
+                  let maxPages = min(pdf.pageCount, 10)
+                  if pdf.pageCount > 10 {
+                      // Show alert via analyzeProgress (show as caption during loading)
+                      analyzeProgress = "Large PDF detected — analysing first 10 of \(pdf.pageCount) pages"
+                  }
+                  var images: [UIImage] = []
+                  for i in 0..<maxPages {
+                      analyzeProgress = "Processing page \(i + 1) of \(maxPages)…"
+                      if let page = pdf.page(at: i) {
+                          let img = page.thumbnail(of: CGSize(width: 1024, height: 1400), for: .mediaBox)
+                          images.append(img)
+                      }
+                  }
+                  parsedRows = try await AIInventoryService.shared.parseSalesPDF(pages: images)
+                  AnalyticsManager.shared.track(.smartSalesModeSelected(mode: "pdf"))
+                  step = .review
+              } catch { self.error = error.localizedDescription; step = .pick }
+          }
+      }
+  }
+
+---
+
+ITEM 7BB-9 — Purchase Invoice Import (AI-powered batch inventory IN movements)
+File: AITest/Views/PurchaseInvoiceImportView.swift (new file)
+Entry point: Add to InventoryAppView or StorageDetailView as a toolbar button "Import Invoice ↓"
+  (exact placement: in StorageDetailView's toolbar alongside existing + button, accessible from any storage)
+
+This feature is the IN-direction equivalent of SmartSalesEntryView. User uploads a supplier invoice (photo, PDF, or Excel) and the AI extracts the items. After review, the confirmed items create batch InventoryMovement IN records and update lastPurchasePrice + lastPurchasedAt on each matched item.
+
+ParsedPurchaseRow struct (add to AITest/Models/ParsedPurchaseRow.swift — new file):
+  struct ParsedPurchaseRow: Identifiable {
+      let id: UUID = UUID()
+      var itemName: String
+      var quantityReceived: Double
+      var costPerUnit: Double        // 0 if AI could not detect
+      var notes: String = ""
+      var resolvedItem: InventoryItem? = nil
+      var isSkipped: Bool = false
+  }
+
+PurchaseInvoiceImportView structure — same 3-mode selection as SmartSalesEntryView but with 3 modes only (Photo, PDF, CSV/Excel):
+  Mode 1 — Photo: photograph a supplier invoice. AI extracts item names, quantities, unit costs.
+  Mode 2 — PDF: upload PDF invoice. Same PDFKit pipeline as SmartSalesPDFView.
+  Mode 3 — CSV/Excel: import supplier delivery note CSV/Excel. Column mapping: item name, quantity received, unit cost.
+
+AI prompts for purchase invoice parsing:
+  "You are parsing a supplier purchase invoice. Extract each line item: item name, quantity received, and unit cost/price. Return JSON: [{\"itemName\": \"...\", \"quantityReceived\": 1.0, \"costPerUnit\": 0.0, \"notes\": \"\"}]. If cost not visible, use 0."
+
+New AIInventoryService methods needed:
+  func parsePurchaseInvoiceImage(imageData: Data) async throws -> [ParsedPurchaseRow]
+  func parsePurchaseInvoicePDF(pages: [UIImage]) async throws -> [ParsedPurchaseRow]
+  func parsePurchaseInvoiceCSV(text: String) async throws -> [ParsedPurchaseRow]
+
+PurchaseReviewView (analogous to SaleEntryReviewView) — batch confirm logic:
+  For each confirmed row:
+    1. ActivityEvent("MovementLogged", itemName: ..., storageName: ...) — insert FIRST
+    2. InventoryMovement(direction: "IN", movementType: MovementTypeIn.purchase.rawValue, ...)
+    3. item.currentQuantity += row.quantityReceived
+    4. if row.costPerUnit > 0:
+         item.lastPurchasePrice = row.costPerUnit  (IMPORTANT: update cost layer)
+         item.lastPurchasedAt = Date()
+    5. item.updatedAt = Date()
+  modelContext.safeSave(context: "PurchaseInvoiceImport")  // SINGLE save after ALL rows
+  FirestoreManager.shared.syncItem(item) for each resolved item
+
+Note on lastPurchasePrice / lastPurchasedAt: These fields must already exist on InventoryItem as part of M6 cost layer (Item M6-5). If M6 has not been run yet when this spec is executed, Cursor must add these two fields to InventoryItem:
+  var lastPurchasePrice: Double = 0
+  var lastPurchasedAt: Date? = nil
+  These use SwiftData default values so no migration step is needed.
+
+Entry point button spec:
+  In StorageDetailView toolbar (alongside the existing + button):
+    Button { showingInvoiceImport = true } label: {
+        Image(systemName: "arrow.down.doc.fill")
+    }
+    .accessibilityIdentifier("importInvoiceButton")
+  .sheet(isPresented: $showingInvoiceImport) {
+      PurchaseInvoiceImportView(defaultStorage: storage)
+          .environmentObject(currencyManager)
+          .sheetStyle()
+  }
+
+---
+
+ITEM 7BB-10 — Maestro: new flows for Smart Sales Entry
+Directory: maestro/flows/
+
+Add 3 new flows (flows 81–83):
+
+Flow 81 — 81_sales_tab_empty_state.yaml:
+  - Launch app, navigate to Sales tab (tag 3)
+  - Assert: "No sales yet" visible
+  - Assert: "Record a Sale" button visible
+  - Assert: "Smart Sales Entry" label visible
+  - assertId: "salesEmptyRecordButton" exists
+
+Flow 82 — 82_sales_item_picker.yaml:
+  - Navigate to Sales tab
+  - Tap "Record a Sale"
+  - Assert: "Select Item" sheet appears
+  - Assert: search field visible
+  - Tap Cancel
+  - Assert: returned to Sales tab
+
+Flow 83 — 83_smart_sales_pro_gate.yaml:
+  - Navigate to Sales tab
+  - Tap Smart Sales Entry button (assertId: "salesEmptySmartEntryButton")
+  - Assert: "Smart Sales Entry" navigation title visible
+  - Assert: "PRO" badge visible on at least one mode card (free user gate)
+  - Tap any mode card
+  - Assert: PaywallView appears (Pro gate working)
+
+All flows: use bundle ID com.vishuddhi.stoqly and assert "Stoqly" as app name (standard rule).
+
+---
+
+BUILD CHECK — PHASE 7B-B:
+After all 7BB items:
+1. Build (Cmd+B). Zero errors, zero warnings related to ParsedSaleRow or new views.
+2. SmartSalesEntryView shows 5 mode cards. Free user: all 5 show PRO badge, tap any → PaywallView.
+3. Pro user: tap Voice → SmartSalesVoiceView opens. Record → Analyse → SaleEntryReviewView shows.
+4. Pro user: tap Text → type "5 chips 10, 2 water 20" → Parse Sales → SaleEntryReviewView shows parsed rows.
+5. SaleEntryReviewView: auto-resolve matches existing inventory items. Unresolved rows show orange dot.
+6. Confirm → SaleEvents + ActivityEvents + InventoryMovements created. Item quantities updated.
+7. Sales tab shows new entries grouped by date after confirmation.
+8. StorageDetailView toolbar: Import Invoice button visible. Tap → PurchaseInvoiceImportView opens.
+9. Photo mode: camera capture → AI analysis → PurchaseReviewView → confirm → item quantities increase + lastPurchasePrice updated.
+10. Maestro flows 81–83 pass.
+11. Update automation_results.rtf with Phase 7B-B results.
+
+---
+
+===========================================
+BUG SPRINT 4 — Phase 7B-B Device Testing Fixes
+Items: S4-0 through S4-6
+Run AFTER Phase 7B-B. These are all surgical fixes confirmed from device testing.
+===========================================
+
+ITEM S4-0 — Sales toolbar: "S..." truncated title
+File: AITest/Views/SalesView.swift
+
+Problem: ToolbarItem(placement: .topBarLeading) with Text("Sales").font(.title2) is squeezed to "S..." when 3 trailing icons exist. Also renders with a button-like appearance despite having no action.
+
+Action: Remove the custom leading ToolbarItem entirely. Use standard navigationTitle instead.
+
+In the body's NavigationStack content:
+- Remove: .navigationBarTitleDisplayMode(.inline)
+- Add: .navigationTitle("Sales")
+- Add: .navigationBarTitleDisplayMode(.large)
+
+In toolbarContent, remove the entire first ToolbarItem block:
+  // DELETE this block:
+  ToolbarItem(placement: .topBarLeading) {
+      Text("Sales").font(.title2).fontWeight(.bold)
+  }
+
+The large nav title will appear above the list/empty state, scrolling away naturally. The trailing icons (sparkles, chart, plus) remain unchanged.
+
+---
+
+ITEM S4-1 — Paywall: update Pro feature list for Smart Sales and Purchase Import
+File: AITest/Models/SubscriptionManager.swift (struct ProFeatureList, around lines 547-549)
+
+Problem: The Pro feature list shows the old SmartCount AI feature names ("Unlimited AI Voice Inventory", "Unlimited AI Photo & Shelf Scan", "Unlimited AI Sheet Inventory") and is missing the new Phase 7B-B features entirely.
+
+Action: Replace the three old AI feature rows with updated naming and add Smart Sales + Purchase Import above them. Keep all other rows unchanged.
+
+Current 3 rows to replace:
+  PaywallFeatureRow(icon: "mic.fill",                 color: .teal,   text: "Unlimited AI Voice Inventory",    note: "Free: 3/month")
+  PaywallFeatureRow(icon: "camera.fill",              color: .teal,   text: "Unlimited AI Photo & Shelf Scan", note: "Free: 3/month")
+  PaywallFeatureRow(icon: "doc.text.viewfinder",      color: .teal,   text: "Unlimited AI Sheet Inventory",    note: "Free: 3/month")
+
+Replace with these 5 rows (in this order):
+  PaywallFeatureRow(icon: "sparkles",                          color: .stoqlyAccent, text: "Smart Sales Entry — Voice, Photo, Text, CSV & PDF")
+  PaywallFeatureRow(icon: "arrow.down.doc.fill",               color: .orange,       text: "AI Purchase Invoice Import")
+  PaywallFeatureRow(icon: "mic.fill",                          color: .teal,         text: "AI Voice Inventory Count",   note: "Free: 3/month")
+  PaywallFeatureRow(icon: "camera.fill",                       color: .teal,         text: "AI Photo Inventory Scan",    note: "Free: 3/month")
+  PaywallFeatureRow(icon: "doc.text.viewfinder",               color: .teal,         text: "AI Sheet Inventory Import",  note: "Free: 3/month")
+
+The total row count increases from 10 to 12. Verify the list still scrolls correctly in the paywall sheet.
+
+---
+
+ITEM S4-2 — Reports: x-axis congestion for "This Month"
+File: AITest/Views/ReportsView.swift (chartXAxis modifier, inside the useDayNumberAxis branch)
+
+Problem: AxisMarks(values: .stride(by: .day, count: 1)) shows every day on the x-axis. For a 30-day month, 30 labels are crammed in — unreadable.
+
+Action: Compute a dynamic stride count based on the number of days in the period range.
+
+Replace the useDayNumberAxis branch:
+  // CURRENT:
+  if useDayNumberAxis {
+      AxisMarks(values: .stride(by: .day, count: 1)) { value in
+          AxisGridLine()
+          AxisValueLabel(format: .dateTime.day())
+      }
+  }
+
+  // REPLACE WITH:
+  if useDayNumberAxis {
+      let daySpan = Calendar.current.dateComponents(
+          [.day],
+          from: periodRange.lowerBound,
+          to: periodRange.upperBound
+      ).day ?? 7
+      let strideCount = daySpan > 20 ? 5 : daySpan > 10 ? 3 : 1
+      AxisMarks(values: .stride(by: .day, count: strideCount)) { value in
+          AxisGridLine()
+          AxisValueLabel(format: .dateTime.day())
+      }
+  }
+
+Result: "This Month" shows label every 5 days (1, 6, 11, 16, 21, 26). "Last 30 Days" same. "This Week" shows every day. "Today" shows every day.
+
+---
+
+ITEM S4-3 — SaleEntryReviewView: remove inner NavigationStack causing double Cancel buttons
+File: AITest/Views/SaleEntryReviewView.swift
+
+Problem: SaleEntryReviewView wraps its body in a NavigationStack. When shown inside SmartSalesTextView or SmartSalesVoiceView (which also have a NavigationStack), two nav bars appear — two Cancel buttons visible simultaneously.
+
+Root cause (lines 18-70):
+  var body: some View {
+      NavigationStack {          // ← INNER NavigationStack — causes nesting
+          VStack(spacing: 0) { ... }
+          .navigationTitle("Review Sales")
+          .navigationBarTitleDisplayMode(.inline)
+          .toolbar { ... }
+      }
+      .onAppear { autoResolveRows() }
+  }
+
+Action: Remove the NavigationStack wrapper. The .navigationTitle, .navigationBarTitleDisplayMode, and .toolbar modifiers propagate up to the parent NavigationStack automatically.
+
+New body structure:
+  var body: some View {
+      VStack(spacing: 0) {
+          // ... existing content unchanged ...
+      }
+      .navigationTitle("Review Sales")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+          ToolbarItem(placement: .topBarLeading) {
+              Button("Cancel") { onCancel() }
+          }
+      }
+      .onAppear { autoResolveRows() }
+  }
+
+Do NOT remove or change any of the inner VStack content, the warning banner, the List, the bottom confirm/cancel buttons, or the saveAllSales logic. Only the NavigationStack wrapper is removed.
+
+---
+
+ITEM S4-4 — Item name matching: exact match first + pass inventory names to AI
+Files:
+  - AITest/Views/SaleEntryReviewView.swift (autoResolveRows)
+  - AITest/Services/AIInventoryService.swift (parse functions + prompts)
+  - AITest/Views/SmartSalesTextView.swift
+  - AITest/Views/SmartSalesVoiceView.swift
+  - AITest/Views/SmartSalesPhotoView.swift
+  - AITest/Views/SmartSalesCSVView.swift
+  - AITest/Views/SmartSalesPDFView.swift
+
+Problem (two parts):
+  1. autoResolveRows() only tries substring matching and requires exactly 1 candidate. If the user has "Apple" and "Apple Juice", neither matches. Also no priority for exact names.
+  2. AI parse prompts don't know the inventory, so the AI returns whatever name it hears/reads ("apples", "red apple") rather than the canonical inventory name ("Apple").
+
+Part A — Fix autoResolveRows() in SaleEntryReviewView.swift:
+  private func autoResolveRows() {
+      for index in rows.indices where rows[index].resolvedItem == nil {
+          let query = rows[index].itemName.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+          guard !query.isEmpty else { continue }
+
+          // 1. Exact match (case-insensitive) — highest confidence
+          if let exact = allItems.first(where: { $0.name.lowercased() == query }) {
+              rows[index].resolvedItem = exact
+              continue
+          }
+
+          // 2. Substring match — both directions, require 3+ chars to avoid noise
+          guard query.count >= 3 else { continue }
+          let candidates = allItems.filter {
+              $0.name.lowercased().contains(query) || query.contains($0.name.lowercased())
+          }
+          if candidates.count == 1 {
+              rows[index].resolvedItem = candidates.first
+          }
+      }
+  }
+
+Part B — Pass inventory names to AI prompts:
+Add @Query to each Smart Sales view to fetch all item names:
+  @Query(sort: \InventoryItem.name) private var allItems: [InventoryItem]
+
+Add a knownItemNames parameter to each AIInventoryService parse function:
+  func parseSalesText(text: String, knownItemNames: [String]) async throws -> [ParsedSaleRow]
+  func parseSalesTranscript(transcript: String, knownItemNames: [String]) async throws -> [ParsedSaleRow]
+  func parseSalesImage(imageData: Data, knownItemNames: [String]) async throws -> [ParsedSaleRow]
+  func parseSalesPDF(pages: [UIImage], knownItemNames: [String]) async throws -> [ParsedSaleRow]
+  func parseSalesCSV(rows: [[String]], knownItemNames: [String]) async throws -> [ParsedSaleRow]
+
+Prepend this to each prompt (before the user input):
+  let inventoryContext = knownItemNames.isEmpty ? "" : """
+  Inventory items available: \(knownItemNames.joined(separator: ", ")).
+  Use the EXACT inventory name (case-sensitive) when the item mentioned matches one of these. Only fall back to the spoken/written name if no inventory item matches.
+
+  """
+
+Update call sites in each view:
+  parsedRows = try await AIInventoryService.shared.parseSalesText(
+      text: inputText,
+      knownItemNames: allItems.map { $0.name }
+  )
+  // (similarly for voice, photo, csv, pdf)
+
+CRITICAL RULE: This same exact-match improvement (Part A) should also be applied to the auto-resolve logic in PurchaseReviewView if it has its own autoResolve function — check and apply the same pattern.
+
+Also check VoiceInventoryView, ImageInventoryView, PaperInventoryView (SmartCount views) — if they have a similar autoResolve step, apply the exact match priority fix there too.
+
+---
+
+ITEM S4-5 — SaleReviewRow: link-then-grey bug (lift item picker sheet to parent)
+Files:
+  - AITest/Views/SaleEntryReviewView.swift
+  - AITest/Views/SaleReviewRow (inside SaleEntryReviewView.swift or separate file)
+
+Problem: After user links an item via SaleItemPickerSheet, the row appears grey with "Undo" label (as if it was skipped). Tapping "Undo" restores the correct display. Root cause: SaleReviewRow manages a .sheet(isPresented: $showingItemPicker) inside ForEach($rows). When the sheet closure updates row.resolvedItem and then dismiss() fires, SwiftUI's ForEach/Binding reconciliation corrupts the row state, setting isSkipped to true.
+
+Fix: Lift the item picker sheet presentation to SaleEntryReviewView. SaleReviewRow no longer owns the sheet — it just signals which row needs a picker.
+
+Changes to SaleEntryReviewView:
+  1. Add a helper struct for sheet identity:
+     private struct PickingRowID: Identifiable { let id: UUID }
+  2. Add state: @State private var pickingRowItem: PickingRowID?
+  3. In the ForEach, pass a closure to SaleReviewRow:
+     ForEach($rows) { $row in
+         SaleReviewRow(
+             row: $row,
+             allItems: allItems,
+             currencyManager: currencyManager,
+             onRequestItemPicker: { pickingRowItem = PickingRowID(id: row.id) }
+         )
+     }
+  4. Add a single sheet at SaleEntryReviewView level:
+     .sheet(item: $pickingRowItem) { picking in
+         SaleItemPickerSheet { item in
+             if let index = rows.firstIndex(where: { $0.id == picking.id }) {
+                 rows[index].resolvedItem = item
+             }
+         }
+         .sheetStyle()
+     }
+
+Changes to SaleReviewRow:
+  1. Add parameter: let onRequestItemPicker: () -> Void
+  2. Remove: @State private var showingItemPicker = false
+  3. Remove: .sheet(isPresented: $showingItemPicker) { SaleItemPickerSheet ... }
+  4. Change "Link to inventory item →" button action: { onRequestItemPicker() }
+  5. Change "Change" button action: { onRequestItemPicker() }
+
+No changes to any other logic (isSkipped toggle, save flow, skip display).
+
+---
+
+ITEM S4-6 — Voice: "Recognition request was cancelled" on stop
+File: AITest/Views/SmartSalesVoiceView.swift
+
+Problem: Tapping stop calls audio.stop() immediately, which abruptly kills the AVAudioEngine while SFSpeechRecognitionTask is still active. The task receives a cancellation error ("Recognition request was cancelled" — kAFAssistantErrorDomain code 203) and displays it as an error message instead of finalizing the transcript.
+
+The UX is: record → tap stop → transcript visible → tap "Parse Sales" → analyze. The stop button is correct. The error needs to be suppressed and the flow needs to work cleanly.
+
+Fix A — stopRecording(): call endAudio() before stopping the engine:
+  private func stopRecording() {
+      guard isRecording || audio.isRunning else { return }
+      audio.request?.endAudio()  // Signal end-of-audio to the recognizer cleanly
+      isRecording = false
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+          audio.stop()  // Give recognizer 300ms to finalize before engine stops
+      }
+  }
+
+Fix B — In the recognition task callback, suppress the cancellation error code:
+  if let callbackError {
+      let nsError = callbackError as NSError
+      // 216 = no speech, 203 = cancelled cleanly after endAudio() — both are non-fatal
+      if nsError.domain == "kAFAssistantErrorDomain" &&
+         (nsError.code == 216 || nsError.code == 203 || nsError.code == 301) { return }
+      errorMessage = callbackError.localizedDescription
+      stopRecording()
+  }
+
+Fix C — After recording stops with a non-empty transcript, show a brief nudge so users know what to do next. Add below the existing "Tap to record" label:
+  if !transcript.isEmpty && !isRecording {
+      Text("Tap \"Parse Sales\" to analyse your recording")
+          .font(.caption2).foregroundColor(.secondary)
+          .multilineTextAlignment(.center)
+  }
+  // The "Parse Sales" button already appears when !transcript.isEmpty && !isRecording — keep it as is.
+
+---
+
+ITEM S4-7 — After Smart Sales confirm, close entire sheet stack and show updated Sales list
+         — After Smart Count confirm, close entire sheet stack and show updated StorageDetailView
+Files:
+  - AITest/Views/SmartSalesEntryView.swift
+  - AITest/Views/SmartSalesVoiceView.swift
+  - AITest/Views/SmartSalesTextView.swift
+  - AITest/Views/SmartSalesPhotoView.swift
+  - AITest/Views/SmartSalesCSVView.swift
+  - AITest/Views/SmartSalesPDFView.swift
+  - AITest/Views/SmartCountView.swift
+  - AITest/Views/StorageDetailView.swift (verify onComplete handler)
+  - AITest/Views/SalesView.swift (toast)
+
+Problem (Smart Sales):
+The sheet hierarchy is: SalesView → SmartSalesEntryView (sheet) → SmartSalesTextView (sheet) → SaleEntryReviewView (step in NavigationStack).
+When the user confirms in SaleEntryReviewView, onConfirm calls dismiss() on SmartSalesTextView. SmartSalesTextView closes but SmartSalesEntryView is still presented — the user sees the mode-card selection screen again. They have no signal that their sales were saved. They must tap "Done" to get back to SalesView.
+
+Problem (Smart Count):
+The sheet hierarchy is: StorageDetailView → SmartCountView (sheet) → VoiceInventoryView (sheet).
+When the user completes a count, VoiceInventoryView calls:
+  showingVoice = false    ← closes VoiceInventoryView
+  onComplete?(count)      ← meant to bubble up to StorageDetailView
+But because showingVoice = false dismisses VoiceInventoryView first, the user momentarily sees the SmartCountView mode-card screen before StorageDetailView's onComplete handler can set showingSmartCount = false. Same for Image and Paper modes.
+
+Fix — Smart Sales (4 changes):
+
+1. Add onCompleted parameter to each mode view (SmartSalesVoiceView, SmartSalesTextView, SmartSalesPhotoView, SmartSalesCSVView, SmartSalesPDFView):
+   var onCompleted: (() -> Void)? = nil
+
+2. In each mode view, update the SaleEntryReviewView onConfirm to call onCompleted instead of dismiss:
+   // BEFORE:
+   SaleEntryReviewView(rows: $parsedRows, onConfirm: { dismiss() }, onCancel: { step = .input })
+
+   // AFTER:
+   SaleEntryReviewView(
+       rows: $parsedRows,
+       onConfirm: { onCompleted?() ?? dismiss() },  // prefer parent-level dismiss; fall back to self
+       onCancel: { step = .input }
+   )
+
+3. In SmartSalesEntryView, pass { dismiss() } as onCompleted to every mode sheet:
+   .sheet(isPresented: $showingVoice) {
+       SmartSalesVoiceView(onCompleted: { dismiss() })
+           .environmentObject(currencyManager).sheetStyle()
+   }
+   .sheet(isPresented: $showingText) {
+       SmartSalesTextView(onCompleted: { dismiss() })
+           .environmentObject(currencyManager).sheetStyle()
+   }
+   // ... same for Photo, CSV, PDF
+
+   When the user confirms in any mode, onCompleted() fires, SmartSalesEntryView dismisses,
+   and SwiftUI automatically closes all child sheets (the mode sheet) with it.
+   SalesView is now the top view, and its @Query-driven list shows the new sales under "Today" automatically.
+
+4. Add a brief confirmation toast in SalesView after Smart Sales completion:
+   In SalesView, add:
+     @State private var savedSaleCount = 0
+     @State private var showSavedToast = false
+
+   Observe a notification posted by SaleEntryReviewView.saveAllSales after safeSave:
+     NotificationCenter.default.post(
+         name: NSNotification.Name("stoqly.smartSalesConfirmed"),
+         object: nil,
+         userInfo: ["count": confirmableRows.count]
+     )
+
+   In SalesView body, add:
+     .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("stoqly.smartSalesConfirmed"))) { note in
+         savedSaleCount = note.userInfo?["count"] as? Int ?? 0
+         showSavedToast = true
+         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { showSavedToast = false }
+     }
+
+   Toast overlay (add inside the NavigationStack content, above the toolbar):
+     .overlay(alignment: .top) {
+         if showSavedToast {
+             HStack(spacing: 8) {
+                 Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                 Text("\(savedSaleCount) sale\(savedSaleCount == 1 ? "" : "s") saved")
+                     .font(.subheadline).fontWeight(.medium)
+             }
+             .padding(.horizontal, 16).padding(.vertical, 10)
+             .background(.regularMaterial, in: Capsule())
+             .shadow(radius: 4)
+             .padding(.top, 8)
+             .transition(.move(edge: .top).combined(with: .opacity))
+             .animation(.spring(response: 0.4), value: showSavedToast)
+         }
+     }
+
+Fix — Smart Count (1 change):
+
+In SmartCountView, remove the explicit showingVoice/showingImage/showingPaper = false assignments from the mode callbacks. Only call onComplete?(count). When the parent (StorageDetailView) receives onComplete and sets showingSmartCount = false, SwiftUI dismisses SmartCountView and all its child sheets together.
+
+  // BEFORE (in each mode sheet's onComplete closure):
+  onComplete: { count in
+      showingVoice = false
+      onComplete?(count)
+  }
+
+  // AFTER:
+  onComplete: { count in
+      onComplete?(count)  // parent handles full dismiss; no need to close child sheet manually
+  }
+  // (same for showingImage and showingPaper)
+
+Verify that StorageDetailView's showingSmartCount = false is called in the onComplete handler (this was fixed in S2-8/S2-10). If for any reason it isn't, add it. After SmartCount dismisses, StorageDetailView is visible with the auto-refreshed item quantities (SwiftData @Query). No toast needed here — the item quantity change is visible immediately in the list.
+
+IMPORTANT: Do not change SaleEntryReviewView's onCancel — cancel should still just return to the mode input screen (step = .input), not close the whole stack.
+
+---
+
+BUILD CHECK — BUG SPRINT 4:
+After all S4 items:
+1. Build (Cmd+B). Zero errors, zero warnings.
+2. Sales tab: large "Sales" title appears, no "S..." truncation.
+3. Paywall: open from free user account → verify Smart Sales Entry and Purchase Invoice Import rows visible.
+4. Reports "This Month": x-axis shows label every 5 days (approx), not every day.
+5. SmartSalesTextView → type text → Parse → Review Sales: only ONE Cancel button visible in nav bar.
+6. Review Sales: type "apple broccoli" in text mode → Apple and Broccoli both auto-resolve (or at least one exact match works). If neither, manually tap a row to link → row shows linked state (NOT grey/undo).
+7. Voice mode: record a phrase → tap stop → no "Recognition request was cancelled" error → transcript visible → tap "Parse Sales" → review appears.
+8. Smart Sales confirm: after confirming review, ALL sheets close, SalesView is visible, new entries appear under "Today", green toast "N sales saved" appears at top for 2.5 seconds.
+9. Smart Count confirm: after confirming a voice/photo/sheet count, ALL sheets close, StorageDetailView is visible, item quantities reflect the count.
+10. Update automation_results.rtf with Bug Sprint 4 results.
+
+---
+
+===========================================
+PM/DESIGN BRIEF — Smart Insights Redesign (post-S4, before M6)
+===========================================
+
+PROBLEM:
+Dashboard SmartInsightsCard (DashboardView.swift SmartInsightsCard struct, ~line 997) shows operational alerts (dead stock, low stock, never audited) but misses a whole class of insight: data completeness. When users haven't set unit cost, selling price, or min quantity on items, every downstream feature (profit margin, smart insights, reorder alerts) silently degrades. Users don't know why their data looks wrong.
+
+PROPOSED ADDITIONS — Data Health nudges (non-blocking, dismissable):
+
+Add these 3 new Insight types to SmartInsightsCard's computed `insights` array. These appear only when the count > 0. Each is orange (not red — informational, not critical). Each taps through to a filtered item list.
+
+  1. Missing unit cost:
+     let missingCost = items.filter { $0.unitCost <= 0 && $0.currentQuantity > 0 }
+     Insight: icon "tag.slash", color .orange
+     Title: "Profit margins incomplete"
+     Subtitle: "\(missingCost.count) item\(missingCost.count == 1 ? "" : "s") have no unit cost — margins show as 0%"
+     Action: tap → InsightDetailView showing those items, each with a "Set Cost" button that opens EditItemView
+
+  2. Missing selling price:
+     let missingPrice = items.filter { $0.sellingPrice <= 0 }
+     Insight: icon "creditcard.slash", color .orange
+     Title: "Revenue tracking incomplete"
+     Subtitle: "\(missingPrice.count) item\(missingPrice.count == 1 ? "" : "s") have no selling price — revenue won't calculate on quick sales"
+     Action: tap → InsightDetailView showing those items, each with "Set Price" → EditItemView
+
+  3. Missing min quantity:
+     let missingMin = items.filter { $0.minQuantity <= 0 }
+     Insight: icon "bell.slash", color .orange
+     Title: "Low-stock alerts disabled"
+     Subtitle: "\(missingMin.count) item\(missingMin.count == 1 ? "" : "s") have no minimum quantity — you won't get restock alerts for them"
+     Action: tap → InsightDetailView showing those items, each with "Set Min Qty" → EditItemView
+
+PLACEMENT: Insert AFTER existing operational insights (dead stock, value at risk, never audited) so they don't replace the higher-priority operational alerts.
+
+DISMISSAL: Each data-health insight can be individually dismissed (UserDefaults key per insight type, re-shows after 14 days). Add a dismiss button (×) to each row in SmartInsightsCard.
+
+AI INSIGHTS: Defer to M6. Cost and latency of calling Claude on every Dashboard load needs careful management (cache + once-daily refresh). Rule-based insights ship faster and are more reliable for V1.
+
+ENGINEERING: All changes to DashboardView.swift SmartInsightsCard and Insight struct. No new files. No Firestore changes. Estimate: ~100 lines added.
+
+---
+
+===========================================
+PM/DESIGN BRIEF — Purchase Invoice Import: Multi-Storage Entry Point (post-S4)
+===========================================
+
+PROBLEM:
+PurchaseInvoiceImportView takes a required `defaultStorage: Storage` parameter and is only accessible from StorageDetailView. Supplier invoices typically span multiple storage areas (e.g., a restaurant invoice has proteins for the Fridge, dry goods for the Pantry, beverages for the Bar). Requiring 3 separate imports for one invoice is painful.
+
+DECISION:
+Add a global "Import Invoice" entry point alongside the storage-specific one. During review, each matched row shows the storage of the resolved item (auto-filled). Unmatched rows allow the user to pick storage manually.
+
+DESIGN CHANGES:
+
+1. Global entry point — Items tab toolbar:
+   ItemListView.swift: Add a toolbar button with icon "arrow.down.doc" (or "tray.and.arrow.down") in the trailing position. Tap → PurchaseInvoiceImportView(defaultStorage: nil).
+
+2. PurchaseInvoiceImportView — make defaultStorage optional:
+   Change: let defaultStorage: Storage
+   To: let defaultStorage: Storage? (nil = cross-storage / global import)
+   Update the subtitle text: if defaultStorage != nil → "for \(defaultStorage!.name)"; else → "AI extracts items across all your storages — you review before stock is updated."
+
+3. ParsedPurchaseRow — add targetStorage field:
+   var targetStorage: Storage? = nil
+   Auto-fill from resolvedItem?.storage when autoResolving.
+   For unmatched rows, show a Storage picker in PurchaseReviewView (compact dropdown or tap-to-pick).
+
+4. PurchaseReviewView row display:
+   Each row shows:
+   - Item name / linked item chip (existing)
+   - Qty + price (existing)
+   - Storage pill: "→ Fridge" (auto-filled from matched item's storage), or "Pick storage" button if unmatched
+   If defaultStorage is set: unmatched rows default to defaultStorage (as today).
+   If defaultStorage is nil: unmatched rows show "Pick storage" — required before save.
+
+5. Save flow:
+   For each confirmed row: create InventoryMovement IN for item.storage (not defaultStorage). Update lastPurchasePrice on matched item as today.
+
+ENGINEERING SCOPE: Medium. PurchaseInvoiceImportView, PurchaseReviewView, ParsedPurchaseRow, ItemListView. No Firestore schema change. Keep StorageDetailView's import button (passes defaultStorage). Spec this as Phase 7B-C or fold into M6.
+
+---

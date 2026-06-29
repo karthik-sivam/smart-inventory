@@ -22,7 +22,9 @@ struct StorageDetailView: View {
     @State private var showingDeleteAlert: InventoryItem? = nil
     /// Bottom toast confirming an item deletion. Auto-clears after ~2 seconds.
     @State private var toastMessage: String? = nil
+    @State private var showingQuickSaleItem: InventoryItem? = nil
     @State private var showingSmartCount = false
+    @State private var showingInvoiceImport = false
 
     private var uniqueCategories: [String] {
         let cats = storage.items.map(\.category).filter { $0 != "Uncategorised" }
@@ -92,8 +94,17 @@ struct StorageDetailView: View {
                             .foregroundColor(.stoqlyPrimary)
                     }
                     .accessibilityLabel("Smart Count")
+                    .accessibilityIdentifier("smart-count-button")
 
                     if teamManager.canEdit {
+                        Button { showingInvoiceImport = true } label: {
+                            Image(systemName: "arrow.down.doc.fill")
+                                .font(.title2)
+                                .foregroundColor(.stoqlyPrimary)
+                        }
+                        .accessibilityLabel("Import Invoice")
+                        .accessibilityIdentifier("importInvoiceButton")
+
                         Button(action: {
                             if SubscriptionManager.shared.canAddItem(currentItemCount: storage.items.count) {
                                 showingAddItem = true
@@ -189,7 +200,7 @@ struct StorageDetailView: View {
                                 .padding(.vertical, 4)
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .listRowBackground(Color.clear)
+                        .listRowBackground(Color(.secondarySystemGroupedBackground))
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         .accessibilityLabel("\(item.name), SKU: \(item.sku)")
@@ -203,6 +214,13 @@ struct StorageDetailView: View {
                                 }
                                 .tint(.green)
                                 .accessibilityIdentifier("swipeCountAction")
+
+                                Button {
+                                    showingQuickSaleItem = item
+                                } label: {
+                                    Label("Sale", systemImage: "cart.fill")
+                                }
+                                .tint(.teal)
                             }
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -250,7 +268,19 @@ struct StorageDetailView: View {
                 .sheetStyle()
         }
         .sheet(isPresented: $showingSmartCount) {
-            SmartCountView(preselectedStorage: storage)
+            SmartCountView(
+                preselectedStorage: storage,
+                onComplete: { savedCount in
+                    showingSmartCount = false
+                    toastMessage = "\(savedCount) item\(savedCount == 1 ? "" : "s") updated"
+                }
+            )
+            .sheetStyle()
+        }
+        .sheet(isPresented: $showingInvoiceImport) {
+            PurchaseInvoiceImportView(defaultStorage: storage)
+                .environmentObject(currencyManager)
+                .environmentObject(SubscriptionManager.shared)
                 .sheetStyle()
         }
         .sheet(item: $showingQuickCount, onDismiss: {
@@ -268,6 +298,11 @@ struct StorageDetailView: View {
         }
         .sheet(item: $showingFullCount) { item in
             CountItemView(item: item)
+                .sheetStyle()
+        }
+        .sheet(item: $showingQuickSaleItem) { item in
+            QuickSaleSheet(item: item)
+                .environmentObject(currencyManager)
                 .sheetStyle()
         }
         .alert("Delete Item", isPresented: Binding(
@@ -329,6 +364,7 @@ struct StatCard: View {
 
 struct ItemCard: View {
     let item: InventoryItem
+    @EnvironmentObject private var currencyManager: CurrencyManager
     
     var body: some View {
         HStack(spacing: 12) {
@@ -379,7 +415,7 @@ struct ItemCard: View {
                     .foregroundColor(.secondary)
                 
                 if item.unitCost > 0 {
-                    Text("$\(String(format: "%.2f", item.totalValue))")
+                    Text(currencyManager.formatPrice(item.totalValue))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -759,10 +795,13 @@ struct ItemDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var currencyManager: CurrencyManager
     @StateObject private var detailVM = ItemDetailViewModel()
     @StateObject private var teamManager = TeamManager.shared
     @State private var showingCountModal = false
     @State private var showingQuickCount = false
+    @State private var showingQuickSale = false
+    @State private var showingMovement = false
     @State private var showingEditItem = false
     @State private var showingDeleteAlert = false
 
@@ -928,6 +967,33 @@ struct ItemDetailView: View {
                 if teamManager.canEdit {
                     quickActionsRow
                         .padding(.horizontal)
+
+                    Button {
+                        showingQuickSale = true
+                    } label: {
+                        Label("Record Sale", systemImage: "cart.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.green)
+                    .controlSize(.large)
+                    .padding(.horizontal)
+                    .accessibilityIdentifier("recordSaleButton")
+
+                    if item.currentQuantity == 0 {
+                        Text("Out of stock — sale will create negative stock")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal)
+                    }
+
+                    Button("Add Movement ↗") {
+                        showingMovement = true
+                    }
+                    .font(.caption)
+                    .foregroundColor(.stoqlyPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
                 }
 
                 // ── 3. Item info section ────────────────────────────
@@ -954,12 +1020,12 @@ struct ItemDetailView: View {
                     }
                     DetailRow(label: "Max Quantity", value: item.maxQuantity > 0 ? item.maxQuantity.smartFormatted : "—")
                     if item.unitCost > 0 {
-                        DetailRow(label: "Unit Cost", value: "$\(String(format: "%.2f", item.unitCost))")
+                        DetailRow(label: "Unit Cost", value: currencyManager.formatPrice(item.unitCost))
                     }
                     if item.lastPurchasePrice > 0 {
                         DetailRow(
                             label: "Last Purchase",
-                            value: "$\(String(format: "%.2f", item.lastPurchasePrice))"
+                            value: currencyManager.formatPrice(item.lastPurchasePrice)
                         )
                         if item.unitCost > 0 {
                             let variance = item.lastPurchasePrice - item.unitCost
@@ -995,7 +1061,11 @@ struct ItemDetailView: View {
                 }
                 .padding(.horizontal)
 
-                // ── 5. Quantity trend chart ─────────────────────────
+                // ── 5. Profitability ────────────────────────────────
+                profitabilitySection
+                    .padding(.horizontal)
+
+                // ── 6. Quantity trend chart ─────────────────────────
                 CountTrendChart(item: item)
                     .padding(.horizontal)
 
@@ -1069,6 +1139,21 @@ struct ItemDetailView: View {
         .sheet(isPresented: $showingEditItem) {
             EditItemView(item: item)
                 .sheetStyle()
+        }
+        .sheet(isPresented: $showingQuickSale) {
+            QuickSaleSheet(item: item)
+                .environmentObject(currencyManager)
+                .sheetStyle()
+        }
+        .sheet(isPresented: $showingMovement) {
+            MovementSheet(item: item, onOpenQuickSale: {
+                showingMovement = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    showingQuickSale = true
+                }
+            })
+            .environmentObject(currencyManager)
+            .sheetStyle()
         }
         .alert("Delete Item", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
@@ -1145,6 +1230,35 @@ struct ItemDetailView: View {
         }
     }
 
+    // MARK: - Profitability section
+
+    @ViewBuilder
+    private var profitabilitySection: some View {
+        if item.sellingPrice > 0 {
+            DetailSection(title: "Profitability") {
+                DetailRow(label: "Cost", value: currencyManager.formatPrice(item.unitCost))
+                DetailRow(label: "Selling Price", value: currencyManager.formatPrice(item.sellingPrice))
+                Divider()
+                if let margin = item.grossMarginPct {
+                    let color: Color = margin > 30 ? .green : margin >= 10 ? .orange : .red
+                    DetailRow(label: "Profit/unit", value: currencyManager.formatPrice(item.grossProfitPerUnit ?? 0), valueColor: color)
+                    DetailRow(label: "Gross Margin", value: String(format: "%.0f%%", margin), valueColor: color)
+                }
+            }
+        } else {
+            DetailSection(title: "Profitability") {
+                Text("Set a selling price to track your profit margin for this item.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Button("Set Selling Price →") {
+                    showingEditItem = true
+                }
+                .font(.caption)
+                .foregroundColor(.stoqlyPrimary)
+            }
+        }
+    }
+
     // MARK: - Batch helpers
 
     /// Colour used for a batch's "Expires …" line: red if already past, orange
@@ -1183,7 +1297,7 @@ struct ItemDetailView: View {
 
             // Value
             if item.unitCost > 0 {
-                Text("Total value: $\(String(format: "%.2f", item.totalValue))")
+                Text("Total value: \(currencyManager.formatPrice(item.totalValue))")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -1436,6 +1550,7 @@ struct QuickCountView: View {
     /// Called when user wants the full count screen (to change UOM/reason).
     /// The parent dismisses this sheet first, then opens CountItemView.
     let onOpenFullCount: () -> Void
+    var onSaved: (() -> Void)? = nil
 
     // MARK: - Count mode
 
@@ -1845,6 +1960,7 @@ struct QuickCountView: View {
             modelContext.safeSave(context: "QuickCountView createBatch")
         }
 
+        onSaved?()
         dismiss()
     }
 }

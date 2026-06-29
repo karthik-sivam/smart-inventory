@@ -33,8 +33,31 @@ struct ValueByCategoryView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
+            Group {
+                if categoryData.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Category Values", systemImage: "chart.pie")
+                    } description: {
+                        Text("Add items with a unit cost to see your inventory value by category.")
+                    }
+                } else {
+                    categoryContent
+                }
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Value by Category")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var categoryContent: some View {
+        ScrollView {
+            VStack(spacing: 24) {
                     ZStack {
                         ForEach(Array(categoryData.enumerated()), id: \.element.category) { index, data in
                             PieSlice(
@@ -136,15 +159,6 @@ struct ValueByCategoryView: View {
                     Spacer(minLength: 40)
                 }
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("Value by Category")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
     }
 
     private func fraction(for index: Int) -> Double {

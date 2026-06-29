@@ -161,6 +161,7 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
             // formVM.barcode and dismisses the sheet.
             DispatchQueue.main.async { [weak self] in
                 self?.onScan(payload, symbology)
+                AdManager.shared.recordCompletion(event: .barcodeScanned)
             }
         }
 

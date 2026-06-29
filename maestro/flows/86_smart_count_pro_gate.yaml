@@ -1,0 +1,29 @@
+# Flow 86 — Smart Count: Pro / free-tier upsell (optional assertions)
+# Free tier shows remaining uses and Upgrade CTA on Smart Count sheet.
+# Does not consume AI credits or require limit to be exhausted.
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml
+- tapOn:
+    id: "smart-count-button"
+- assertVisible: "Smart Count"
+- assertVisible:
+    text: "remaining"
+    optional: true
+- assertVisible:
+    text: "Upgrade"
+    optional: true
+- tapOn:
+    text: "Upgrade"
+    optional: true
+- assertVisible:
+    text: "Upgrade to Stoqly Pro"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- tapOn: "Done"

@@ -129,6 +129,16 @@ enum StoqlyEvent {
     case settingsViewed
     case exportCompleted(format: String)                   // "csv" | "pdf"
 
+    // ── Sales & Movements (Phase 7A) ─────────────────────────────────────────────
+    case saleRecorded(itemId: String, qty: Double, sellingPrice: Double, costPrice: Double, profit: Double, storageId: String)
+    case movementLogged(itemId: String, movementType: String, qty: Double, pricePerUnit: Double)
+    case reportViewed(period: String)
+
+    // ── Smart Sales Entry (Phase 7B-B) ───────────────────────────────────────────
+    case smartSalesOpened
+    case smartSalesModeSelected(mode: String)
+    case smartSalesCompleted(mode: String, saleCount: Int)
+
     // ── Errors / Crashes (non-fatal, for awareness) ───────────────────────────────
     case syncFailed(reason: String)
     case barcodeEnrichmentFailed
@@ -173,6 +183,14 @@ enum StoqlyEvent {
         case .categoryExplorerViewed:    return "category_explorer_viewed"
         case .settingsViewed:            return "settings_viewed"
         case .exportCompleted:           return "export_completed"
+
+        case .saleRecorded:              return "sale_recorded"
+        case .movementLogged:            return "movement_logged"
+        case .reportViewed:              return "report_viewed"
+
+        case .smartSalesOpened:          return "smart_sales_opened"
+        case .smartSalesModeSelected:    return "smart_sales_mode_selected"
+        case .smartSalesCompleted:       return "smart_sales_completed"
 
         case .syncFailed:                return "sync_failed"
         case .barcodeEnrichmentFailed:   return "barcode_enrichment_failed"
@@ -220,6 +238,24 @@ enum StoqlyEvent {
         case .categoryExplorerViewed:         return [:]
         case .settingsViewed:                 return [:]
         case .exportCompleted(let fmt):       return ["format": fmt]
+
+        case .saleRecorded(let itemId, let qty, let sp, let cp, let profit, let storageId):
+            return [
+                "item_id": itemId,
+                "qty": qty,
+                "selling_price": sp,
+                "cost_price": cp,
+                "profit": profit,
+                "storage_id": storageId
+            ]
+        case .movementLogged(let itemId, let type, let qty, let price):
+            return ["item_id": itemId, "movement_type": type, "qty": qty, "price_per_unit": price]
+        case .reportViewed(let period):       return ["period": period]
+
+        case .smartSalesOpened:               return [:]
+        case .smartSalesModeSelected(let m):  return ["mode": m]
+        case .smartSalesCompleted(let m, let n):
+            return ["mode": m, "sale_count": n]
 
         case .syncFailed(let r):              return ["reason": r]
         case .barcodeEnrichmentFailed:        return [:]

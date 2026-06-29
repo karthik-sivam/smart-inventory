@@ -1,0 +1,146 @@
+import SwiftUI
+
+struct SmartSalesEntryView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var subscriptionManager: SubscriptionManager
+    @EnvironmentObject var currencyManager: CurrencyManager
+
+    @State private var showingVoice = false
+    @State private var showingPhoto = false
+    @State private var showingText = false
+    @State private var showingCSV = false
+    @State private var showingPDF = false
+    @State private var showingPaywall = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    headerSection
+                    modeCards
+                    if !subscriptionManager.isPro { proUpsellBanner }
+                    Spacer(minLength: 40)
+                }
+                .padding(.horizontal)
+                .padding(.bottom)
+            }
+            .navigationTitle("Smart Sales Entry")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .onAppear {
+            AnalyticsManager.shared.track(.smartSalesOpened)
+        }
+        .sheet(isPresented: $showingVoice) {
+            SmartSalesVoiceView(onCompleted: { dismiss() })
+                .environmentObject(currencyManager).sheetStyle()
+        }
+        .sheet(isPresented: $showingPhoto) {
+            SmartSalesPhotoView(onCompleted: { dismiss() })
+                .environmentObject(currencyManager).sheetStyle()
+        }
+        .sheet(isPresented: $showingText) {
+            SmartSalesTextView(onCompleted: { dismiss() })
+                .environmentObject(currencyManager).sheetStyle()
+        }
+        .sheet(isPresented: $showingCSV) {
+            SmartSalesCSVView(onCompleted: { dismiss() })
+                .environmentObject(currencyManager).sheetStyle()
+        }
+        .sheet(isPresented: $showingPDF) {
+            SmartSalesPDFView(onCompleted: { dismiss() })
+                .environmentObject(currencyManager).sheetStyle()
+        }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView(source: "smart_sales").sheetStyle()
+        }
+    }
+
+    private var headerSection: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 36))
+                .foregroundStyle(Color.stoqlyPrimary)
+            Text("Smart Sales Entry")
+                .font(.title2).fontWeight(.bold)
+            Text("Record multiple sales at once using voice, photo, text, or file import. AI parses the input — you review before anything is saved.")
+                .font(.subheadline).foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.top, 8)
+    }
+
+    private var modeCards: some View {
+        VStack(spacing: 12) {
+            modeCard(icon: "mic.fill", iconColor: .stoqlyPrimary, title: "Voice",
+                     description: "Say what you sold. \"5 chips, 2 waters, 1 sandwich\". AI parses into a sale list.",
+                     action: { showingVoice = true })
+            modeCard(icon: "camera.fill", iconColor: .stoqlyAccent, title: "Photo",
+                     description: "Photograph a handwritten chit, receipt, or invoice. AI reads every line.",
+                     action: { showingPhoto = true })
+            modeCard(icon: "text.alignleft", iconColor: .blue, title: "Text",
+                     description: "Type or paste a free-form sales list. AI structures it for you.",
+                     action: { showingText = true })
+            modeCard(icon: "tablecells", iconColor: .green, title: "CSV / Excel",
+                     description: "Import a spreadsheet of sales. Map columns then confirm.",
+                     action: { showingCSV = true })
+            modeCard(icon: "doc.fill", iconColor: .orange, title: "PDF",
+                     description: "Upload a PDF invoice or sales report. AI extracts the sale rows.",
+                     action: { showingPDF = true })
+        }
+    }
+
+    private func modeCard(icon: String, iconColor: Color, title: String, description: String, action: @escaping () -> Void) -> some View {
+        let isPro = subscriptionManager.isPro
+        return Button(action: isPro ? action : { showingPaywall = true }) {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle().fill(iconColor.opacity(isPro ? 0.12 : 0.06)).frame(width: 52, height: 52)
+                    Image(systemName: icon).font(.title3).foregroundColor(isPro ? iconColor : .secondary)
+                }
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 6) {
+                        Text(title).font(.subheadline).fontWeight(.semibold).foregroundColor(isPro ? .primary : .secondary)
+                        if !isPro {
+                            Text("PRO").font(.caption2).fontWeight(.bold).foregroundColor(.white)
+                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                .background(Color.orange).cornerRadius(4)
+                        }
+                    }
+                    Text(description).font(.caption).foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.leading)
+                }
+                Spacer()
+                Image(systemName: isPro ? "chevron.right" : "lock.fill")
+                    .font(.caption).foregroundColor(isPro ? .secondary : .orange)
+            }
+            .padding(16)
+            .background(Color(.secondarySystemGroupedBackground))
+            .cornerRadius(12)
+            .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+            .opacity(isPro ? 1.0 : 0.7)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .accessibilityIdentifier("smartSalesMode_\(title.lowercased().replacingOccurrences(of: " ", with: "_"))")
+    }
+
+    private var proUpsellBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "crown.fill").foregroundColor(.orange)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Smart Sales Entry is a Pro feature").font(.subheadline).fontWeight(.semibold)
+                Text("Upgrade to record bulk sales with AI — saves hours of manual entry.").font(.caption).foregroundColor(.secondary)
+            }
+            Spacer()
+            Button("Upgrade") { showingPaywall = true }.font(.caption).fontWeight(.semibold).foregroundColor(.orange)
+        }
+        .padding(14)
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(12)
+        .padding(.horizontal)
+    }
+}

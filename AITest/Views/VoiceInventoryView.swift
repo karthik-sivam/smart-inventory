@@ -163,6 +163,7 @@ private struct RecordingPulseRing: View {
 
 struct VoiceInventoryView: View {
     var preselectedStorage: Storage? = nil
+    var onComplete: ((Int) -> Void)? = nil
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -666,7 +667,11 @@ struct VoiceInventoryView: View {
             }
         }
 
-        dismiss()
+        if let onComplete {
+            onComplete(itemsToSave.count)
+        } else {
+            dismiss()
+        }
     }
 }
 
@@ -700,8 +705,25 @@ extension Array where Element == EditableItem {
     mutating func applyNameMatching(in storage: Storage?) {
         guard let storage else { return }
         for index in indices {
-            let name = self[index].name.lowercased()
-            if let found = storage.items.first(where: { $0.name.lowercased() == name }) {
+            let query = self[index].name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else {
+                self[index].match = .new
+                continue
+            }
+
+            if let exact = storage.items.first(where: { $0.name.lowercased() == query }) {
+                self[index].match = .existing(exact)
+                continue
+            }
+
+            guard query.count >= 3 else {
+                self[index].match = .new
+                continue
+            }
+            let candidates = storage.items.filter {
+                $0.name.lowercased().contains(query) || query.contains($0.name.lowercased())
+            }
+            if candidates.count == 1, let found = candidates.first {
                 self[index].match = .existing(found)
             } else {
                 self[index].match = .new

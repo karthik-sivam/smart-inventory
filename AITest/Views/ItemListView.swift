@@ -8,8 +8,10 @@ struct ItemListView: View {
     @Query private var storages: [Storage]
     @StateObject private var viewModel = ItemListViewModel()
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
+    @EnvironmentObject private var currencyManager: CurrencyManager
     @StateObject private var teamManager = TeamManager.shared
     @State private var showingAddItem = false
+    @State private var showingNoStorageAlert = false
     @State private var showingExport = false
     @State private var showingSmartCount = false
     @State private var showingEditItem: InventoryItem?
@@ -79,7 +81,7 @@ struct ItemListView: View {
                         .accessibilityLabel("Smart Count")
                         
                         if teamManager.canEdit {
-                            Button(action: { showingAddItem = true }) {
+                            Button(action: { beginAddItem() }) {
                                 Image(systemName: "plus")
                                     .font(.title2)
                                     .foregroundColor(.stoqlyPrimary)
@@ -186,7 +188,7 @@ struct ItemListView: View {
 
                             if viewModel.searchText.isEmpty && viewModel.selectedCategory == nil,
                                teamManager.canEdit {
-                                Button(action: { showingAddItem = true }) {
+                                Button(action: { beginAddItem() }) {
                                     Label("Add Item", systemImage: "plus.circle.fill")
                                         .fontWeight(.medium)
                                         .frame(maxWidth: .infinity)
@@ -347,6 +349,14 @@ struct ItemListView: View {
                 Text("Are you sure you want to delete '\(item.name)'? This action cannot be undone.")
             }
         }
+        .alert("Create a Storage First", isPresented: $showingNoStorageAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Go to Storages") {
+                NotificationCenter.default.post(name: NSNotification.Name("stoqly.switchToStoragesTab"), object: nil)
+            }
+        } message: {
+            Text("You need at least one storage area before adding items. Create a storage in the Storages tab first.")
+        }
         .onAppear {
             viewModel.bind(modelContext: modelContext, items: items, storages: storages)
         }
@@ -370,10 +380,19 @@ struct ItemListView: View {
         }
         .toast(message: $toastMessage)
     }
+
+    private func beginAddItem() {
+        if storages.isEmpty {
+            showingNoStorageAlert = true
+        } else {
+            showingAddItem = true
+        }
+    }
 }
 
 struct ItemRowView: View {
     let item: InventoryItem
+    @EnvironmentObject private var currencyManager: CurrencyManager
     
     var body: some View {
         HStack(spacing: 12) {
@@ -411,7 +430,7 @@ struct ItemRowView: View {
                     Spacer()
                     
                     if item.unitCost > 0 {
-                        Text("$\(String(format: "%.2f", item.totalValue))")
+                        Text(currencyManager.formatPrice(item.totalValue))
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }

@@ -1,0 +1,17 @@
+# Flow 81 — Smart Count: Open and dismiss
+# Opens Smart Count from storage detail sparkle button, verifies mode picker, dismisses.
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml
+- tapOn:
+    id: "smart-count-button"
+- assertVisible: "Smart Count"
+- assertVisible: "Voice Inventory"
+- assertVisible: "Photo Inventory"
+- assertVisible: "Sheet Inventory"
+- tapOn: "Done"
+- assertVisible: "Test Warehouse"

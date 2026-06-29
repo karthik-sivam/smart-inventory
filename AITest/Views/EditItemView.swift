@@ -8,6 +8,7 @@ struct EditItemView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
+    @EnvironmentObject private var currencyManager: CurrencyManager
     @Query private var storages: [Storage]
     @Query private var uoms: [UOM]
     @StateObject private var formVM = ItemFormViewModel()
@@ -177,6 +178,24 @@ struct EditItemView: View {
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                     }
+                    HStack {
+                        Text("Selling Price")
+                        Spacer()
+                        TextField("0.00", text: $formVM.sellingPrice)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .accessibilityLabel("Selling price per unit")
+                    }
+                    if let sp = Double(formVM.sellingPrice), sp > 0 {
+                        let cost = Double(formVM.unitCost) ?? 0
+                        let margin = sp > 0 ? (sp - cost) / sp * 100 : 0
+                        HStack {
+                            Text(cost > sp ? "Selling below cost" : String(format: "Margin: %.0f%%", margin))
+                                .font(.caption)
+                                .foregroundColor(cost > sp ? .red : margin >= 30 ? .green : margin >= 10 ? .orange : .red)
+                            Spacer()
+                        }
+                    }
                 }
                 
                 Section(header: Text("Stock Status")) {
@@ -198,7 +217,7 @@ struct EditItemView: View {
                     HStack {
                         Text("Total Value")
                         Spacer()
-                        Text("$\(String(format: "%.2f", item.totalValue))")
+                        Text(currencyManager.formatPrice(item.totalValue))
                             .fontWeight(.medium)
                     }
                     

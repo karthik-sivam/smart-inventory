@@ -15,6 +15,7 @@ import SwiftData
 
 struct SmartCountView: View {
     var preselectedStorage: Storage? = nil
+    var onComplete: ((Int) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
@@ -166,13 +167,31 @@ struct SmartCountView: View {
             }
         }
         .sheet(isPresented: $showingVoice) {
-            VoiceInventoryView(preselectedStorage: selectedStorage).sheetStyle()
+            VoiceInventoryView(
+                preselectedStorage: selectedStorage,
+                onComplete: { count in
+                    onComplete?(count)
+                }
+            )
+            .sheetStyle()
         }
         .sheet(isPresented: $showingImage) {
-            ImageInventoryView(preselectedStorage: selectedStorage).sheetStyle()
+            ImageInventoryView(
+                preselectedStorage: selectedStorage,
+                onComplete: { count in
+                    onComplete?(count)
+                }
+            )
+            .sheetStyle()
         }
         .sheet(isPresented: $showingPaper) {
-            PaperInventoryView(preselectedStorage: selectedStorage).sheetStyle()
+            PaperInventoryView(
+                preselectedStorage: selectedStorage,
+                onComplete: { count in
+                    onComplete?(count)
+                }
+            )
+            .sheetStyle()
         }
         .sheet(isPresented: $showingPaywall) {
             PaywallView(source: "ai_limit").sheetStyle()

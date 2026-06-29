@@ -169,7 +169,6 @@
 				D2776A0B2E1DAA5D00C580F6 /* Frameworks */,
 				D2776A0C2E1DAA5D00C580F6 /* Resources */,
 				5AC623BD2F828CEF00AC4937 /* Firebase Crashlytics */,
-				5A4AFEA82FED453A00B47D05 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -316,25 +315,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		5A4AFEA82FED453A00B47D05 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}",
-				"$(SRCROOT)/$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)",
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${BUILD_DIR%Build/*}SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n";
-		};
 		5AC623BD2F828CEF00AC4937 /* Firebase Crashlytics */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;

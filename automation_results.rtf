@@ -13,4 +13,87 @@
 \bullet ITEM 13: syncFailed on Firestore pushStorage/pushItem errors\par
 \bullet Fixed AnalyticsManager: AmplitudeEventBody to [String: Any], @unchecked Sendable\par
 \bullet Build: Swift compile OK; post-build Crashlytics upload-symbols sandbox error (env, not code)\par
+\par
+{\b Phase 7A — Sales, Profitability & Reports (todolist ITEMs 14-38)}\par
+[COMPLETED]\par
+\bullet ITEM 14-15: sellingPrice on InventoryItem + Firestore push/pull\par
+\bullet ITEM 16-17: SaleEvent.swift, InventoryMovement.swift (MovementTypeIn/Out enums)\par
+\bullet ITEM 18: SwiftData schema + clearLocalData on sign-out\par
+\bullet ITEM 19: pushSaleEvent / pushInventoryMovement (push-only, Phase 7B pull deferred)\par
+\bullet ITEM 20: ActivityEvent SaleMade + MovementLogged display strings/icons/colors\par
+\bullet ITEM 21: EditItemView selling price + live margin; ItemFormViewModel load/save\par
+\bullet ITEM 22: BulkImportView ImportField.sellingPrice + auto-detect + import mapping\par
+\bullet ITEM 23: QuickSaleSheet (sale + movement + ActivityEvent + analytics + Firestore)\par
+\bullet ITEM 24-25: ItemDetailView Record Sale / Add Movement; StorageDetailView swipe Sale\par
+\bullet ITEM 26: MovementSheet with onOpenQuickSale callback\par
+\bullet ITEM 27-28: ReportsView + MovementsListView (Charts revenue trend)\par
+\bullet ITEM 29: ItemDetailView Profitability section\par
+\bullet ITEM 30: Dashboard Sales Performance + Revenue/Gross Profit KPI cards\par
+\bullet ITEM 31: DashboardView @EnvironmentObject currencyManager (single source of truth)\par
+\bullet ITEM 32-33: CurrencyManager locale auto-detect + dashboard locale-change banner\par
+\bullet ITEM 34: SmartInsightsCard dead-stock (30d grace) + never-audited (7d grace)\par
+\bullet ITEM 35: ValueByCategoryView ContentUnavailableView empty state\par
+\bullet ITEM 36: StorageListView/StorageDetailView secondarySystemGroupedBackground rows\par
+\bullet ITEM 37-38: Settings Privacy & Ads #if DEBUG; AI Features hidden when Secrets.plist key set\par
+\bullet Analytics: saleRecorded, movementLogged, reportViewed StoqlyEvent cases\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b Bug Sprint 2 — Phase 7A Device Testing Fixes (S2-1 through S2-10)}\par
+[COMPLETED]\par
+\bullet S2-1: QuickSaleSheet "Record Sale" borderedProminent + stoqlyAccent, full-width bottom button\par
+\bullet S2-2: Sales Performance horizontal period pills (no clipping); label/value row alignment\par
+\bullet S2-3: ReportsView allDays zero-fill chart + weekday/day x-axis + stoqlyAccent bars\par
+\bullet S2-4: Removed hardcoded "$" in StorageDetailView, ItemListView, EditItemView, FilteredItemListView\par
+\bullet S2-5: Audit tab green tick only after QuickCountView onSaved (lastCountWasSaved flag)\par
+\bullet S2-6: Dead stock tap snapshots items; guard empty relatedItems; InsightDetailView empty state\par
+\bullet S2-7: markAsManuallySet() suppresses locale banner after Settings currency change; softer banner copy\par
+\bullet S2-8/S2-10: SmartCount onComplete bubbles voice/image/paper → StorageDetailView dismiss + toast\par
+\bullet S2-9: ItemListView blocks Add Item when no storages; alert + switchToStoragesTab notification\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b Phase 7B-A — Sales Tab, SalesView, DatePicker Cap, ReportsView CTA (7BA-1 through 7BA-6)}\par
+[COMPLETED]\par
+\bullet 7BA-1: Tab restructure — Sales tab (tag 3), Audit (tag 4); Profile removed from tab bar\par
+\bullet 7BA-1: Dashboard gear (dashboardGearButton) opens ProfileView sheet; Audit nav selectedTab 4\par
+\bullet 7BA-2: SalesView.swift — empty/list states, grouped sales, Reports/Smart Entry sheets, SaleEventRow\par
+\bullet 7BA-2: SmartSalesEntryView stub ("Coming soon") for Phase 7B-B\par
+\bullet 7BA-3: SaleItemPickerSheet.swift — searchable item list → QuickSaleSheet\par
+\bullet 7BA-4: DatePicker capped at today in QuickSaleSheet + MovementSheet (in: ...Date())\par
+\bullet 7BA-5: ReportsView empty-state "Record a Sale" CTA + stoqly.recordSaleFromReports notification\par
+\bullet 7BA-6: Maestro — Profile via dashboardGearButton; Settings via Profile gear row; cross-tab + signout updated\par
+\bullet ProfileView: Settings row (id gear), Done toolbar, environmentObject injection from Dashboard\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b Bug Sprint 3 — Phase 7B-A Device Testing Fixes (S3-0 through S3-5)}\par
+[COMPLETED]\par
+\bullet S3-0: SaleEventRow subtitle — quantity only, no timestamp\par
+\bullet S3-1: Record Sale button — bordered green secondary style + recordSaleButton id\par
+\bullet S3-2: QuickSaleSheet profitPreview — no misleading 100% margin when unitCost is 0\par
+\bullet S3-3: SaleItemPickerSheet storage dot — white stroke ring for visibility\par
+\bullet S3-4: SalesView toolbar — single leading title, trailing sparkles/chart/plus; empty Smart Entry plain style\par
+\bullet S3-5: Dashboard Sales Performance — Grid layout for Revenue/Profit/Margin alignment\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b Phase 7B-B — Smart Sales Entry + Purchase Invoice Import (7BB-0 through 7BB-10)}\par
+[COMPLETED]\par
+\bullet 7BB-0: XLSXParser.swift shared utility; BulkImportView uses XLSXParser.parse(url:)\par
+\bullet 7BB-1: SmartSalesEntryView.swift — 5 mode cards, Pro gate, smartSalesOpened analytics\par
+\bullet 7BB-2: ParsedSaleRow + SaleEntryReviewView — batch save, auto-resolve, Firestore sync\par
+\bullet 7BB-3–8: SmartSalesVoice/Photo/Text/CSV/PDF views + AIInventoryService sales/purchase parsers\par
+\bullet 7BB-6: Analytics smartSalesOpened/ModeSelected/Completed events\par
+\bullet 7BB-9: PurchaseInvoiceImportView + PurchaseReviewView; importInvoiceButton on StorageDetailView\par
+\bullet 7BB-10: Maestro flows 88–90 (sales empty, item picker, smart sales Pro gate) + run_all.yaml\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b Bug Sprint 4 — Phase 7B-B Device Testing Fixes (S4-0 through S4-7)}\par
+[COMPLETED]\par
+\bullet S4-0: SalesView large navigationTitle — removed truncated leading toolbar title\par
+\bullet S4-1: Paywall ProFeatureList — Smart Sales Entry + Purchase Invoice Import rows; renamed AI count features\par
+\bullet S4-2: ReportsView chart x-axis dynamic stride (every 5 days for 20+ day periods)\par
+\bullet S4-3: SaleEntryReviewView — removed inner NavigationStack (single Cancel in review)\par
+\bullet S4-4: Exact-match auto-resolve + knownItemNames passed to AI parse functions; PurchaseReview + SmartCount matching\par
+\bullet S4-5: Item picker sheet lifted to SaleEntryReviewView (fixes link-then-grey bug)\par
+\bullet S4-6: SmartSalesVoiceView — endAudio before stop, suppress codes 203/301, Parse Sales nudge\par
+\bullet S4-7: onCompleted dismisses full Smart Sales sheet stack; smartSalesConfirmed toast; SmartCount child sheets no manual dismiss\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
 }

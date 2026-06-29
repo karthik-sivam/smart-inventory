@@ -117,6 +117,7 @@ final class ItemFormViewModel: ObservableObject {
     @Published var minQuantity: String = ""
     @Published var maxQuantity: String = ""
     @Published var unitCost: String = ""
+    @Published var sellingPrice: String = ""
     @Published var reorderPercentage: Double = 0
     @Published var lastPurchasePrice: String = ""
     @Published var selectedStorage: Storage?
@@ -185,6 +186,7 @@ final class ItemFormViewModel: ObservableObject {
         maxQuantity     = item.maxQuantity.smartFormatted
         // Unit cost keeps %.2f — currency should always show two decimals.
         unitCost        = String(format: "%.2f", item.unitCost)
+        sellingPrice    = item.sellingPrice > 0 ? String(format: "%.2f", item.sellingPrice) : ""
         reorderPercentage = item.reorderPercentage
         lastPurchasePrice = item.lastPurchasePrice > 0
             ? String(format: "%.2f", item.lastPurchasePrice)
@@ -235,6 +237,7 @@ final class ItemFormViewModel: ObservableObject {
             uom: uom
         )
         item.createdFromTemplateId = sourceTemplateId
+        item.sellingPrice = Double(sellingPrice) ?? 0
         modelContext.insert(item)
 
         // If the item was created with an expiry date and non-zero quantity,
@@ -286,6 +289,7 @@ final class ItemFormViewModel: ObservableObject {
         item.minQuantity     = Double(minQuantity) ?? 0
         item.maxQuantity     = Double(maxQuantity) ?? 0
         item.unitCost        = Double(unitCost) ?? 0
+        item.sellingPrice    = Double(sellingPrice) ?? 0
         item.reorderPercentage = reorderPercentage
         let newLastPrice = Double(lastPurchasePrice) ?? 0
         if newLastPrice > 0 {

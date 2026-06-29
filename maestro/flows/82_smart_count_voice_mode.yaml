@@ -1,0 +1,18 @@
+# Flow 82 — Smart Count: Voice mode navigation
+# Verifies Voice Inventory UI loads; does not tap record (mic unavailable in simulator).
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: open_test_warehouse.yaml
+- tapOn:
+    id: "smart-count-button"
+- assertVisible: "Smart Count"
+- tapOn: "Voice Inventory"
+- assertVisible: "Voice Inventory"
+- assertVisible: "Tap to record"
+- tapOn: "Cancel"
+- assertVisible: "Smart Count"
+- tapOn: "Done"
