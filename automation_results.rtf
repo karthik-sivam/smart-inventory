@@ -96,4 +96,62 @@
 \bullet S4-6: SmartSalesVoiceView — endAudio before stop, suppress codes 203/301, Parse Sales nudge\par
 \bullet S4-7: onCompleted dismisses full Smart Sales sheet stack; smartSalesConfirmed toast; SmartCount child sheets no manual dismiss\par
 \bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b M6 — Pre-Ship Polish (M6-1 through M6-4)}\par
+[COMPLETED]\par
+\bullet M6-1: Smart Insights data-health nudges (missing cost / selling price / min qty) + per-insight 14-day dismiss\par
+\bullet M6-2: PurchaseInvoiceImportView defaultStorage optional; targetStorage on ParsedPurchaseRow; multi-storage review + global Items tab entry (globalInvoiceImportButton)\par
+\bullet M6-3: BarcodeEnrichmentService — no debug print() calls (already clean)\par
+\bullet M6-4: Maestro flows 91–92 + run_all.yaml append\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b BUG SPRINT 5 — Purchase Invoice + Smart Sales Polish (S5-1 through S5-8)}\par
+[COMPLETED]\par
+\bullet S5-1: PurchaseReviewView NavigationStack removed — one nav bar, one Cancel; CSV sheet wrapped in NavigationStack\par
+\bullet S5-2: Item picker lifted to PurchaseReviewView parent — no ForEach binding / Undo glitch; storage pill informational only\par
+\bullet S5-3: UOM symbol shown next to quantity in purchase review rows\par
+\bullet S5-4: PDF first-page thumbnail + filename preview in PurchaseInvoicePDFView\par
+\bullet S5-5: PurchaseInvoiceCSVView 3-step flow with PurchaseInvoiceCSVViewModel — column mapping + preview before review\par
+\bullet S5-6: SmartSalesCSVView Picker label shows current field selection\par
+\bullet S5-7: stoqly.purchaseInvoiceConfirmed toast on StorageDetailView + ItemListView (Smart Sales toast already in SalesView)\par
+\bullet S5-8: Confirm validation guards unmatched rows + empty save set — crash addressed via S5-1/S5-2 binding fix\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b BUG SPRINT 6 — Sync, Storage Labels, ForEach Binding, CSV Mapping UI (S6-1 through S6-4)}\par
+[COMPLETED]\par
+\bullet S6-1: InventoryMovements pulled from Firestore in pullFromCloud (after saleEvents block)\par
+\bullet S6-2: Storage name as plain grey label in SaleReviewRow + PurchaseReviewRow (defaultStorage fallback)\par
+\bullet S6-3: ForEach enumerated Binding in SaleEntryReviewView + PurchaseReviewView — fixes Undo glitch on item link\par
+\bullet S6-3 follow-up: Replaced whole-row @Binding with per-field id-keyed bindings — opening item picker no longer corrupts isSkipped\par
+\bullet S6-4: CSV Map Columns — Picker("", ...) + labelsHidden() in SmartSalesCSVView + PurchaseInvoiceCSVView (column header Text kept)\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b BUG SPRINT 7 — CSV Mapping Layout, UOM, Toast Timing (S7-1 through S7-4)}\par
+[COMPLETED]\par
+\bullet S7-1: CSV map columns HStack layout — column name left, picker right (SmartSalesCSVView, PurchaseInvoiceCSVView, BulkImportView)\par
+\bullet S7-2: UOM symbol in SaleReviewRow qty group when resolvedItem has uom\par
+\bullet S7-3: Toast timing — notification posted after onConfirm() with 0.5s delay; SmartSales toast on StorageDetailView\par
+\bullet S7-4: Photo import auto-resolve — onChange(of: allItems) re-runs autoResolveRows when @Query settles\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b DASHBOARD PERIOD FIX — DS-1 (Bug Sprint 8)}\par
+[COMPLETED]\par
+\bullet DS-1: Last 30 Days added to DashboardSalesPeriod; default .lastThirtyDays; dashboardPeriodRange + dashboardPeriodAsReportPeriod updated; Revenue deltaText uses rawValue\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b BUG SPRINT 9 — XLSX/AI Mapping, SmartCount CSV, Invoice Dismiss, Barcode Enrich (SC-1 through SC-4)}\par
+[COMPLETED]\par
+\bullet SC-1: XLSXParser case-insensitive sharedStrings lookup; AIInventoryService suggestSales/Purchase/CountColumnMapping; aiEnhanceMapping + loading banner in SmartSalesCSVView + PurchaseInvoiceCSVView\par
+\bullet SC-2: SmartCount CSV/Excel mode — fourth mode card, SmartCountCSVView + SmartCountCSVViewModel (file/map/preview/review); BulkCountImported ActivityEvent; Firestore sync on confirm\par
+\bullet SC-3: PurchaseInvoiceImportView onCompleted chain — child sheets dismiss parent so stoqly.purchaseInvoiceConfirmed toast visible on StorageDetailView\par
+\bullet SC-4: AddItemView barcode fullScreenCover onDismiss triggers BarcodeEnrichmentService.enrich when Pro + empty name; "Looking up product…" loading indicator\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b APP STORE REJECTION FIXES \emdash Build 14}\par
+[COMPLETED]\par
+\bullet ITEM 1: EULA + Privacy Policy links in PaywallView (Guideline 3.1.2c) — SubscriptionManager.swift\par
+\bullet ITEM 2: Sign in with Apple backend — prepareAppleSignIn, signInWithApple, nonce helpers in AuthManager.swift\par
+\bullet ITEM 3: Sign in with Apple button in AuthView — SignInWithAppleButton below Google sign-in\par
+\bullet ITEM 4: AITest.entitlements — com.apple.developer.applesignin Default + aps-environment production\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
 }

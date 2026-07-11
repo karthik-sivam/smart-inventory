@@ -62,6 +62,8 @@ final class ActivityEvent {
             return "Sale recorded: \(qty) sold from \(storageName)"
         case "MovementLogged":
             return "Movement logged in \(storageName)"
+        case "BulkCountImported":
+            return "Bulk count imported in \(storageName)"
         default:
             return eventType
         }
@@ -77,6 +79,7 @@ final class ActivityEvent {
         case "StorageCreated": return "archivebox.fill"
         case "SaleMade": return "cart.fill"
         case "MovementLogged": return "arrow.up.arrow.down.circle.fill"
+        case "BulkCountImported": return "list.clipboard.fill"
         default: return "circle.fill"
         }
     }
@@ -91,6 +94,7 @@ final class ActivityEvent {
         case "StorageCreated": return "purple"
         case "SaleMade": return "green"
         case "MovementLogged": return "blue"
+        case "BulkCountImported": return "blue"
         default: return "gray"
         }
     }

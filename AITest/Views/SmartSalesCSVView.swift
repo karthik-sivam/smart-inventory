@@ -20,6 +20,7 @@ final class SmartSalesCSVViewModel: ObservableObject {
     @Published var rows: [[String]] = []
     @Published var columnMapping: [Int: SalesImportField] = [:]
     @Published var parseError: String?
+    @Published var isSuggestingMappings = false
 
     var previewRows: [[String]] { Array(rows.prefix(5)) }
 
@@ -45,12 +46,34 @@ final class SmartSalesCSVViewModel: ObservableObject {
                 parseError = "The file appears empty. Make sure it has a header row and at least one data row."
                 return
             }
-            headers = grid[0].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            rows = Array(grid.dropFirst()).filter { $0.contains(where: { !$0.isEmpty }) }
+            let headerIdx = XLSXParser.findHeaderRow(in: grid)
+            headers = grid[headerIdx].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            rows = Array(grid[(headerIdx + 1)...]).filter { $0.contains(where: { !$0.isEmpty }) }
             autoDetect()
             step = 1
+            Task { await aiEnhanceMapping() }
         } catch {
             parseError = "Could not read file: \(error.localizedDescription)"
+        }
+    }
+
+    @MainActor
+    private func aiEnhanceMapping() async {
+        guard !headers.isEmpty, !rows.isEmpty else { return }
+        isSuggestingMappings = true
+        defer { isSuggestingMappings = false }
+        do {
+            let sample = rows.first ?? []
+            let suggestions = try await AIInventoryService.shared.suggestSalesColumnMapping(headers: headers, sampleRow: sample)
+            for (indexStr, fieldName) in suggestions {
+                guard let index = Int(indexStr) else { continue }
+                let matched = SalesImportField.allCases.first { $0.rawValue == fieldName } ?? .skip
+                if columnMapping[index] == .skip || columnMapping[index] == nil {
+                    columnMapping[index] = matched
+                }
+            }
+        } catch {
+            // Fall back to keyword autoDetect() already applied
         }
     }
 
@@ -72,9 +95,9 @@ final class SmartSalesCSVViewModel: ObservableObject {
 
     private func autoDetect() {
         let rules: [(SalesImportField, [String])] = [
-            (.itemName, ["item", "name", "product", "description"]),
-            (.quantity, ["qty", "quantity", "count", "units"]),
-            (.pricePerUnit, ["price", "rate", "unit price", "selling price", "amount"]),
+            (.itemName, ["item", "name", "product", "description", "particulars", "goods"]),
+            (.quantity, ["qty", "quantity", "count", "units", "pcs", "nos", "pieces"]),
+            (.pricePerUnit, ["price", "rate", "unit price", "selling price", "unit rate", "rate per unit"]),
             (.date, ["date", "time", "when"]),
             (.notes, ["notes", "remarks", "comment"])
         ]
@@ -230,14 +253,26 @@ struct SmartSalesCSVView: View {
 
     private var mappingStep: some View {
         List {
+            if vm.isSuggestingMappings {
+                Section {
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.8)
+                        Text("AI is suggesting column matches…")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                }
+            }
             Section("\(vm.rows.count) rows · map each column") {
                 ForEach(vm.headers.indices, id: \.self) { i in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(vm.headers[i]).fontWeight(.medium)
-                        if let sample = vm.rows.first, i < sample.count, !sample[i].isEmpty {
-                            Text("e.g. \(sample[i])").font(.caption).foregroundColor(.secondary)
+                    HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(vm.headers[i]).fontWeight(.medium).font(.subheadline)
+                            if let sample = vm.rows.first, i < sample.count, !sample[i].isEmpty {
+                                Text("e.g. \(sample[i])").font(.caption).foregroundColor(.secondary)
+                            }
                         }
-                        Picker("Field", selection: Binding(
+                        Spacer()
+                        Picker("", selection: Binding(
                             get: { vm.columnMapping[i] ?? .skip },
                             set: { vm.columnMapping[i] = $0 }
                         )) {
@@ -246,6 +281,8 @@ struct SmartSalesCSVView: View {
                             }
                         }
                         .pickerStyle(.menu)
+                        .labelsHidden()
+                        .fixedSize()
                     }
                 }
             }

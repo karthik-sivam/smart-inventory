@@ -25,6 +25,9 @@ struct StorageDetailView: View {
     @State private var showingQuickSaleItem: InventoryItem? = nil
     @State private var showingSmartCount = false
     @State private var showingInvoiceImport = false
+    @State private var savedPurchaseCount = 0
+    @State private var showPurchaseToast = false
+    @State private var showSmartSalesToast = false
 
     private var uniqueCategories: [String] {
         let cats = storage.items.map(\.category).filter { $0 != "Uncategorised" }
@@ -161,6 +164,7 @@ struct StorageDetailView: View {
                     .padding(.horizontal)
                 }
                 .padding(.top, 8)
+                .padding(.bottom, 10)
             }
             List {
                 if filteredItems.isEmpty {
@@ -331,6 +335,43 @@ struct StorageDetailView: View {
             }
         }
         .toast(message: $toastMessage)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("stoqly.purchaseInvoiceConfirmed"))) { note in
+            savedPurchaseCount = note.userInfo?["itemCount"] as? Int ?? 0
+            showPurchaseToast = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { showPurchaseToast = false }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("stoqly.smartSalesConfirmed"))) { _ in
+            showSmartSalesToast = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { showSmartSalesToast = false }
+        }
+        .overlay(alignment: .top) {
+            if showPurchaseToast {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                    Text("\(savedPurchaseCount) item\(savedPurchaseCount == 1 ? "" : "s") received into stock")
+                        .font(.subheadline).fontWeight(.medium)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .background(.regularMaterial, in: Capsule())
+                .shadow(radius: 4)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .animation(.spring(response: 0.4), value: showPurchaseToast)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if showSmartSalesToast {
+                Text("Sales recorded")
+                    .font(.subheadline).fontWeight(.semibold)
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(Color(.systemBackground).opacity(0.95))
+                    .cornerRadius(20)
+                    .shadow(radius: 6)
+                    .padding(.bottom, 32)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(response: 0.4), value: showSmartSalesToast)
+            }
+        }
     }
     
     
@@ -457,6 +498,7 @@ struct AddItemView: View {
     /// in `onDismiss` so we don't mutate `barcode` in the same render pass
     /// that toggles `showingBarcodeScanner`.
     @State private var pendingScannedBarcode: String?
+    @State private var isEnriching = false
     @State private var sourceTemplateId: UUID? = nil
 
     enum Field: Hashable {
@@ -504,6 +546,13 @@ struct AddItemView: View {
                                     .font(.title3)
                                     .foregroundColor(.stoqlyPrimary)
                             }
+                        }
+                    }
+                    if isEnriching {
+                        HStack(spacing: 8) {
+                            ProgressView().scaleEffect(0.8)
+                            Text("Looking up product...")
+                                .font(.caption).foregroundColor(.secondary)
                         }
                     }
                 }
@@ -679,6 +728,25 @@ struct AddItemView: View {
                 if let code = pendingScannedBarcode {
                     barcode = code
                     pendingScannedBarcode = nil
+                    if subscriptionManager.isPro && name.isEmpty {
+                        Task {
+                            isEnriching = true
+                            defer { isEnriching = false }
+                            if let product = await BarcodeEnrichmentService.shared.enrich(barcode: code) {
+                                AnalyticsManager.shared.track(.barcodeScanResult(found: true, enriched: true))
+                                if name.isEmpty { name = product.name }
+                                if description.isEmpty { description = product.description }
+                                if category == "Uncategorised" { category = product.category }
+                                if selectedUOM == nil || selectedUOM?.isDefault == true {
+                                    if let matched = uoms.first(where: { $0.symbol == product.uomSymbol }) {
+                                        selectedUOM = matched
+                                    }
+                                }
+                            } else {
+                                AnalyticsManager.shared.track(.barcodeScanResult(found: false, enriched: false))
+                            }
+                        }
+                    }
                 }
             }
         ) {

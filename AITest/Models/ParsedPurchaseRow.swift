@@ -9,6 +9,7 @@ struct ParsedPurchaseRow: Identifiable {
     var costPerUnit: Double
     var notes: String = ""
     var resolvedItem: InventoryItem? = nil
+    var targetStorage: Storage? = nil
     var isSkipped: Bool = false
 }
 

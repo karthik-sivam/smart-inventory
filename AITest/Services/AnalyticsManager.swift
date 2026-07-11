@@ -46,20 +46,25 @@ final class AnalyticsManager: @unchecked Sendable {
 
     // MARK: - Identify user
 
-    /// Call after sign-in or whenever user properties change.
+    /// Call after sign-in, on auth-state restore, or whenever user properties change.
+    /// Only non-nil properties are written, so calling this on app launch (without
+    /// counts/method) won't overwrite previously-set values. `signup_method` uses
+    /// setOnce so it's never clobbered after the first sign-up.
     func identify(
         userId: String,
+        email: String? = nil,
         isPro: Bool,
-        storageCount: Int = 0,
-        itemCount: Int = 0,
-        signupMethod: String = "unknown"
+        storageCount: Int? = nil,
+        itemCount: Int? = nil,
+        signupMethod: String? = nil
     ) {
         amplitude?.setUserId(userId: userId)
         let identify = Identify()
-        identify.set(property: "is_pro",        value: isPro)
-        identify.set(property: "storage_count", value: storageCount)
-        identify.set(property: "item_count",    value: itemCount)
-        identify.set(property: "signup_method", value: signupMethod)
+        if let email = email { identify.set(property: "email", value: email) }
+        identify.set(property: "is_pro", value: isPro)
+        if let storageCount = storageCount { identify.set(property: "storage_count", value: storageCount) }
+        if let itemCount = itemCount { identify.set(property: "item_count", value: itemCount) }
+        if let signupMethod = signupMethod { identify.setOnce(property: "signup_method", value: signupMethod) }
         amplitude?.identify(identify: identify)
     }
 

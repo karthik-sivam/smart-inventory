@@ -14,7 +14,8 @@ struct XLSXParser {
         }
 
         var sharedStrings: [String] = []
-        if let ssData = entries["xl/sharedStrings.xml"] {
+        let ssKey = entries.keys.first(where: { $0.lowercased() == "xl/sharedstrings.xml" })
+        if let ssKey, let ssData = entries[ssKey] {
             sharedStrings = parseSharedStrings(xml: ssData)
         }
 
@@ -132,7 +133,8 @@ struct XLSXParser {
                 } else if tagName == "/t" || tag == "</t>" {
                     inT = false
                 } else if tagName == "/si" || tag == "</si>" {
-                    strings.append(current)
+                    strings.append(decodeEntities(current))
+                    current = ""
                 }
             } else if inT {
                 current.append(text[i])
@@ -212,12 +214,7 @@ struct XLSXParser {
             } else {
                 value = rawValue
             }
-            value = value
-                .replacingOccurrences(of: "&amp;", with: "&")
-                .replacingOccurrences(of: "&lt;",  with: "<")
-                .replacingOccurrences(of: "&gt;",  with: ">")
-                .replacingOccurrences(of: "&quot;", with: "\"")
-                .replacingOccurrences(of: "&#39;", with: "'")
+            value = decodeEntities(value)
 
             if !cellRef.isEmpty {
                 let col = colIndex(cellRef.prefix(while: { $0.isLetter }).description)
@@ -237,6 +234,82 @@ struct XLSXParser {
             grid[cell.row][cell.col] = cell.value
         }
         return grid
+    }
+
+    // MARK: - Smart header-row detection
+
+    /// Scans the first 15 rows and returns the index of the row with the most non-empty cells.
+    /// Ties go to the earlier row.  Handles the common pattern where row 1 is a title/metadata
+    /// line and the actual column headers sit in row 3 or 4.
+    static func findHeaderRow(in grid: [[String]]) -> Int {
+        let searchCount = min(15, grid.count)
+        var bestRow = 0
+        var bestCount = 0
+        for idx in 0..<searchCount {
+            let nonEmpty = grid[idx].filter {
+                !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }.count
+            if nonEmpty > bestCount {
+                bestCount = nonEmpty
+                bestRow = idx
+            }
+        }
+        return bestRow
+    }
+
+    // MARK: - XML entity decoder
+
+    /// Decodes standard XML named entities and numeric character references (&#NNN; and &#xHHH;).
+    static func decodeEntities(_ input: String) -> String {
+        guard input.contains("&") else { return input }
+        var result = ""
+        result.reserveCapacity(input.count)
+        var i = input.startIndex
+
+        while i < input.endIndex {
+            let ch = input[i]
+            guard ch == "&" else {
+                result.append(ch)
+                i = input.index(after: i)
+                continue
+            }
+            // Search for closing semicolon within next 12 characters
+            let searchEnd = input.index(i, offsetBy: 12, limitedBy: input.endIndex) ?? input.endIndex
+            if let semiRange = input.range(of: ";", range: i..<searchEnd) {
+                let entity = String(input[input.index(after: i)..<semiRange.lowerBound])
+                var decoded: String? = nil
+
+                switch entity {
+                case "amp":         decoded = "&"
+                case "lt":          decoded = "<"
+                case "gt":          decoded = ">"
+                case "quot":        decoded = "\""
+                case "apos", "#39": decoded = "'"
+                case "nbsp":        decoded = "\u{00A0}"
+                default:
+                    if entity.hasPrefix("#x") || entity.hasPrefix("#X") {
+                        if let cp = UInt32(entity.dropFirst(2), radix: 16),
+                           let scalar = Unicode.Scalar(cp) {
+                            decoded = String(Character(scalar))
+                        }
+                    } else if entity.hasPrefix("#") {
+                        if let cp = UInt32(entity.dropFirst()),
+                           let scalar = Unicode.Scalar(cp) {
+                            decoded = String(Character(scalar))
+                        }
+                    }
+                }
+
+                if let d = decoded {
+                    result += d
+                    i = semiRange.upperBound
+                    continue
+                }
+            }
+            result.append(ch)
+            i = input.index(after: i)
+        }
+        return result
     }
 }
 

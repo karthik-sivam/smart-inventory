@@ -3661,3 +3661,2286 @@ DESIGN CHANGES:
 ENGINEERING SCOPE: Medium. PurchaseInvoiceImportView, PurchaseReviewView, ParsedPurchaseRow, ItemListView. No Firestore schema change. Keep StorageDetailView's import button (passes defaultStorage). Spec this as Phase 7B-C or fold into M6.
 
 ---
+
+===========================================
+M6 — PRE-SHIP POLISH (Cursor Spec)
+===========================================
+
+This is the final Cursor batch before App Store submission.
+Two new features from PM/Design briefs above, plus pre-ship cleanup.
+
+CRITICAL RULES (never violate):
+- Use modelContext.safeSave(context:) — never try? modelContext.save()
+- Insert ActivityEvent BEFORE modelContext.delete(item)
+- Never set isPro = true in any code (already hardcoded true for testing — do NOT touch it)
+- Never add NavigationStack inside sheet/modal views that already have one
+- Use item.currentQuantity.smartFormatted — never String(format: "%.2f", ...)
+- Barcode scanner must use .fullScreenCover, never .sheet
+
+---
+
+ITEM M6-1 — Smart Insights: data health nudges
+File: AITest/Views/DashboardView.swift
+Location: SmartInsightsCard private struct, inside the `insights` computed property
+
+CONTEXT:
+SmartInsightsCard.insights already returns operational insights (running-low-soon, dead stock, inventory value at risk, never audited). Add 3 data-quality nudges AFTER those operational insights. Each nudge is dismissable per-type with a 14-day re-show. The Insight struct is already defined — use the same pattern.
+
+CHANGE 1 — Add dismiss helpers to SmartInsightsCard:
+Add these two private static methods to the SmartInsightsCard struct body (NOT as global functions):
+
+  private static func isDismissed(_ key: String) -> Bool {
+      guard let dismissedAt = UserDefaults.standard.object(forKey: key) as? Date else { return false }
+      return Date().timeIntervalSince(dismissedAt) < 14 * 86400
+  }
+
+  private static func dismiss(_ key: String) {
+      UserDefaults.standard.set(Date(), forKey: key)
+  }
+
+CHANGE 2 — Add dismiss button to each insight row:
+In the ForEach that renders each Insight row inside SmartInsightsCard, add a dismiss button (Image(systemName: "xmark").font(.caption2)) at the trailing edge of each row. Tapping it calls:
+  SmartInsightsCard.dismiss("stoqly_insight_dismissed_\(insight.icon)")
+To force a refresh, add @State private var refreshID = UUID() to SmartInsightsCard and call refreshID = UUID() on dismiss. The insights computed property will re-run and the dismissed insight disappears.
+
+CHANGE 3 — Append data-health nudge blocks to the `insights` computed property, AFTER the existing neverCounted block and BEFORE `return result`:
+
+  // --- Data-health nudges ---
+
+  let dismissKeyCost = "stoqly_insight_dismissed_cart.badge.questionmark"
+  if !SmartInsightsCard.isDismissed(dismissKeyCost) {
+      let noCost = items.filter { $0.unitCost == 0 && $0.lastPurchasePrice == 0 }
+      if !noCost.isEmpty {
+          result.append(Insight(
+              icon: "cart.badge.questionmark",
+              iconColor: .purple,
+              title: "Missing cost prices",
+              subtitle: "\(noCost.count) item\(noCost.count == 1 ? "" : "s") have no cost price — profit margin tracking is incomplete",
+              relatedItems: noCost
+          ))
+      }
+  }
+
+  let dismissKeySelling = "stoqly_insight_dismissed_tag.slash"
+  if !SmartInsightsCard.isDismissed(dismissKeySelling) {
+      let noSelling = items.filter { $0.sellingPrice == 0 }
+      if !noSelling.isEmpty {
+          result.append(Insight(
+              icon: "tag.slash",
+              iconColor: .teal,
+              title: "Missing selling prices",
+              subtitle: "\(noSelling.count) item\(noSelling.count == 1 ? "" : "s") have no selling price — revenue tracking won't be accurate",
+              relatedItems: noSelling
+          ))
+      }
+  }
+
+  let dismissKeyMin = "stoqly_insight_dismissed_bell.slash"
+  if !SmartInsightsCard.isDismissed(dismissKeyMin) {
+      let noMin = items.filter { $0.minQuantity == 0 && $0.reorderPercentage == 0 }
+      if !noMin.isEmpty {
+          result.append(Insight(
+              icon: "bell.slash",
+              iconColor: .orange,
+              title: "Low-stock alerts disabled",
+              subtitle: "\(noMin.count) item\(noMin.count == 1 ? "" : "s") have no minimum quantity — you won't get restock alerts",
+              relatedItems: noMin
+          ))
+      }
+  }
+
+NOTE: reorderPercentage is the field name on InventoryItem (confirmed in codebase). The filter checks both minQuantity == 0 AND reorderPercentage == 0 so items using % threshold aren't incorrectly flagged.
+
+---
+
+ITEM M6-2 — Purchase Invoice: global entry from Items tab + multi-storage support
+Files: AITest/Views/ItemListView.swift, AITest/Views/PurchaseInvoiceImportView.swift, AITest/Views/PurchaseReviewView.swift, AITest/Models/ParsedPurchaseRow.swift
+
+STEP A — Make defaultStorage optional in PurchaseInvoiceImportView:
+File: AITest/Views/PurchaseInvoiceImportView.swift
+Change:
+  let defaultStorage: Storage
+To:
+  let defaultStorage: Storage?
+
+Update any usage in the view that assumes non-nil:
+- Subtitle/description text: if let s = defaultStorage { "Importing into \(s.name)" } else { "AI extracts items across all your storages — review and assign storage before saving." }
+- Pass defaultStorage (now Storage?) through to PurchaseReviewView
+The existing StorageDetailView call `PurchaseInvoiceImportView(defaultStorage: storage)` passes a non-optional Storage — Swift handles this automatically. No changes needed to StorageDetailView.
+
+STEP B — Add targetStorage to ParsedPurchaseRow:
+File: AITest/Models/ParsedPurchaseRow.swift
+Add after existing fields:
+  var targetStorage: Storage? = nil
+
+STEP C — Auto-fill targetStorage during auto-resolve:
+In PurchaseInvoiceImportView's autoResolveRows() function (wherever resolvedItem is set on each row), also set:
+  rows[i].targetStorage = matchedItem.storage
+
+STEP D — Update PurchaseReviewView row display to show storage:
+File: AITest/Views/PurchaseReviewView.swift
+For each row:
+- If row.resolvedItem != nil: show storage pill using row.targetStorage?.name ?? row.resolvedItem?.storage?.name ?? "Unknown Storage"
+- If row.resolvedItem == nil AND defaultStorage != nil: show greyed pill "→ \(defaultStorage!.name)" (auto-assigned)
+- If row.resolvedItem == nil AND defaultStorage == nil: show a "Pick storage →" button that opens a storage picker sheet; tapping it sets row.targetStorage. Unmatched rows with no targetStorage cannot be confirmed (show validation error on "Confirm" tap: "Please assign a storage to all items before saving.")
+
+Storage picker sheet: simple NavigationStack + List of @Query(sort: \Storage.name) private var allStorages: [Storage]. On tap, set row.targetStorage = selected and dismiss.
+
+STEP E — Update save logic to use row's effective storage:
+In the save/confirm action (wherever InventoryMovements are created), replace any hard reference to defaultStorage with:
+  let movStorage = row.targetStorage ?? row.resolvedItem?.storage ?? defaultStorage
+  guard let movStorage else { continue } // skip unresolvable rows
+
+Keep all existing save logic for lastPurchasePrice, InventoryMovement creation, and Firestore sync.
+
+STEP F — Add global entry point in ItemListView:
+File: AITest/Views/ItemListView.swift
+1. Add: @State private var showingPurchaseInvoice = false
+2. In existing .toolbar block, add a new ToolbarItem:
+   ToolbarItem(placement: .topBarTrailing) {
+       Button {
+           showingPurchaseInvoice = true
+       } label: {
+           Image(systemName: "arrow.down.doc.fill")
+               .foregroundColor(.stoqlyPrimary)
+       }
+       .accessibilityIdentifier("globalInvoiceImportButton")
+   }
+3. Add sheet (outside the toolbar block, on the root view):
+   .sheet(isPresented: $showingPurchaseInvoice) {
+       PurchaseInvoiceImportView(defaultStorage: nil)
+           .sheetStyle()
+   }
+   IMPORTANT: PurchaseInvoiceImportView already has its own NavigationStack — do NOT add another one here.
+
+---
+
+ITEM M6-3 — Remove debug print logs from BarcodeEnrichmentService
+File: AITest/Services/BarcodeEnrichmentService.swift
+Search for all print() calls that contain "[Enrichment]" or any other debug prefix strings.
+Delete every such print() call line entirely.
+Do NOT remove any error handling, guard statements, or actual logic — only the debug print() lines.
+
+---
+
+ITEM M6-4 — Maestro flows for M6 features
+Files: maestro/flows/91_smart_insights_data_health.yaml, maestro/flows/92_global_invoice_import_entry.yaml
+Update: maestro/run_all.yaml (append both)
+Bundle ID: com.vishuddhi.stoqly
+App name assert: "Stoqly"
+
+FLOW 91 — 91_smart_insights_data_health.yaml:
+appId: com.vishuddhi.stoqly
+---
+- launchApp:
+    appId: com.vishuddhi.stoqly
+- tapOn:
+    id: "tab_dashboard" # or index 0, whichever reaches Dashboard tab
+- assertVisible:
+    text: "Smart Insights"
+    # if "Smart Insights" header is not the label used, assert any stable text on the Dashboard card instead
+
+FLOW 92 — 92_global_invoice_import_entry.yaml:
+appId: com.vishuddhi.stoqly
+---
+- launchApp:
+    appId: com.vishuddhi.stoqly
+- tapOn:
+    id: "tab_3" # Items tab (tag 3 in TabView — verify against InventoryAppView.swift)
+- assertVisible:
+    id: "globalInvoiceImportButton"
+- tapOn:
+    id: "globalInvoiceImportButton"
+- assertVisible:
+    text: "Purchase Invoice" # or whatever PurchaseInvoiceImportView's navigationTitle is
+- swipeUp: # dismiss sheet
+- assertNotVisible:
+    text: "Purchase Invoice"
+
+Append both to maestro/run_all.yaml flows list.
+
+---
+
+BUILD VERIFICATION:
+After all changes:
+  xcodebuild -project AITest.xcodeproj -scheme AITest -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+Must exit 0, BUILD SUCCEEDED.
+
+Update smart-inventory/automation_results.rtf with:
+{\b M6 — Pre-Ship Polish}\par
+[COMPLETED or FAILED]\par
+\bullet M6-1: Smart Insights data-health nudges (missing cost / selling price / min qty) + per-insight dismiss\par
+\bullet M6-2: PurchaseInvoiceImportView defaultStorage optional; targetStorage on ParsedPurchaseRow; global entry from Items tab toolbar\par
+\bullet M6-3: BarcodeEnrichmentService debug print removal\par
+\bullet M6-4: Maestro flows 91-92\par
+
+---
+
+PRE-SHIP REMINDER — Manual steps (NOT for Cursor — do these yourself before App Store build):
+1. Revert SubscriptionManager.swift line ~60: @Published var isPro = false  (was true for testing)
+2. Revert SubscriptionManager.swift line ~244: isPro = hasPro  (was: isPro = true)
+3. Run full Maestro suite and document results
+4. Physical device test — not just simulator
+5. StoreKit sandbox purchase + restore flow
+6. Firestore security rules review
+7. App Store Connect: verify product IDs configured (com.vishuddhi.stoqly.pro.monthly, .pro.annual, .removeads)
+8. App Store screenshots match current Stoqly UI
+
+
+===========================================
+BUG SPRINT 5 — Purchase Invoice + Smart Sales Polish (Cursor Spec)
+===========================================
+
+These are bugs found during M6 device testing. Items S5-1 through S5-4 are in
+PurchaseReviewView/PurchaseInvoiceImportView. Items S5-5 and S5-6 are in SmartSalesCSVView
+and SmartSalesPhotoView. READ each CONTEXT section carefully before touching any file.
+
+CRITICAL RULES (never violate):
+- Use modelContext.safeSave(context:) — never try? modelContext.save()
+- Insert ActivityEvent BEFORE modelContext.delete(item)
+- Never set isPro = true in any code
+- Never add a NavigationStack inside a view that will be shown INSIDE another NavigationStack
+- Use item.currentQuantity.smartFormatted — never String(format: "%.2f", ...)
+
+---
+
+ITEM S5-1 — PurchaseReviewView: Remove nested NavigationStack (double nav bar / double Cancel)
+File: AITest/Views/PurchaseReviewView.swift
+
+CONTEXT:
+PurchaseReviewView currently wraps its content in its own NavigationStack (the `body` computed
+property starts with `NavigationStack { reviewContent ... }`). But its callers —
+PurchaseInvoicePhotoView and PurchaseInvoicePDFView — already have their own NavigationStack
+and show PurchaseReviewView inline (not in a sheet). This creates a nested NavigationStack,
+resulting in two navigation bars and two Cancel buttons visible simultaneously.
+
+The same bug was fixed for SaleEntryReviewView in Bug Sprint 4 (S4-3). Follow the same fix.
+
+CHANGE — Remove the NavigationStack wrapper from PurchaseReviewView:
+
+BEFORE (PurchaseReviewView.body):
+  var body: some View {
+      NavigationStack {
+          reviewContent
+              .navigationTitle("Review Invoice")
+              .navigationBarTitleDisplayMode(.inline)
+              .toolbar {
+                  ToolbarItem(placement: .topBarLeading) {
+                      Button("Cancel") { onCancel() }
+                  }
+              }
+      }
+      .sheet(item: pickingStorageBinding) { ... }
+      .onAppear { autoResolveRows() }
+  }
+
+AFTER (PurchaseReviewView.body):
+  var body: some View {
+      reviewContent
+          .navigationTitle("Review Invoice")
+          .navigationBarTitleDisplayMode(.inline)
+          .toolbar {
+              ToolbarItem(placement: .topBarLeading) {
+                  Button("Cancel") { onCancel() }
+              }
+          }
+          .sheet(item: pickingStorageBinding) { ... }
+          .onAppear { autoResolveRows() }
+  }
+
+ALSO: In PurchaseInvoiceCSVView, the PurchaseReviewView is shown in a .sheet
+(`.sheet(isPresented: $showingReview) { PurchaseReviewView(...).environmentObject(...).sheetStyle() }`).
+A sheet needs its own NavigationStack for the nav bar. Wrap it:
+
+BEFORE:
+  .sheet(isPresented: $showingReview) {
+      PurchaseReviewView(
+          rows: $parsedRows,
+          defaultStorage: defaultStorage,
+          onConfirm: { dismiss() },
+          onCancel: { showingReview = false }
+      )
+      .environmentObject(currencyManager)
+      .sheetStyle()
+  }
+
+AFTER:
+  .sheet(isPresented: $showingReview) {
+      NavigationStack {
+          PurchaseReviewView(
+              rows: $parsedRows,
+              defaultStorage: defaultStorage,
+              onConfirm: { dismiss() },
+              onCancel: { showingReview = false }
+          )
+          .environmentObject(currencyManager)
+      }
+      .sheetStyle()
+  }
+
+Also remove the bottom `Button("Cancel") { onCancel() }` from reviewContent in PurchaseReviewView
+(the `.padding(.bottom, 12)` Cancel button at the bottom of VStack). The toolbar Cancel is sufficient.
+The toolbar Cancel button should read "Cancel" (existing) — do NOT change it.
+
+---
+
+ITEM S5-2 — PurchaseReviewRow: Lift item picker sheet to parent (ForEach binding / Undo bug)
+File: AITest/Views/PurchaseReviewView.swift
+
+CONTEXT:
+When the user taps "Link to item →" or "Change item" in a PurchaseReviewRow, a sheet
+(SaleItemPickerSheet) opens. The sheet is managed by @State inside PurchaseReviewRow itself
+(`@State private var showingItemPicker = false`). Because PurchaseReviewRow is rendered
+inside `ForEach($rows) { $row in ... }`, dismissing the sheet corrupts the @Binding var row,
+making the row go grey and show "Undo" — the same bug fixed in SaleEntryReviewView (S4-5).
+
+The fix: lift the sheet to the parent PurchaseReviewView, exactly as SaleEntryReviewView does
+with its `pickingRowItem: PickingRowID?` pattern.
+
+CHANGE A — Add item-picker state to PurchaseReviewView:
+In PurchaseReviewView, the existing `pickingStorageRowID: UUID?` already handles storage picker.
+Add a parallel state for item picker:
+  @State private var pickingItemRowID: UUID?
+
+CHANGE B — Add .sheet for item picker to PurchaseReviewView.body:
+Alongside the existing `.sheet(item: pickingStorageBinding)`, add:
+  .sheet(item: pickingItemRowIDBinding) { picking in
+      SaleItemPickerSheet { item in
+          if let index = rows.firstIndex(where: { $0.id == picking.id }) {
+              rows[index].resolvedItem = item
+              rows[index].targetStorage = item.storage
+          }
+          pickingItemRowID = nil
+      }
+      .sheetStyle()
+  }
+
+Add a computed binding alongside pickingStorageBinding:
+  private var pickingItemRowIDBinding: Binding<PickingItemRowID?> {
+      Binding(
+          get: { pickingItemRowID.map { PickingItemRowID(id: $0) } },
+          set: { pickingItemRowID = $0?.id }
+      )
+  }
+
+Add a private struct:
+  private struct PickingItemRowID: Identifiable {
+      let id: UUID
+  }
+
+CHANGE C — Update PurchaseReviewRow to use callback pattern:
+Remove @State private var showingItemPicker from PurchaseReviewRow.
+Remove the .sheet(isPresented: $showingItemPicker) from PurchaseReviewRow.body.
+Add a callback parameter to PurchaseReviewRow:
+  let onRequestItemPicker: () -> Void
+
+Update calls to showingItemPicker = true in PurchaseReviewRow with: onRequestItemPicker()
+
+CHANGE D — Update PurchaseReviewView.rowsList to pass callback:
+In the ForEach inside rowsList, pass:
+  PurchaseReviewRow(
+      row: $row,
+      catalogItems: catalogItems,
+      defaultStorage: defaultStorage,
+      currencyManager: currencyManager,
+      onRequestItemPicker: { pickingItemRowID = row.id },
+      onRequestStoragePicker: { pickingStorageRowID = row.id }
+  )
+
+CHANGE E — Remove "Pick storage →" button from PurchaseReviewRow:
+The "Pick storage →" Button in storageAssignmentRow is hard to tap and causes accidental taps
+on the adjacent "Link to item →" button. Remove it. Instead, unmatched rows with no defaultStorage
+will show a neutral grey pill "→ Assign storage" (non-tappable, informational only).
+The Confirm button validation already blocks saving until storage is assigned for all rows.
+
+Update storageAssignmentRow:
+  @ViewBuilder
+  private var storageAssignmentRow: some View {
+      if let defaultStorage, row.targetStorage == nil {
+          storagePill("→ \(defaultStorage.name)", highlighted: false)
+      } else if let name = row.targetStorage?.name {
+          storagePill("→ \(name)", highlighted: true)
+      } else if defaultStorage == nil {
+          storagePill("→ No storage", highlighted: false)
+              .foregroundColor(.secondary)  // already handled inside storagePill
+      }
+  }
+
+Update the validation error message in saveAllPurchases:
+  validationError = "Link unmatched items to inventory items first, or skip them."
+
+---
+
+ITEM S5-3 — PurchaseReviewView: UOM display in review rows
+File: AITest/Views/PurchaseReviewView.swift
+
+CONTEXT:
+The quantity/cost row in PurchaseReviewRow shows "Qty" and a text field, but never shows the
+unit of measure (e.g., "kg", "nos", "box"). Users can't verify if the parsed quantity is
+in the right unit.
+
+CHANGE — In PurchaseReviewRow.quantityCostRow, add UOM after the Qty label:
+  HStack(spacing: 4) {
+      Text("Qty").font(.caption).foregroundColor(.secondary)
+      TextField("0", value: $row.quantityReceived, format: .number)
+          .keyboardType(.decimalPad).frame(width: 60)
+      if let uomSymbol = row.resolvedItem?.uom?.symbol, !uomSymbol.isEmpty {
+          Text(uomSymbol).font(.caption2).foregroundColor(.secondary)
+      }
+  }
+
+No change to data model needed — uom is already on InventoryItem.
+
+---
+
+ITEM S5-4 — PurchaseInvoicePDFView: Show PDF preview after file is selected
+File: AITest/Views/PurchaseInvoiceImportView.swift
+
+CONTEXT:
+After the user selects a PDF in PurchaseInvoicePDFView, the `pickStep` view still shows
+only a "Choose PDF" button and (once selected) an "Analyse PDF" button. The user has no
+visual confirmation of which file was selected or what it contains. This is the "PDF mode"
+section of PurchaseInvoiceImportView.swift (struct PurchaseInvoicePDFView).
+
+CHANGE — Add a PDF thumbnail preview in pickStep after pdfURL is set:
+
+In pickStep, replace:
+  VStack(spacing: 16) {
+      Button("Choose PDF") { showingFilePicker = true }
+          .buttonStyle(.borderedProminent).tint(.orange)
+      if pdfURL != nil {
+          Button("Analyse PDF") { analyzePDF() }
+      }
+      if let errorMessage { Text(errorMessage).font(.caption).foregroundColor(.red) }
+      Spacer()
+  }
+  .padding()
+
+With:
+  VStack(spacing: 16) {
+      Button("Choose PDF") { showingFilePicker = true }
+          .buttonStyle(.borderedProminent).tint(.orange)
+      if let url = pdfURL {
+          // Thumbnail preview of first page
+          if let pdf = PDFDocument(url: url),
+             let page = pdf.page(at: 0) {
+              let thumb = page.thumbnail(of: CGSize(width: 280, height: 360), for: .mediaBox)
+              Image(uiImage: thumb)
+                  .resizable()
+                  .scaledToFit()
+                  .frame(maxHeight: 220)
+                  .cornerRadius(8)
+                  .shadow(radius: 3)
+              Text(url.lastPathComponent)
+                  .font(.caption).foregroundColor(.secondary)
+                  .lineLimit(1)
+          }
+          Button("Analyse PDF") { analyzePDF() }
+              .buttonStyle(.borderedProminent).tint(.orange)
+      }
+      if let errorMessage { Text(errorMessage).font(.caption).foregroundColor(.red) }
+      Spacer()
+  }
+  .padding()
+
+NOTE: PDFDocument and PDFPage are already imported (PDFKit is imported at the top of the file).
+The thumbnail call is synchronous so it's fine on the main thread for a single page.
+Wrap in `if let pdf = PDFDocument(url: url)` — this handles security-scoped access gracefully
+since pdfURL was already granted access when the fileImporter result was received.
+
+However, PDFDocument(url:) may fail for security-scoped URLs after the security scope ends.
+To be safe, store the first-page thumbnail as @State when pdfURL is set:
+
+Add to PurchaseInvoicePDFView:
+  @State private var pdfThumbnail: UIImage?
+  @State private var pdfFileName: String?
+
+Add a onChange(of: pdfURL) handler:
+  .onChange(of: pdfURL) { _, url in
+      guard let url else { pdfThumbnail = nil; return }
+      guard url.startAccessingSecurityScopedResource() else { return }
+      defer { url.stopAccessingSecurityScopedResource() }
+      pdfFileName = url.lastPathComponent
+      if let pdf = PDFDocument(url: url), let page = pdf.page(at: 0) {
+          pdfThumbnail = page.thumbnail(of: CGSize(width: 280, height: 360), for: .mediaBox)
+      }
+  }
+
+Then in pickStep, use `pdfThumbnail` and `pdfFileName` instead of re-opening the PDF.
+
+---
+
+ITEM S5-5 — PurchaseInvoiceCSVView: Empty review page after loading CSV/Excel
+File: AITest/Views/PurchaseInvoiceImportView.swift (struct PurchaseInvoiceCSVView)
+
+CONTEXT:
+PurchaseInvoiceCSVView uses SmartSalesCSVViewModel (designed for sales) to load the file.
+The ViewModel shows step >= 1 once a file is loaded and displays "N rows loaded — map columns
+in the file picker flow". But there is NO column mapping UI in PurchaseInvoiceCSVView —
+the user just sees "Convert & Review" button. When they tap it, vm.buildParsedRows() returns
+rows with empty itemName (because columnMapping wasn't manually confirmed) and all rows get
+filtered out by `.filter { !$0.itemName.isEmpty }`. Result: PurchaseReviewView shows empty.
+
+ALSO: The current PurchaseInvoiceCSVView reuses SmartSalesCSVViewModel which has sales-specific
+field types (SalesImportField). For purchases, the fields are: itemName, quantity, costPerUnit.
+
+FIX — Rewrite PurchaseInvoiceCSVView to include a column mapping step:
+
+Replace the current Form-based single-step UI with a 3-step flow mirroring SmartSalesCSVView:
+  - step 0: file picker
+  - step 1: column mapping (Item Name, Quantity, Unit Cost, Skip)
+  - step 2: preview (first 5 rows mapped)
+  - "Review" button launches PurchaseReviewView
+
+Create a PurchaseInvoiceCSVViewModel (new @MainActor ObservableObject in same file):
+  enum PurchaseImportField: String, CaseIterable, Identifiable {
+      case itemName = "Item Name"
+      case quantity = "Quantity"
+      case costPerUnit = "Unit Cost"
+      case notes = "Notes"
+      case skip = "— Skip —"
+      var id: String { rawValue }
+  }
+
+  @MainActor
+  final class PurchaseInvoiceCSVViewModel: ObservableObject {
+      @Published var step = 0
+      @Published var headers: [String] = []
+      @Published var rows: [[String]] = []
+      @Published var columnMapping: [Int: PurchaseImportField] = [:]
+      @Published var parseError: String?
+
+      var previewRows: [[String]] { Array(rows.prefix(5)) }
+      var canProceedToPreview: Bool {
+          columnMapping.values.contains(.itemName) && !rows.isEmpty
+      }
+
+      func loadFile(from url: URL) { /* same logic as SmartSalesCSVViewModel.loadFile */ }
+
+      func buildParsedRows() -> [ParsedPurchaseRow] {
+          rows.map { row in
+              ParsedPurchaseRow(
+                  itemName: value(row, .itemName),
+                  quantityReceived: Double(value(row, .quantity)) ?? 0,
+                  costPerUnit: Double(value(row, .costPerUnit).replacingOccurrences(of: "[^0-9.]",
+                               with: "", options: .regularExpression)) ?? 0,
+                  notes: value(row, .notes)
+              )
+          }.filter { !$0.itemName.isEmpty }
+      }
+
+      private func value(_ row: [String], _ field: PurchaseImportField) -> String {
+          guard let col = columnMapping.first(where: { $0.value == field })?.key,
+                col < row.count else { return "" }
+          return row[col].trimmingCharacters(in: .whitespacesAndNewlines)
+      }
+
+      func autoDetect() {
+          let rules: [(PurchaseImportField, [String])] = [
+              (.itemName,   ["item", "name", "product", "description", "particulars"]),
+              (.quantity,   ["qty", "quantity", "count", "units", "pcs", "nos"]),
+              (.costPerUnit, ["price", "rate", "cost", "unit price", "unit cost", "amount"]),
+              (.notes,      ["notes", "remarks", "hsn", "description"])
+          ]
+          var used = Set<PurchaseImportField>()
+          columnMapping = [:]
+          for (i, header) in headers.enumerated() {
+              let h = header.lowercased()
+              var matched: PurchaseImportField = .skip
+              for (field, keywords) in rules where !used.contains(field) {
+                  if keywords.contains(where: { h == $0 || h.contains($0) || $0.contains(h) }) {
+                      matched = field
+                      break
+                  }
+              }
+              if matched != .skip { used.insert(matched) }
+              columnMapping[i] = matched
+          }
+      }
+
+      // Reuse SmartSalesCSVViewModel's CSV parser logic (copy parseCSV function body)
+  }
+
+Rewrite PurchaseInvoiceCSVView.body to use a NavigationStack with step-based Group (same
+structure as SmartSalesCSVView — file picker step, mapping step, preview step).
+For the mapping step Picker, use:
+  Picker(vm.columnMapping[i]?.rawValue ?? "— Skip —", selection: Binding(
+      get: { vm.columnMapping[i] ?? .skip },
+      set: { vm.columnMapping[i] = $0 }
+  )) {
+      ForEach(PurchaseImportField.allCases) { field in
+          Text(field.rawValue).tag(field)
+      }
+  }
+  .pickerStyle(.menu)
+
+This replaces `Picker("Field", ...)` so the Picker button label shows the SELECTED field name
+instead of the static string "Field".
+
+---
+
+ITEM S5-6 — SmartSalesCSVView: Column mapping Picker shows "Field" instead of selection
+File: AITest/Views/SmartSalesCSVView.swift
+
+CONTEXT:
+In SmartSalesCSVView.mappingStep, each column header has a Picker:
+  Picker("Field", selection: Binding(
+      get: { vm.columnMapping[i] ?? .skip },
+      set: { vm.columnMapping[i] = $0 }
+  )) { ... }.pickerStyle(.menu)
+
+The label "Field" is shown as static text in all rows regardless of the selected value.
+Users can't tell what field is assigned to each column without tapping the picker.
+
+FIX — Change the Picker label to show the current selection:
+  Picker(vm.columnMapping[i]?.rawValue ?? "— Skip —", selection: Binding(
+      get: { vm.columnMapping[i] ?? .skip },
+      set: { vm.columnMapping[i] = $0 }
+  )) {
+      ForEach(SalesImportField.allCases) { field in
+          Text(field.rawValue).tag(field)
+      }
+  }
+  .pickerStyle(.menu)
+
+This makes the Picker button's label dynamically reflect the current selection
+(e.g., "Item Name", "Quantity", "— Skip —") so users can see mapping at a glance.
+
+---
+
+ITEM S5-7 — PurchaseReviewView + SaleEntryReviewView: Success toast after confirm
+Files: AITest/Views/PurchaseInvoiceImportView.swift, AITest/Views/SaleEntryReviewView.swift
+
+CONTEXT:
+After confirming a purchase invoice import, the sheet dismisses with no user feedback.
+The same issue exists for Smart Sales (SaleEntryReviewView posts a notification handled
+by SalesView per S4 spec, but if that wasn't implemented, add it now).
+
+For Purchase Invoice: after onConfirm() is called in saveAllPurchases(), the parent
+dismisses. Add a post-save notification so the caller can show a toast.
+
+CHANGE — In PurchaseReviewView.saveAllPurchases(), after modelContext.safeSave and before onConfirm(), post:
+  let savedCount = confirmableRows.count
+  // ... existing sync code ...
+  isSaving = false
+  NotificationCenter.default.post(
+      name: NSNotification.Name("stoqly.purchaseInvoiceConfirmed"),
+      object: nil,
+      userInfo: ["count": savedCount, "itemCount": updatedItems.count]
+  )
+  onConfirm()
+
+In StorageDetailView (which shows PurchaseInvoiceImportView via .sheet(isPresented: $showingInvoiceImport)),
+add a toast state and receive the notification:
+  @State private var savedPurchaseCount = 0
+  @State private var showPurchaseToast = false
+
+  // In body, add:
+  .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("stoqly.purchaseInvoiceConfirmed"))) { note in
+      savedPurchaseCount = note.userInfo?["itemCount"] as? Int ?? 0
+      showPurchaseToast = true
+      DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { showPurchaseToast = false }
+  }
+
+  // Toast overlay on StorageDetailView root view:
+  .overlay(alignment: .top) {
+      if showPurchaseToast {
+          HStack(spacing: 8) {
+              Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+              Text("\(savedPurchaseCount) item\(savedPurchaseCount == 1 ? "" : "s") received into stock")
+                  .font(.subheadline).fontWeight(.medium)
+          }
+          .padding(.horizontal, 16).padding(.vertical, 10)
+          .background(.regularMaterial, in: Capsule())
+          .shadow(radius: 4)
+          .padding(.top, 8)
+          .transition(.move(edge: .top).combined(with: .opacity))
+          .animation(.spring(response: 0.4), value: showPurchaseToast)
+      }
+  }
+
+ALSO add the same notification receive and toast to ItemListView for the global import entry
+point (added in M6-2). Exact same pattern, same notification name.
+
+---
+
+ITEM S5-8 — PurchaseReviewView: Investigate crash on confirm after matching
+File: AITest/Views/PurchaseReviewView.swift
+
+CONTEXT:
+After S5-1 (NavigationStack removal) and S5-2 (ForEach binding fix), test confirm again.
+The crash may be caused by the corrupted binding state that S5-2 fixes. If crash persists:
+
+Check saveAllPurchases() for any force-unwrap or unsafe array access. Specifically:
+- `let movStorage = row.targetStorage ?? item.storage ?? defaultStorage` — if movStorage is nil, it's guarded with `guard let movStorage else { continue }`. This is safe.
+- `modelContext.insert(event)` before `modelContext.insert(movement)` — check that ActivityEvent and InventoryMovement init don't throw.
+
+If the crash is from InventoryMovement init, add a try/catch around the modelContext.insert calls:
+  do {
+      modelContext.insert(event)
+      FirestoreManager.shared.syncActivity(event)
+      modelContext.insert(movement)
+      savedMovements.append(movement)
+  }
+  // (no catch needed — insert doesn't throw in SwiftData, but log if needed)
+
+If the crash is an index out of bounds during the ForEach deletion (`.onDelete`), ensure
+`rows.remove(atOffsets: $0)` is the only mutation happening. Do not sort or filter rows
+while the List is visible.
+
+---
+
+BUILD VERIFICATION:
+After all S5 items:
+  xcodebuild -project AITest.xcodeproj -scheme AITest -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+Must exit 0, BUILD SUCCEEDED.
+
+Manual device test checklist:
+1. Import Invoice → PDF → choose a PDF → thumbnail preview shows → tap Analyse → review appears with ONE nav bar, ONE Cancel button.
+2. Import Invoice → CSV → choose file → column mapping step shows → each Picker label shows the selected field name → tap Preview → tap Review → PurchaseReviewView with rows (not empty).
+3. PurchaseReviewView → tap "Link to item →" → picker opens → select item → row shows linked item, NO grey/undo glitch.
+4. PurchaseReviewView → tap Confirm → no crash → sheet dismisses → green toast appears in StorageDetailView/ItemListView.
+5. PurchaseReviewView rows → linked items show UOM symbol next to quantity.
+6. Smart Sales → CSV → column mapping step → all Pickers show selected field name.
+7. Smart Insights → Dashboard → data-health insights (Missing cost prices, Missing selling prices, Low-stock alerts disabled) appear FIRST before operational insights. No × button visible on rows.
+
+Update smart-inventory/automation_results.rtf with:
+{\b BUG SPRINT 5 — Purchase Invoice + Smart Sales Polish}\par
+[COMPLETED or FAILED]\par
+\bullet S5-1: PurchaseReviewView NavigationStack removed — one nav bar, one Cancel\par
+\bullet S5-2: PurchaseReviewRow item picker lifted to parent — no more Undo glitch\par
+\bullet S5-3: UOM displayed in purchase review rows\par
+\bullet S5-4: PDF thumbnail preview in PurchaseInvoicePDFView\par
+\bullet S5-5: PurchaseInvoiceCSVView 3-step mapping flow — review page no longer empty\par
+\bullet S5-6: SmartSalesCSVView column mapping Picker shows current selection\par
+\bullet S5-7: Success toast after purchase invoice confirm\par
+\bullet S5-8: Crash on confirm — investigate and fix if still present after S5-1/S5-2\par
+
+\par
+\par
+{\b BUG SPRINT 6 — Sync, Storage Labels, ForEach Binding, CSV Mapping UI}\par
+\par
+Fix 4 device-test regressions plus scan for identical patterns elsewhere in the codebase and fix those too.\par
+\par
+CRITICAL RULES (must be followed in every item):\par
+\bullet ALWAYS use modelContext.safeSave(context: "...") — NEVER try? modelContext.save()\par
+\bullet ActivityEvent MUST be inserted BEFORE modelContext.delete() — never after\par
+\bullet No inner NavigationStack inside any sheet/modal view\par
+\bullet Use .smartFormatted for quantities, String(format: "%.2f", ...) for currency only\par
+\par
+---\par
+\par
+{\b S6-1: Pull InventoryMovements from Firestore on sync}\par
+\par
+File: AITest/Models/FirestoreManager.swift\par
+\par
+Problem: InventoryMovement records are pushed to Firestore (pushInventoryMovement already exists) but are NEVER pulled back during pullFromCloud. After reinstall, the Movements tab shows "No Movements" even though movements exist in the cloud.\par
+\par
+Fix: In pullFromCloud(), add an inventoryMovements pull block immediately after the saleEvents pull block (which was already added — search for "pullFromCloud saleEvents" to find the insertion point). Add it BEFORE the final modelContext.safeSave(context: "pullFromCloud").\par
+\par
+Add this block:\par
+\par
+// Pull last 1000 inventory movements so the Movements tab survives reinstall\par
+let movementsSnap = try await db\par
+    .collection("users").document(uid)\par
+    .collection("inventoryMovements")\par
+    .order(by: "occurredAt", descending: true)\par
+    .getDocuments() // no limit — fetch all\par
+\par
+for doc in movementsSnap.documents \{\par
+    let d = doc.data()\par
+    guard let idString = d["id"] as? String,\par
+          let id = UUID(uuidString: idString),\par
+          let occurredTs = d["occurredAt"] as? Timestamp else \{ continue \}\par
+\par
+    let existing = (try? modelContext.fetch(\par
+        FetchDescriptor<InventoryMovement>(\par
+            predicate: #Predicate \{ $0.id == id \}\par
+        )\par
+    )) ?? []\par
+    guard existing.isEmpty else \{ continue \}\par
+\par
+    let movement = InventoryMovement(\par
+        item: nil,\par
+        itemName: d["itemName"] as? String ?? "",\par
+        itemSKU: d["itemSKU"] as? String ?? "",\par
+        storageName: d["storageName"] as? String ?? "",\par
+        category: d["category"] as? String ?? "",\par
+        direction: d["direction"] as? String ?? "IN",\par
+        movementType: d["movementType"] as? String ?? "",\par
+        quantity: d["quantity"] as? Double ?? 0,\par
+        pricePerUnit: d["pricePerUnit"] as? Double ?? 0,\par
+        notes: d["notes"] as? String ?? "",\par
+        occurredAt: occurredTs.dateValue(),\par
+        linkedSaleEventId: (d["linkedSaleEventId"] as? String).flatMap \{ UUID(uuidString: $0) \}\par
+    )\par
+    movement.id = id\par
+    if let createdTs = d["createdAt"] as? Timestamp \{\par
+        movement.createdAt = createdTs.dateValue()\par
+    \}\par
+    modelContext.insert(movement)\par
+\}\par
+modelContext.safeSave(context: "pullFromCloud inventoryMovements")\par
+\par
+Also scan: grep the codebase for any other "@Model" types that have a push function but no corresponding pull in pullFromCloud. If found, apply the same pattern.\par
+\par
+---\par
+\par
+{\b S6-2: Show storage name as plain label in both review screens}\par
+\par
+Files: AITest/Views/SaleEntryReviewView.swift, AITest/Views/PurchaseReviewView.swift\par
+\par
+Problem: After linking an item in Review Sales or Review Invoice, the storage name the item belongs to is not visible. User wants to see which storage is involved so they can confirm the mapping is correct. Show it as a plain non-tappable Text label (NOT a NavigationLink or Button).\par
+\par
+FIX A — SaleEntryReviewView.swift / SaleReviewRow:\par
+In the linked item HStack (where "→ ItemName" pill and "Change" button live), add a storage label below the HStack:\par
+\par
+// In SaleReviewRow body, in the linkSection where row.resolvedItem != nil:\par
+// CURRENT:\par
+if let linked = row.resolvedItem \{\par
+    HStack(spacing: 8) \{\par
+        Text("-> \(linked.name)")...\par
+        Button("Change") \{ onRequestItemPicker() \}...\par
+    \}\par
+    // no storage shown\par
+\}\par
+\par
+// AFTER — add storage label below the HStack:\par
+if let linked = row.resolvedItem \{\par
+    HStack(spacing: 8) \{\par
+        Text("-> \(linked.name)")...\par
+        Button("Change") \{ onRequestItemPicker() \}...\par
+    \}\par
+    if let storageName = linked.storage?.name, !storageName.isEmpty \{\par
+        Text(storageName)\par
+            .font(.caption2)\par
+            .foregroundColor(.secondary)\par
+    \}\par
+\}\par
+\par
+FIX B — PurchaseReviewView.swift / PurchaseReviewRow.storageLabel:\par
+The storageLabel property is: row.targetStorage?.name ?? row.resolvedItem?.storage?.name\par
+If both are nil the pill does not show. Add defaultStorage as final fallback:\par
+\par
+private var storageLabel: String? \{\par
+    row.targetStorage?.name ?? row.resolvedItem?.storage?.name ?? defaultStorage?.name\par
+\}\par
+\par
+Also verify: the storagePill for the linked case in PurchaseReviewRow.linkSection is present. It should be:\par
+    Text("-> \(linked.name)")\par
+    if let name = storageLabel \{ storagePill(name, highlighted: true) \}\par
+    Button("Change item") \{ onRequestItemPicker() \}\par
+If the storagePill call is missing, restore it.\par
+\par
+---\par
+\par
+{\b S6-3: Fix ForEach $row binding Undo glitch — both review screens}\par
+\par
+Files: AITest/Views/SaleEntryReviewView.swift, AITest/Views/PurchaseReviewView.swift\par
+\par
+Problem: After tapping an item in the SaleItemPickerSheet, the row immediately shows greyed-out with "Undo" (isSkipped appears true). Only after tapping "Undo" does the correctly-linked row appear. This happens in BOTH Review Sales and Review Invoice. Bug persists even after removing pickingItemRowID = nil from the callback.\par
+\par
+Root cause: ForEach($rows) derives $row bindings using SwiftUI's internal index tracking. When .sheet(item:) dismisses (via dismiss() inside SaleItemPickerSheet) at the same time as rows[i].resolvedItem is mutated, SwiftUI re-renders the ForEach during the dismiss animation. The derived $row binding can read stale state, causing isSkipped to appear true momentarily — and since SwiftUI's state is committed at that point, it stays stuck.\par
+\par
+Fix: Replace ForEach($rows) with an explicit stable-ID enumerated binding in BOTH files. This bypasses the derived binding entirely.\par
+\par
+Pattern to use (identical for both files, just with their respective Row/ParsedRow types):\par
+\par
+// BEFORE in SaleEntryReviewView (rowsList):\par
+ForEach($rows) \{ $row in\par
+    SaleReviewRow(\par
+        row: $row,\par
+        allItems: allItems,\par
+        currencyManager: currencyManager,\par
+        onRequestItemPicker: \{ pickingRowItem = PickingRowID(id: row.id) \}\par
+    )\par
+\}\par
+.onDelete \{ rows.remove(atOffsets: $0) \}\par
+\par
+// AFTER:\par
+ForEach(Array(rows.enumerated()), id: \\.element.id) \{ i, _ in\par
+    SaleReviewRow(\par
+        row: Binding(\par
+            get: \{ i < rows.count ? rows[i] : ParsedSaleRow(itemName: "", quantitySold: 0, pricePerUnit: 0) \},\par
+            set: \{ if i < rows.count \{ rows[i] = $0 \} \}\par
+        ),\par
+        allItems: allItems,\par
+        currencyManager: currencyManager,\par
+        onRequestItemPicker: \{ if i < rows.count \{ pickingRowItem = PickingRowID(id: rows[i].id) \} \}\par
+    )\par
+\}\par
+.onDelete \{ rows.remove(atOffsets: $0) \}\par
+\par
+// BEFORE in PurchaseReviewView (rowsList):\par
+ForEach($rows) \{ $row in\par
+    PurchaseReviewRow(\par
+        row: $row,\par
+        defaultStorage: defaultStorage,\par
+        currencyManager: currencyManager,\par
+        onRequestItemPicker: \{ pickingItemRowID = row.id \}\par
+    )\par
+\}\par
+.onDelete \{ rows.remove(atOffsets: $0) \}\par
+\par
+// AFTER:\par
+ForEach(Array(rows.enumerated()), id: \\.element.id) \{ i, _ in\par
+    PurchaseReviewRow(\par
+        row: Binding(\par
+            get: \{ i < rows.count ? rows[i] : ParsedPurchaseRow(itemName: "", quantityReceived: 0, costPerUnit: 0) \},\par
+            set: \{ if i < rows.count \{ rows[i] = $0 \} \}\par
+        ),\par
+        defaultStorage: defaultStorage,\par
+        currencyManager: currencyManager,\par
+        onRequestItemPicker: \{ if i < rows.count \{ pickingItemRowID = rows[i].id \} \}\par
+    )\par
+\}\par
+.onDelete \{ rows.remove(atOffsets: $0) \}\par
+\par
+Important: ParsedSaleRow and ParsedPurchaseRow both have let id = UUID() — stable identity. The enumerated id: \\.element.id uses each row's stable UUID so ForEach correctly tracks identity across deletes and re-renders.\par
+\par
+Also scan: search the entire codebase for other ForEach($array) patterns where a .sheet(item:) is used in the same view to mutate array elements. Apply the same enumerated Binding fix to any found. Likely candidates: VoiceInventoryView, QuickCountView, any other review screens.\par
+\par
+---\par
+\par
+{\b S6-4: Fix CSV column mapping UI — column name left, mapped field right}\par
+\par
+Files: AITest/Views/SmartSalesCSVView.swift (mappingStep), AITest/Views/PurchaseInvoiceImportView.swift (PurchaseInvoiceCSVView.mappingStep)\par
+\par
+Problem: The Picker label argument is currently set to vm.columnMapping[i]?.rawValue ?? "- Skip -" (the MAPPED field name). With .pickerStyle(.menu) inside a List, SwiftUI renders this as: LEFT=label ("- Skip -"), RIGHT=selection ("- Skip - arrows"). User sees "- Skip -" on BOTH sides and cannot tell which file column they are mapping.\par
+\par
+User wants: LEFT = the FILE'S column name (so they know what column it is), RIGHT = the assigned mapping (tappable to change).\par
+\par
+Fix: In mappingStep of BOTH SmartSalesCSVView and PurchaseInvoiceCSVView:\par
+1. Remove the separate Text(vm.headers[i]).fontWeight(.medium) line — the Picker label will now show the column name instead.\par
+2. Change the Picker label from the mapped field to the file column name.\par
+3. Keep the sample data caption line.\par
+\par
+// BEFORE (in both SmartSalesCSVView.mappingStep and PurchaseInvoiceCSVView.mappingStep):\par
+VStack(alignment: .leading, spacing: 4) \{\par
+    Text(vm.headers[i]).fontWeight(.medium)   // <-- remove this\par
+    if let sample = vm.rows.first, i < sample.count, !sample[i].isEmpty \{\par
+        Text("e.g. \(sample[i])").font(.caption).foregroundColor(.secondary)\par
+    \}\par
+    Picker(vm.columnMapping[i]?.rawValue ?? "- Skip -", selection: Binding(  // <-- label was mapped field\par
+        get: \{ vm.columnMapping[i] ?? .skip \},\par
+        set: \{ vm.columnMapping[i] = $0 \}\par
+    )) \{\par
+        ForEach(XxxImportField.allCases) \{ field in\par
+            Text(field.rawValue).tag(field)\par
+        \}\par
+    \}\par
+    .pickerStyle(.menu)\par
+\}\par
+\par
+// AFTER:\par
+VStack(alignment: .leading, spacing: 2) \{\par
+    if let sample = vm.rows.first, i < sample.count, !sample[i].isEmpty \{\par
+        Text("e.g. \(sample[i])").font(.caption).foregroundColor(.secondary)\par
+    \}\par
+    Picker(\par
+        vm.headers[i].isEmpty ? "Column \(i + 1)" : vm.headers[i],  // <-- FILE column name as label\par
+        selection: Binding(\par
+            get: \{ vm.columnMapping[i] ?? .skip \},\par
+            set: \{ vm.columnMapping[i] = $0 \}\par
+        )\par
+    ) \{\par
+        ForEach(XxxImportField.allCases) \{ field in\par
+            Text(field.rawValue).tag(field)\par
+        \}\par
+    \}\par
+    .pickerStyle(.menu)\par
+\}\par
+\par
+Where XxxImportField is SalesImportField for SmartSalesCSVView and PurchaseImportField for PurchaseInvoiceCSVView.\par
+\par
+Also check BulkImportView.swift (item import) for the same mapping step UI — if it also uses the mapped field as Picker label, apply the same fix there.\par
+\par
+---\par
+\par
+{\b Build verification}\par
+\par
+After all items:\par
+1. Build must succeed with zero errors and zero new warnings.\par
+2. Search entire codebase for remaining references to ForEach($rows) inside any view that also has a .sheet(item:) or .sheet(isPresented:) that mutates the same array — fix any found with the enumerated Binding pattern from S6-3.\par
+3. Search for any other @Model types (besides SaleEvent and InventoryMovement) that have a push function but no pull in pullFromCloud — if found, raise in results but do not add pulls without explicit instruction (some may be intentionally push-only).\par
+\par
+{\b Manual device test checklist}\par
+1. Uninstall app, reinstall, log in with same account -> Movements tab shows movements (not "No Movements").\par
+2. Sales review: link an item -> row immediately shows linked item pill + storage name, NO grey/undo flash.\par
+3. Invoice review: link an item -> row immediately shows linked item pill + storage name, NO grey/undo flash.\par
+4. Sales review: linked row shows storage name as plain grey text below the item pill.\par
+5. Invoice review: linked row shows storage name pill (highlighted) next to item name.\par
+6. CSV import (Sales): Map Columns screen shows FILE column name on left, current mapping on right as tappable picker.\par
+7. CSV import (Invoice): same as above.\par
+8. Smart Sales -> CSV -> import a file with "DAILY SALES REPORT" title row -> Map Columns correctly shows each column's file header on the left side.\par
+\par
+Update smart-inventory/automation_results.rtf with:\par
+{\b BUG SPRINT 6 — Sync, Storage Labels, ForEach Binding, CSV Mapping UI}\par
+[COMPLETED or FAILED]\par
+\bullet S6-1: InventoryMovements pulled from Firestore on reinstall\par
+\bullet S6-2: Storage name shown as label in Sales and Invoice review rows\par
+\bullet S6-3: ForEach enumerated Binding — no more Undo glitch in either review screen\par
+\bullet S6-4: CSV Map Columns UI — column name on left, mapping picker on right\par
+
+
+{\b CORRECTIONS TO BUG SPRINT 6 — apply these INSTEAD OF the corresponding sections above}\par
+\par
+The following corrections supersede parts of the S6 spec above. Read these before implementing.\par
+\par
+---\par
+\par
+{\b CORRECTION TO S6-2B — PurchaseReviewRow storage label must be PLAIN TEXT, not a styled pill}\par
+\par
+The original S6-2B spec says "restore the storagePill call for the linked case." That is WRONG.\par
+The user's request was: "Just show it as a label instead" — plain text, no background, not tappable.\par
+\par
+In PurchaseReviewRow.linkSection (PurchaseReviewView.swift), in the "if let linked = row.resolvedItem" branch:\par
+\par
+CURRENT:\par
+if let linked = row.resolvedItem \{\par
+    Text("-> \(linked.name)").font(.caption2).foregroundColor(.stoqlyPrimary)\par
+    if let name = storageLabel \{\par
+        storagePill(name, highlighted: true)   // <-- styled pill, NOT what user wants\par
+    \}\par
+    Button("Change item") \{ onRequestItemPicker() \}\par
+        .font(.caption2).foregroundColor(.secondary)\par
+\}\par
+\par
+AFTER (change storagePill to plain Text):\par
+if let linked = row.resolvedItem \{\par
+    Text("-> \(linked.name)").font(.caption2).foregroundColor(.stoqlyPrimary)\par
+    if let name = storageLabel \{\par
+        Text(name)                              // plain label — no background, no pill\par
+            .font(.caption2)\par
+            .foregroundColor(.secondary)\par
+    \}\par
+    Button("Change item") \{ onRequestItemPicker() \}\par
+        .font(.caption2).foregroundColor(.secondary)\par
+\}\par
+\par
+The storageLabel fallback update from the original spec is still correct:\par
+private var storageLabel: String? \{\par
+    row.targetStorage?.name ?? row.resolvedItem?.storage?.name ?? defaultStorage?.name\par
+\}\par
+\par
+Also update the manual device test checklist item 5 to read:\par
+5. Invoice review: linked row shows storage name as plain grey text below the item name (not a highlighted pill).\par
+\par
+---\par
+\par
+{\b CORRECTION TO S6-4 — DO NOT remove Text(vm.headers[i]). Only fix the Picker label.}\par
+\par
+The original S6-4 spec says:\par
+  "1. Remove the separate Text(vm.headers[i]).fontWeight(.medium) line"\par
+  "2. Change the Picker label from the mapped field to the file column name"\par
+\par
+This is WRONG. The Text(vm.headers[i]) line already exists and shows the column name correctly.\par
+The only bug is that the Picker also duplicates it by using the mapped field as the Picker label.\par
+With .pickerStyle(.menu), SwiftUI renders: [Picker-label (left)] [selected-value (right)].\par
+When the Picker label is vm.columnMapping[i]?.rawValue ?? "- Skip -", both sides show "- Skip -".\par
+\par
+CORRECT FIX — only two changes in each file:\par
+1. Change Picker("vm.columnMapping[i]?.rawValue ?? "- Skip -"", ...) to Picker("", ...)\par
+2. Add .labelsHidden() after .pickerStyle(.menu)\par
+Do NOT remove or modify the Text(vm.headers[i]).fontWeight(.medium) line.\par
+\par
+BEFORE (in SmartSalesCSVView.mappingStep AND PurchaseInvoiceCSVView.mappingStep):\par
+VStack(alignment: .leading, spacing: 4) \{\par
+    Text(vm.headers[i]).fontWeight(.medium)   // <-- KEEP THIS — shows column name\par
+    if let sample = vm.rows.first, i < sample.count, !sample[i].isEmpty \{\par
+        Text("e.g. \(sample[i])").font(.caption).foregroundColor(.secondary)\par
+    \}\par
+    Picker(vm.columnMapping[i]?.rawValue ?? "- Skip -", selection: Binding(  // <-- BUG: label duplicates mapped field\par
+        get: \{ vm.columnMapping[i] ?? .skip \},\par
+        set: \{ vm.columnMapping[i] = $0 \}\par
+    )) \{\par
+        ForEach(XxxImportField.allCases) \{ field in\par
+            Text(field.rawValue).tag(field)\par
+        \}\par
+    \}\par
+    .pickerStyle(.menu)\par
+\}\par
+\par
+AFTER — only the Picker label and labelsHidden change:\par
+VStack(alignment: .leading, spacing: 4) \{\par
+    Text(vm.headers[i]).fontWeight(.medium)   // <-- UNCHANGED — still shows column name\par
+    if let sample = vm.rows.first, i < sample.count, !sample[i].isEmpty \{\par
+        Text("e.g. \(sample[i])").font(.caption).foregroundColor(.secondary)\par
+    \}\par
+    Picker("", selection: Binding(            // <-- empty label\par
+        get: \{ vm.columnMapping[i] ?? .skip \},\par
+        set: \{ vm.columnMapping[i] = $0 \}\par
+    )) \{\par
+        ForEach(XxxImportField.allCases) \{ field in\par
+            Text(field.rawValue).tag(field)\par
+        \}\par
+    \}\par
+    .pickerStyle(.menu)\par
+    .labelsHidden()                           // <-- hides the empty label; only selection shows\par
+\}\par
+\par
+Where XxxImportField is SalesImportField for SmartSalesCSVView and PurchaseImportField for PurchaseInvoiceCSVView.\par
+\par
+Result: LEFT = column name (from Text above, bold), RIGHT = tappable picker showing only the selected mapping.\par
+This matches the BulkImportView.mappingStep pattern exactly — do NOT change BulkImportView.\par
+\par
+---\par
+
+
+{\b BUG SPRINT 7 — CSV Mapping Layout, UOM, Toast Timing}\par
+\par
+CRITICAL RULES (never violate):\par
+- Use modelContext.safeSave(context:) — never try? modelContext.save()\par
+- Insert ActivityEvent BEFORE modelContext.delete(item)\par
+- Never set isPro = true in any code\par
+- Use .font(.caption2) and .foregroundColor(.secondary) for all secondary labels in review rows\par
+\par
+---\par
+\par
+{\b S7-1: CSV Map Columns — horizontal two-column layout (column name left, picker right)}\par
+\par
+Files: AITest/Views/SmartSalesCSVView.swift (mappingStep), AITest/Views/PurchaseInvoiceImportView.swift (PurchaseInvoiceCSVView.mappingStep)\par
+\par
+Problem: Both mappingStep implementations use a VStack — so column name, sample, and picker all stack vertically in each row. The user wants a horizontal row: LEFT = fixed column name label, RIGHT = tappable picker. The current VStack layout puts the picker on a third line, not aligned right.\par
+\par
+Fix: Replace the outer VStack with an HStack in BOTH files. Column name + sample go in a left-side VStack. The Picker sits on the right, right-aligned.\par
+\par
+BEFORE (SmartSalesCSVView.mappingStep — same pattern in PurchaseInvoiceCSVView.mappingStep):\par
+VStack(alignment: .leading, spacing: 4) \{\par
+    Text(vm.headers[i]).fontWeight(.medium)\par
+    if let sample = vm.rows.first, i < sample.count, !sample[i].isEmpty \{\par
+        Text("e.g. \(sample[i])").font(.caption).foregroundColor(.secondary)\par
+    \}\par
+    Picker("", selection: Binding(\par
+        get: \{ vm.columnMapping[i] ?? .skip \},\par
+        set: \{ vm.columnMapping[i] = $0 \}\par
+    )) \{\par
+        ForEach(XxxImportField.allCases) \{ field in\par
+            Text(field.rawValue).tag(field)\par
+        \}\par
+    \}\par
+    .pickerStyle(.menu)\par
+    .labelsHidden()\par
+\}\par
+\par
+AFTER:\par
+HStack(alignment: .center, spacing: 12) \{\par
+    VStack(alignment: .leading, spacing: 2) \{\par
+        Text(vm.headers[i]).fontWeight(.medium).font(.subheadline)\par
+        if let sample = vm.rows.first, i < sample.count, !sample[i].isEmpty \{\par
+            Text("e.g. \(sample[i])").font(.caption).foregroundColor(.secondary)\par
+        \}\par
+    \}\par
+    Spacer()\par
+    Picker("", selection: Binding(\par
+        get: \{ vm.columnMapping[i] ?? .skip \},\par
+        set: \{ vm.columnMapping[i] = $0 \}\par
+    )) \{\par
+        ForEach(XxxImportField.allCases) \{ field in\par
+            Text(field.rawValue).tag(field)\par
+        \}\par
+    \}\par
+    .pickerStyle(.menu)\par
+    .labelsHidden()\par
+    .fixedSize()    // prevents the picker from expanding to fill Spacer\par
+\}\par
+\par
+Where XxxImportField is SalesImportField for SmartSalesCSVView and PurchaseImportField for PurchaseInvoiceCSVView.\par
+Result: each row is a horizontal pair — bold column name + sample on left, tappable mapping picker on right.\par
+\par
+Also check BulkImportView.swift mappingStep — if it still uses a VStack layout, apply the same HStack fix there too.\par
+\par
+---\par
+\par
+{\b S7-2: Add UOM symbol to SaleReviewRow quantity display}\par
+\par
+File: AITest/Views/SaleEntryReviewView.swift\par
+\par
+Problem: SaleReviewRow shows Qty + price but never shows the UOM symbol even when the linked inventory item has a UOM set. PurchaseReviewRow already shows it correctly (inside the qty HStack). Apply the same pattern to SaleReviewRow.\par
+\par
+Location: In SaleReviewRow body, inside the outer HStack(spacing: 16) that holds the qty and price groups. In the inner HStack(spacing: 4) that contains the "Qty" label and the quantitySold TextField:\par
+\par
+BEFORE:\par
+HStack(spacing: 4) \{\par
+    Text("Qty").font(.caption).foregroundColor(.secondary)\par
+    TextField("0", value: $quantitySold, format: .number).font(.caption)\par
+        .keyboardType(.decimalPad).frame(width: 60)\par
+\}\par
+\par
+AFTER — add UOM immediately after the TextField:\par
+HStack(spacing: 4) \{\par
+    Text("Qty").font(.caption).foregroundColor(.secondary)\par
+    TextField("0", value: $quantitySold, format: .number).font(.caption)\par
+        .keyboardType(.decimalPad).frame(width: 60)\par
+    if let uomSymbol = row.resolvedItem?.uom?.symbol, !uomSymbol.isEmpty \{\par
+        Text(uomSymbol).font(.caption2).foregroundColor(.secondary)\par
+    \}\par
+\}\par
+\par
+Note: row.resolvedItem is available because SaleReviewRow receives the full ParsedSaleRow as "let row: ParsedSaleRow" (non-binding copy), alongside the individual @Binding properties. Access uom via row.resolvedItem?.uom?.symbol.\par
+\par
+---\par
+\par
+{\b S7-3: Fix toast timing — post notification AFTER sheet dismiss, not before}\par
+\par
+Files: AITest/Views/SaleEntryReviewView.swift, AITest/Views/PurchaseReviewView.swift, AITest/Views/StorageDetailView.swift\par
+\par
+Problem: Both review screens post the confirmation notification BEFORE calling onConfirm(). This means the toast fires while the sheet is still animating closed. By the time the parent view becomes visible and the user can see the toast, the notification may have been received while the view was covered. Result: user sees the sheet dismiss with no visible toast feedback.\par
+\par
+FIX A — SaleEntryReviewView.swift, in saveAllSales():\par
+Move the NotificationCenter.default.post(stoqly.smartSalesConfirmed) call to AFTER onConfirm(), with a 0.5 second delay.\par
+\par
+BEFORE:\par
+NotificationCenter.default.post(\par
+    name: NSNotification.Name("stoqly.smartSalesConfirmed"),\par
+    object: nil,\par
+    userInfo: ["count": confirmableRows.count]\par
+)\par
+isSaving = false\par
+onConfirm()\par
+\par
+AFTER:\par
+isSaving = false\par
+onConfirm()    // dismiss sheets first\par
+let savedCount = confirmableRows.count\par
+DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) \{\par
+    NotificationCenter.default.post(\par
+        name: NSNotification.Name("stoqly.smartSalesConfirmed"),\par
+        object: nil,\par
+        userInfo: ["count": savedCount]\par
+    )\par
+\}\par
+\par
+FIX B — PurchaseReviewView.swift, in saveAllPurchases():\par
+Same pattern — move the stoqly.purchaseInvoiceConfirmed post to AFTER onConfirm() with 0.5s delay.\par
+\par
+BEFORE:\par
+NotificationCenter.default.post(\par
+    name: NSNotification.Name("stoqly.purchaseInvoiceConfirmed"),\par
+    object: nil,\par
+    userInfo: ["count": confirmableRows.count, "itemCount": updatedItems.count]\par
+)\par
+onConfirm()\par
+\par
+AFTER:\par
+let savedCount = confirmableRows.count\par
+let savedItemCount = updatedItems.count\par
+onConfirm()    // dismiss sheets first\par
+DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) \{\par
+    NotificationCenter.default.post(\par
+        name: NSNotification.Name("stoqly.purchaseInvoiceConfirmed"),\par
+        object: nil,\par
+        userInfo: ["count": savedCount, "itemCount": savedItemCount]\par
+    )\par
+\}\par
+\par
+FIX C — StorageDetailView.swift: add stoqly.smartSalesConfirmed listener\par
+StorageDetailView already has a showPurchaseToast state and listener for stoqly.purchaseInvoiceConfirmed. Add a parallel showSmartSalesToast state and listener for stoqly.smartSalesConfirmed, so that if Smart Sales is ever opened from StorageDetailView context, the toast shows there too.\par
+\par
+Add state var:\par
+@State private var showSmartSalesToast = false\par
+\par
+Add the toast overlay (same style as existing showPurchaseToast overlay):\par
+if showSmartSalesToast \{\par
+    VStack \{\par
+        Spacer()\par
+        Text("Sales recorded")\par
+            .font(.subheadline).fontWeight(.semibold)\par
+            .padding(.horizontal, 16).padding(.vertical, 10)\par
+            .background(Color(.systemBackground).opacity(0.95))\par
+            .cornerRadius(20)\par
+            .shadow(radius: 6)\par
+            .padding(.bottom, 32)\par
+    \}\par
+    .transition(.move(edge: .bottom).combined(with: .opacity))\par
+\}\par
+.animation(.spring(response: 0.4), value: showSmartSalesToast)\par
+\par
+Add the onReceive:\par
+.onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("stoqly.smartSalesConfirmed"))) \{ _ in\par
+    showSmartSalesToast = true\par
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) \{ showSmartSalesToast = false \}\par
+\}\par
+\par
+Check SalesView.swift — it already has the stoqly.smartSalesConfirmed listener and showSavedToast. No change needed there.\par
+Check ItemListView.swift — if it shows a smart sales entry point, add the same showSmartSalesToast pattern there too. If it only shows invoice import, it already has purchaseInvoiceConfirmed — no change needed.\par
+\par
+---\par
+\par
+{\b Build verification}\par
+\par
+After all items:\par
+1. Build must succeed with zero errors and zero new warnings.\par
+2. Confirm: CSV mapping screen (sales and invoice) shows column name bold on left, picker on right in each row.\par
+3. Confirm: SaleReviewRow shows UOM next to quantity when resolvedItem has a uom.symbol set.\par
+4. Confirm: After confirming a sale or invoice, the parent view shows a toast within 1 second of the sheet finishing its dismiss animation.\par
+\par
+{\b Manual device test checklist}\par
+1. Open Smart Sales -> CSV -> load a file -> Map Columns screen shows two-column layout: column name left, mapping picker right.\par
+2. Open Invoice Import -> CSV -> same two-column mapping layout.\par
+3. Sales review: link an item that has a UOM set -> qty row shows the UOM symbol next to the quantity.\par
+4. Confirm sales batch -> SalesView shows "Sales recorded" toast within 1-2 seconds.\par
+5. Confirm invoice import -> StorageDetailView (or wherever opened from) shows toast within 1-2 seconds.\par
+\par
+Update smart-inventory/automation_results.rtf with:\par
+{\b BUG SPRINT 7 — CSV Mapping Layout, UOM, Toast Timing}\par
+[COMPLETED or FAILED]\par
+\bullet S7-1: CSV map columns HStack layout — column name left, picker right\par
+\bullet S7-2: UOM symbol in SaleReviewRow qty group\par
+\bullet S7-3: Toast timing fixed — notification posted after dismiss, 0.5s delay; SmartSales toast added to StorageDetailView\par
+
+
+{\b CORRECTION TO BUG SPRINT 7 — ADD S7-4: Photo import auto-resolve timing fix}\par
+\par
+The earlier analysis of this bug was wrong. Photo OCR IS capturing item names correctly (Apple, Rice, Carrot all extracted accurately). The bug is a SwiftData query timing issue, not AI quality.\par
+\par
+Root cause: SmartSalesPhotoView is presented as a sheet-inside-a-sheet (SalesView -> SmartSalesEntryView -> SmartSalesPhotoView). When AI analysis completes, step switches to .review and SaleEntryReviewView is created fresh inline. SaleEntryReviewView has @Query private var allItems: [InventoryItem]. The .onAppear fires immediately — but the @Query has not yet delivered its first results on that runloop tick. So autoResolveRows() runs against an empty allItems array: nothing maps.\par
+\par
+For PDF this doesn't happen because the analysis takes 10-20 seconds. By the time step = .review fires, the @Query has long since settled and allItems is populated.\par
+\par
+The same timing issue does NOT affect autoResolveRows() in SmartSalesCSVView because the user manually taps through steps (step 0 -> 1 -> 2 -> review), giving the query time to settle.\par
+\par
+{\b S7-4: Fix autoResolveRows() timing in SaleEntryReviewView}\par
+\par
+File: AITest/Views/SaleEntryReviewView.swift\par
+\par
+Location: In SaleEntryReviewView.body, find the existing .onAppear modifier:\par
+.onAppear \{ autoResolveRows() \}\par
+\par
+Add .onChange(of: allItems) immediately after it:\par
+.onAppear \{ autoResolveRows() \}\par
+.onChange(of: allItems) \{ _, _ in autoResolveRows() \}\par
+\par
+This ensures autoResolveRows() re-fires the moment the @Query delivers its first results, regardless of which frame that happens in. The guard at the top of the loop (rows[index].resolvedItem == nil) prevents double-mapping rows that were already resolved.\par
+\par
+No other changes needed. The AI prompt is already correct — it passes knownItemNames and uses inventoryContext. The autoResolveRows() logic is already correct. The only issue is timing.\par
+\par
+Also: check SmartSalesPDFView and SmartSalesCSVView — if SaleEntryReviewView is presented inline (not as a sheet), apply the same .onChange(of: allItems) fix there too, as a safety net.\par
+\par
+Manual device test after fix:\par
+Smart Sales -> Photo -> take or pick a photo with items that exist in inventory -> Review Sales screen should show items already auto-linked (no "Link to inventory item" buttons for matched items).\par
+\par
+Add to automation_results.rtf Bug Sprint 7 checklist:\par
+\bullet S7-4: Photo import auto-resolve — items matching inventory names auto-link on Review Sales screen\par
+
+---
+
+{\b DASHBOARD PERIOD FIX — Bug Sprint 8 (DS-1)}
+{\b File: AITest/Views/DashboardView.swift}
+\par
+
+{\b DS-1: Add "Last 30 Days" period to dashboard and make it the default}
+\par
+
+{\b Overview}\par
+The KPI cards (Revenue, Gross Profit) default to "This Month" which shows 0 whenever the user hasn't made sales in the current calendar month — very common at the start of a month. "Last 30 Days" is a rolling window that always shows recent activity. Make it the default for both the KPI cards and the Sales Performance period pills.\par
+\par
+{\b CRITICAL RULES — apply to every change in this spec}\par
+\bullet NEVER use try? modelContext.save() — always use modelContext.safeSave(context: "...")\par
+\bullet Do NOT touch SubscriptionManager.swift isPro — it is already set to false for production\par
+\bullet Do NOT change line ~287 isPro = true inside updateEntitlements(for:) — that is correct production code for verified StoreKit transactions\par
+\par
+---\par
+
+{\b CHANGE 1: Add lastThirtyDays case to DashboardSalesPeriod enum}\par
+\par
+Location: DashboardView.swift, the DashboardSalesPeriod enum (approximately lines 50-54). Currently:\par
+\par
+enum DashboardSalesPeriod: String, CaseIterable \{\par
+    case today = "Today"\par
+    case thisWeek = "This Week"\par
+    case thisMonth = "This Month"\par
+\}\par
+\par
+Replace with (insert lastThirtyDays between thisWeek and thisMonth for logical pill ordering):\par
+\par
+enum DashboardSalesPeriod: String, CaseIterable \{\par
+    case today = "Today"\par
+    case thisWeek = "This Week"\par
+    case lastThirtyDays = "Last 30 Days"\par
+    case thisMonth = "This Month"\par
+\}\par
+\par
+
+{\b CHANGE 2: Change default period from .thisWeek to .lastThirtyDays}\par
+\par
+Location: DashboardView.swift, approximately line 40. Currently:\par
+\par
+@State private var dashboardSalesPeriod: DashboardSalesPeriod = .thisWeek\par
+\par
+Change to:\par
+\par
+@State private var dashboardSalesPeriod: DashboardSalesPeriod = .lastThirtyDays\par
+\par
+
+{\b CHANGE 3: Add lastThirtyDays date range to dashboardPeriodRange}\par
+\par
+Location: DashboardView.swift, the dashboardPeriodRange computed property (approximately lines 474-487). Currently:\par
+\par
+switch dashboardSalesPeriod \{\par
+case .today:\par
+    return cal.startOfDay(for: now)...now\par
+case .thisWeek:\par
+    let start = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now\par
+    return start...now\par
+case .thisMonth:\par
+    let start = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now\par
+    return start...now\par
+\}\par
+\par
+Add the new case before .thisMonth:\par
+\par
+switch dashboardSalesPeriod \{\par
+case .today:\par
+    return cal.startOfDay(for: now)...now\par
+case .thisWeek:\par
+    let start = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now\par
+    return start...now\par
+case .lastThirtyDays:\par
+    let start = cal.date(byAdding: .day, value: -30, to: now) ?? now\par
+    return start...now\par
+case .thisMonth:\par
+    let start = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now\par
+    return start...now\par
+\}\par
+\par
+
+{\b CHANGE 4: Add lastThirtyDays case to dashboardPeriodAsReportPeriod}\par
+\par
+Location: DashboardView.swift, dashboardPeriodAsReportPeriod computed property (approximately lines 511-517). Currently:\par
+\par
+private var dashboardPeriodAsReportPeriod: ReportsView.ReportPeriod \{\par
+    switch dashboardSalesPeriod \{\par
+    case .today: return .today\par
+    case .thisWeek: return .thisWeek\par
+    case .thisMonth: return .thisMonth\par
+    \}\par
+\}\par
+\par
+Add the new case:\par
+\par
+private var dashboardPeriodAsReportPeriod: ReportsView.ReportPeriod \{\par
+    switch dashboardSalesPeriod \{\par
+    case .today: return .today\par
+    case .thisWeek: return .thisWeek\par
+    case .lastThirtyDays: return .last30Days\par
+    case .thisMonth: return .thisMonth\par
+    \}\par
+\}\par
+\par
+Note: ReportsView.ReportPeriod already has case last30Days = "Last 30 Days" — no change needed in ReportsView.swift.\par
+\par
+
+{\b CHANGE 5: Fix Revenue KPI card period label (deltaText)}\par
+\par
+Location: DashboardView.swift, the Revenue DashboardCard call (approximately line 221). Currently:\par
+\par
+deltaText: "This \(dashboardSalesPeriod.rawValue.lowercased())",\par
+\par
+This produces "This last 30 days" / "this this week" etc. — incorrect. Replace with just the rawValue:\par
+\par
+deltaText: dashboardSalesPeriod.rawValue,\par
+\par
+This shows "Last 30 Days", "Today", "This Week", "This Month" clearly inside the Revenue card, so users always know what period the revenue figure covers.\par
+\par
+
+{\b Sales Performance pills — no code change needed}\par
+\par
+The salesPerformanceSection already uses ForEach(DashboardSalesPeriod.allCases) and sets dashboardSalesPeriod = period on tap. Adding lastThirtyDays to the enum automatically adds the pill. Changing the default @State to .lastThirtyDays means the "Last 30 Days" pill is selected by default. No further changes needed.\par
+\par
+
+{\b Build verification}\par
+\par
+After all changes:\par
+1. Build must succeed with zero errors and zero new warnings.\par
+2. Swift compiler must not warn about non-exhaustive switch — all four cases must be handled in dashboardPeriodRange and dashboardPeriodAsReportPeriod.\par
+3. Dashboard opens with "Last 30 Days" pill selected in Sales Performance.\par
+4. Revenue KPI card shows the period name (e.g., "Last 30 Days") in its delta label.\par
+5. Tapping "This Month" pill changes both KPI figures and the Sales Performance chart to the current-month range.\par
+\par
+
+{\b Manual device test checklist}\par
+1. Open Dashboard. Revenue and Gross Profit KPI cards show "Last 30 Days" as their period label.\par
+2. Sales Performance pills show: Today, This Week, Last 30 Days (selected), This Month.\par
+3. Tap "This Month" — KPI figures and chart update. If no sales this month, values show 0 (correct).\par
+4. Tap "Last 30 Days" — values return to 30-day window data.\par
+5. Revenue card delta label reflects the selected period name in all four cases.\par
+\par
+Update smart-inventory/automation_results.rtf with:\par
+{\b DASHBOARD PERIOD FIX — DS-1}\par
+[COMPLETED or FAILED]\par
+\bullet DS-1: Last 30 Days added to DashboardSalesPeriod, default changed, dashboardPeriodRange and dashboardPeriodAsReportPeriod updated, Revenue deltaText fixed\par
+
+---
+
+{\b SPRINT CLOSE — BUG SPRINT 9 (SC-1 through SC-4)}
+{\b Four issues reported after device testing. One-shot spec — no more cycles.}
+\par
+
+{\b CRITICAL RULES — apply to every change in this spec}\par
+\bullet ALWAYS use modelContext.safeSave(context: "...") — NEVER try? modelContext.save()\par
+\bullet Insert ActivityEvent BEFORE any modelContext.delete() call\par
+\bullet Barcode scanner MUST use .fullScreenCover, never .sheet\par
+\bullet Do NOT touch SubscriptionManager.swift isPro field\par
+\par
+---\par
+
+{\b SC-1: XLSX column headers showing blank — fix XLSXParser + add AI column mapping}\par
+\par
+{\b Root cause:} XLSXParser.swift looks up shared strings with a case-sensitive dictionary key "xl/sharedStrings.xml". Some Excel files (LibreOffice, Numbers, older Excel) store this as "xl/SharedStrings.xml" or other case variants. When the lookup fails, sharedStrings array stays empty. All cells of type="s" return empty strings. So every header in vm.headers is "", which makes the mapping UI show blank labels against Skip pickers.\par
+\par
+{\b Fix 1: XLSXParser.swift — case-insensitive shared strings lookup}\par
+\par
+File: AITest/Utilities/XLSXParser.swift\par
+\par
+Location: static func parse(data: Data), approximately lines 16-19. Currently:\par
+\par
+var sharedStrings: [String] = []\par
+if let ssData = entries["xl/sharedStrings.xml"] \{\par
+    sharedStrings = parseSharedStrings(xml: ssData)\par
+\}\par
+\par
+Replace with:\par
+\par
+var sharedStrings: [String] = []\par
+let ssKey = entries.keys.first(where: \{ $0.lowercased() == "xl/sharedstrings.xml" \})\par
+if let ssKey, let ssData = entries[ssKey] \{\par
+    sharedStrings = parseSharedStrings(xml: ssData)\par
+\}\par
+\par
+{\b Fix 2: XLSXParser.swift — handle t="str" and cells with xml:space attribute}\par
+\par
+Location: parseSheet, the cellType extraction block. Currently:\par
+\par
+var cellType = ""\par
+if let tRange = cTag.range(of: " t=\\"") \{\par
+\par
+No change needed — " t=\\"" correctly matches t="s", t="str", t="inlineStr" etc. This is fine.\par
+\par
+{\b Fix 3: Add AI-powered column mapping suggestion to SmartSalesCSVViewModel and PurchaseInvoiceCSVViewModel}\par
+\par
+The AI suggestion replaces the pure keyword autoDetect() as the primary mapping method. It passes headers and the first sample row to Claude API and gets back a structured field mapping. Falls back to autoDetect() if AI fails.\par
+\par
+File: AITest/Services/AIInventoryService.swift\par
+\par
+Add this new static method to AIInventoryService:\par
+\par
+static func suggestSalesColumnMapping(headers: [String], sampleRow: [String]) async throws -> [String: String] \{\par
+    let headerList = headers.enumerated().map \{ "Column \($0.offset): \\"\($0.element)\\"" \}.joined(separator: ", ")\par
+    let sampleList = sampleRow.enumerated().map \{ "Column \($0.offset): \\"\($0.element)\\"" \}.joined(separator: ", ")\par
+    let prompt = """\par
+    You are mapping spreadsheet columns for a sales import. Available fields: "Item Name", "Quantity", "Price Per Unit", "Date", "Notes", "— Skip —".\par
+    Headers: \(headerList)\par
+    First data row: \(sampleList)\par
+    Reply with ONLY a JSON object mapping column index (as string) to field name. Example: \{"0":"Item Name","1":"Quantity","2":"Price Per Unit","3":"— Skip —"\}\par
+    Map every column index. Use "— Skip —" for unrecognised columns.\par
+    """\par
+    let result = try await shared.callClaude(prompt: prompt, maxTokens: 200)\par
+    guard let data = result.data(using: .utf8),\par
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: String] else \{\par
+        throw NSError(domain: "AIInventoryService", code: 99, userInfo: [NSLocalizedDescriptionKey: "Could not parse mapping response"])\par
+    \}\par
+    return json\par
+\}\par
+\par
+Add a parallel method for purchase invoice:\par
+\par
+static func suggestPurchaseColumnMapping(headers: [String], sampleRow: [String]) async throws -> [String: String] \{\par
+    let headerList = headers.enumerated().map \{ "Column \($0.offset): \\"\($0.element)\\"" \}.joined(separator: ", ")\par
+    let sampleList = sampleRow.enumerated().map \{ "Column \($0.offset): \\"\($0.element)\\"" \}.joined(separator: ", ")\par
+    let prompt = """\par
+    You are mapping spreadsheet columns for a purchase invoice import. Available fields: "Item Name", "Quantity", "Unit Cost", "Notes", "— Skip —".\par
+    Headers: \(headerList)\par
+    First data row: \(sampleList)\par
+    Reply with ONLY a JSON object mapping column index (as string) to field name. Example: \{"0":"Item Name","1":"Quantity","2":"Unit Cost"\}\par
+    Map every column index. Use "— Skip —" for unrecognised columns.\par
+    """\par
+    let result = try await shared.callClaude(prompt: prompt, maxTokens: 200)\par
+    guard let data = result.data(using: .utf8),\par
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: String] else \{\par
+        throw NSError(domain: "AIInventoryService", code: 99, userInfo: [NSLocalizedDescriptionKey: "Could not parse mapping response"])\par
+    \}\par
+    return json\par
+\}\par
+\par
+Note: "callClaude" is whatever the existing internal Claude API call method is in AIInventoryService. Check the file for the correct method name and signature — adapt accordingly.\par
+\par
+File: AITest/Views/SmartSalesCSVView.swift — SmartSalesCSVViewModel\par
+\par
+Add to SmartSalesCSVViewModel:\par
+\par
+@Published var isSuggestingMappings = false\par
+\par
+Replace the loadFile() method's call to autoDetect() with an async AI suggestion:\par
+\par
+func loadFile(from url: URL) \{\par
+    parseError = nil\par
+    ...\par
+    (same parsing logic as before)\par
+    ...\par
+    headers = grid[0].map \{ $0.trimmingCharacters(in: .whitespacesAndNewlines) \}\par
+    rows = Array(grid.dropFirst()).filter \{ $0.contains(where: \{ !$0.isEmpty \}) \}\par
+    autoDetect() // immediate keyword fallback so UI isn't empty\par
+    step = 1\par
+    // AI-enhanced mapping runs async — updates columnMapping when done\par
+    Task \{ await aiEnhanceMapping() \}\par
+\}\par
+\par
+@MainActor\par
+private func aiEnhanceMapping() async \{\par
+    guard !headers.isEmpty, !rows.isEmpty else \{ return \}\par
+    isSuggestingMappings = true\par
+    defer \{ isSuggestingMappings = false \}\par
+    do \{\par
+        let sample = rows.first ?? []\par
+        let suggestions = try await AIInventoryService.suggestSalesColumnMapping(headers: headers, sampleRow: sample)\par
+        // Apply only where AI is more confident than autoDetect (i.e., any column)\par
+        for (indexStr, fieldName) in suggestions \{\par
+            guard let index = Int(indexStr) else \{ continue \}\par
+            let matched = SalesImportField.allCases.first \{ $0.rawValue == fieldName \} ?? .skip\par
+            // Only override if AI's suggestion differs or autoDetect said Skip\par
+            if columnMapping[index] == .skip || columnMapping[index] == nil \{\par
+                columnMapping[index] = matched\par
+            \}\par
+        \}\par
+    \} catch \{\par
+        // Silently fall back to autoDetect() result already applied\par
+    \}\par
+\}\par
+\par
+File: AITest/Views/SmartSalesCSVView.swift — mappingStep UI\par
+\par
+In mappingStep, add a loading banner above the list when isSuggestingMappings is true:\par
+\par
+private var mappingStep: some View \{\par
+    List \{\par
+        if vm.isSuggestingMappings \{\par
+            Section \{\par
+                HStack(spacing: 8) \{\par
+                    ProgressView().scaleEffect(0.8)\par
+                    Text("AI is suggesting column matches...")\par
+                        .font(.caption).foregroundColor(.secondary)\par
+                \}\par
+            \}\par
+        \}\par
+        Section(...existing mapping rows...)\par
+    \}\par
+\}\par
+\par
+Apply identical changes to PurchaseInvoiceCSVViewModel in AITest/Views/PurchaseInvoiceImportView.swift:\par
+\bullet Add isSuggestingMappings @Published var\par
+\bullet Replace autoDetect() with aiEnhanceMapping() using AIInventoryService.suggestPurchaseColumnMapping\par
+\bullet Use PurchaseImportField instead of SalesImportField\par
+\bullet Add same loading banner in PurchaseInvoiceCSVView.mappingStep\par
+\par
+---\par
+
+{\b SC-2: Add CSV/Excel import mode to SmartCountView}\par
+\par
+{\b Context:} Smart Count currently has Voice, Photo, Sheet. Users have spreadsheets with item names and new count quantities. Adding CSV/Excel completes the mode set and reuses existing infrastructure.\par
+\par
+File: AITest/Views/SmartCountView.swift\par
+\par
+Step 1 — Add state:\par
+@State private var showingCSV = false\par
+\par
+Step 2 — Add fourth mode card after the existing Sheet card (around line 126):\par
+\par
+modeCard(\par
+    icon: "tablecells",\par
+    iconColor: .green,\par
+    title: "CSV / Excel",\par
+    description: "Upload a spreadsheet with item names and quantities. AI maps columns — you review before saving.",\par
+    featureType: .paper, // reuse .paper for Pro gating; or add .csv if AIUsageFeatureType has it\par
+    action: \{\par
+        AnalyticsManager.shared.track(.smartCountModeSelected(mode: "csv"))\par
+        showingCSV = true\par
+    \}\par
+)\par
+\par
+Step 3 — Add sheet presentation after the existing .sheet(isPresented: $showingPaper):\par
+\par
+.sheet(isPresented: $showingCSV) \{\par
+    SmartCountCSVView(\par
+        storage: selectedStorage,\par
+        onComplete: \{ count in\par
+            onComplete?(count)\par
+        \}\par
+    )\par
+    .sheetStyle()\par
+\}\par
+\par
+File: AITest/Views/SmartCountView.swift — add SmartCountCSVView struct at the bottom of the file\par
+\par
+The SmartCountCSVView follows the exact same pattern as SmartSalesCSVView. Key differences:\par
+\bullet Fields: ItemName + Quantity only (no price, no date)\par
+\bullet On confirm: instead of creating SaleEvent, update InventoryItem.currentQuantity and create InventoryCount records\par
+\bullet Title: "Count Import"\par
+\par
+ViewModel:\par
+\par
+enum CountImportField: String, CaseIterable, Identifiable \{\par
+    case itemName = "Item Name"\par
+    case quantity = "Quantity"\par
+    case skip = "— Skip —"\par
+    var id: String \{ rawValue \}\par
+\}\par
+\par
+@MainActor\par
+final class SmartCountCSVViewModel: ObservableObject \{\par
+    @Published var step = 0\par
+    @Published var headers: [String] = []\par
+    @Published var rows: [[String]] = []\par
+    @Published var columnMapping: [Int: CountImportField] = [:]\par
+    @Published var parseError: String?\par
+    @Published var isSuggestingMappings = false\par
+\par
+    var previewRows: [[String]] \{ Array(rows.prefix(5)) \}\par
+    var canProceedToPreview: Bool \{ columnMapping.values.contains(.itemName) && !rows.isEmpty \}\par
+\par
+    func loadFile(from url: URL) \{\par
+        // same parsing logic as SmartSalesCSVViewModel — CSV + XLSX via XLSXParser\par
+        // after loading: autoDetect(), step = 1, Task \{ await aiEnhanceMapping() \}\par
+    \}\par
+\par
+    private func autoDetect() \{\par
+        let rules: [(CountImportField, [String])] = [\par
+            (.itemName, ["item", "name", "product", "description", "particulars", "goods"]),\par
+            (.quantity, ["qty", "quantity", "count", "units", "stock", "amount"])\par
+        ]\par
+        // same matching logic as SmartSalesCSVViewModel.autoDetect()\par
+    \}\par
+\par
+    @MainActor\par
+    private func aiEnhanceMapping() async \{\par
+        // same pattern as SC-1 but uses suggestPurchaseColumnMapping adapted for count fields\par
+        // or add a new suggestCountColumnMapping method to AIInventoryService with fields: "Item Name", "Quantity", "— Skip —"\par
+    \}\par
+\}\par
+\par
+View:\par
+\par
+struct SmartCountCSVView: View \{\par
+    let storage: Storage?\par
+    var onComplete: ((Int) -> Void)? = nil\par
+\par
+    @Environment(\\.dismiss) private var dismiss\par
+    @Environment(\\.modelContext) private var modelContext\par
+    @Query(sort: \InventoryItem.name) private var allItems: [InventoryItem]\par
+    @EnvironmentObject private var currencyManager: CurrencyManager\par
+    @StateObject private var vm = SmartCountCSVViewModel()\par
+    @State private var showFilePicker = false\par
+    @State private var showingReview = false\par
+    @State private var countRows: [(item: InventoryItem, newQty: Double)] = []\par
+\par
+    // Steps: 0=pick file, 1=map columns, 2=preview, 3=review+confirm\par
+    // mapping and preview steps: same as SmartSalesCSVView\par
+    // Review step: show list of matched items with new qty, unmatched items highlighted\par
+    // Confirm: for each matched row, create InventoryCount + update currentQuantity\par
+    // Use safeSave, not try? modelContext.save()\par
+    // Post "stoqly.smartCountConfirmed" notification after confirm for StorageDetailView toast\par
+\}\par
+\par
+On confirm in SmartCountCSVView, for each row where an InventoryItem matches by name (case-insensitive):\par
+\par
+1. Update item.currentQuantity to the new quantity from the CSV\par
+2. Create InventoryCount(\par
+       itemId: item.id,\par
+       itemName: item.name,\par
+       storageName: item.storage?.name ?? "",\par
+       quantityCounted: newQty,\par
+       previousQuantity: item.currentQuantity,\par
+       notes: "CSV import",\par
+       countedBy: AuthManager.shared.actorName\par
+   )\par
+3. modelContext.insert(count)\par
+4. FirestoreManager.shared.syncItem(item)\par
+5. After all rows: modelContext.safeSave(context: "SmartCountCSVImport")\par
+6. Call onComplete?(matchedRows.count)\par
+\par
+NOTE: Do NOT create an ActivityEvent per item. Create ONE ActivityEvent:\par
+let event = ActivityEvent(eventType: "BulkCountImported", itemName: "\\(matchedRows.count) items", storageName: storage?.name ?? "", performedBy: AuthManager.shared.actorName)\par
+modelContext.insert(event)\par
+modelContext.safeSave(context: "SmartCountCSVActivityEvent")\par
+\par
+---\par
+
+{\b SC-3: Invoice import — auto-dismiss parent sheet so toast is visible}\par
+\par
+{\b Root cause:} PurchaseReviewView posts "stoqly.purchaseInvoiceConfirmed" after onConfirm(). StorageDetailView listens and shows showPurchaseToast. BUT PurchaseInvoiceImportView (the outer sheet) is still presented when the notification fires — StorageDetailView is behind it. After 2.5s the toast times out. When user taps Done to dismiss PurchaseInvoiceImportView, the toast is already gone.\par
+\par
+{\b Fix:} Thread a completion callback through the entire invoice import hierarchy so all sheets dismiss together, revealing StorageDetailView BEFORE the 0.5s notification fires.\par
+\par
+File: AITest/Views/PurchaseInvoiceImportView.swift\par
+\par
+Step 1 — Add completion callback to PurchaseInvoiceImportView:\par
+\par
+struct PurchaseInvoiceImportView: View \{\par
+    let defaultStorage: Storage?\par
+    var onCompleted: (() -> Void)? = nil  // ADD THIS\par
+\par
+Step 2 — Pass onCompleted into each child sheet. Currently:\par
+.sheet(isPresented: $showingPhoto) \{\par
+    PurchaseInvoicePhotoView(defaultStorage: defaultStorage)\par
+\}\par
+\par
+Change to:\par
+.sheet(isPresented: $showingPhoto) \{\par
+    PurchaseInvoicePhotoView(\par
+        defaultStorage: defaultStorage,\par
+        onCompleted: \{ onCompleted?(); dismiss() \}\par
+    )\par
+\}\par
+.sheet(isPresented: $showingPDF) \{\par
+    PurchaseInvoicePDFView(\par
+        defaultStorage: defaultStorage,\par
+        onCompleted: \{ onCompleted?(); dismiss() \}\par
+    )\par
+\}\par
+.sheet(isPresented: $showingCSV) \{\par
+    PurchaseInvoiceCSVView(\par
+        defaultStorage: defaultStorage,\par
+        onCompleted: \{ onCompleted?(); dismiss() \}\par
+    )\par
+\}\par
+\par
+Step 3 — Add onCompleted parameter to each child view struct:\par
+\par
+struct PurchaseInvoicePhotoView: View \{\par
+    let defaultStorage: Storage?\par
+    var onCompleted: (() -> Void)? = nil  // ADD\par
+\par
+struct PurchaseInvoicePDFView: View \{\par
+    let defaultStorage: Storage?\par
+    var onCompleted: (() -> Void)? = nil  // ADD\par
+\par
+struct PurchaseInvoiceCSVView: View \{\par
+    let defaultStorage: Storage?\par
+    var onCompleted: (() -> Void)? = nil  // ADD\par
+\par
+Step 4 — In each child view, change onConfirm to call onCompleted:\par
+\par
+PurchaseInvoicePhotoView — currently:\par
+PurchaseReviewView(\par
+    rows: $parsedRows,\par
+    defaultStorage: defaultStorage,\par
+    onConfirm: \{ dismiss() \},\par
+    onCancel: \{ step = 0 \}\par
+)\par
+Change to:\par
+PurchaseReviewView(\par
+    rows: $parsedRows,\par
+    defaultStorage: defaultStorage,\par
+    onConfirm: \{ onCompleted?() ?? dismiss() \},\par
+    onCancel: \{ step = 0 \}\par
+)\par
+\par
+Apply identical change to PurchaseInvoicePDFView and PurchaseInvoiceCSVView.\par
+\par
+Step 5 — Update callers of PurchaseInvoiceImportView in StorageDetailView.swift:\par
+\par
+Find the .sheet that presents PurchaseInvoiceImportView and pass onCompleted: dismiss is handled inside. No change needed — the new parameter has a nil default so existing callers still compile.\par
+\par
+{\b Result:} When user taps Confirm in PurchaseReviewView → onCompleted() fires → BOTH PurchaseInvoicePhotoView AND PurchaseInvoiceImportView dismiss → StorageDetailView is visible → 0.5s later notification fires → toast shows clearly.\par
+\par
+---\par
+
+{\b SC-4: AddItemView barcode scan doesn't call enrichment}\par
+\par
+{\b Root cause:} AddItemView.fullScreenCover.onDismiss only sets barcode = code. It never calls BarcodeEnrichmentService. EditItemView correctly calls formVM.enrichFromBarcode() in its onDismiss, but AddItemView (which uses local @State vars, not ItemFormViewModel) has no equivalent.\par
+\par
+File: AITest/Views/StorageDetailView.swift — AddItemView struct\par
+\par
+Step 1 — Add isEnriching state:\par
+@State private var isEnriching = false\par
+\par
+Step 2 — Replace the existing fullScreenCover onDismiss:\par
+\par
+Currently:\par
+.fullScreenCover(\par
+    isPresented: $showingBarcodeScanner,\par
+    onDismiss: \{\par
+        if let code = pendingScannedBarcode \{\par
+            barcode = code\par
+            pendingScannedBarcode = nil\par
+        \}\par
+    \}\par
+)\par
+\par
+Replace with:\par
+.fullScreenCover(\par
+    isPresented: $showingBarcodeScanner,\par
+    onDismiss: \{\par
+        if let code = pendingScannedBarcode \{\par
+            barcode = code\par
+            pendingScannedBarcode = nil\par
+            // Enrich from barcode when name is still empty (user hasn't typed yet)\par
+            // Same guard as EditItemView: only enrich when the form is "clean"\par
+            if subscriptionManager.isPro && name.isEmpty \{\par
+                Task \{\par
+                    isEnriching = true\par
+                    defer \{ isEnriching = false \}\par
+                    if let product = await BarcodeEnrichmentService.shared.enrich(barcode: code) \{\par
+                        if name.isEmpty        \{ name = product.name \}\par
+                        if description.isEmpty \{ description = product.description \}\par
+                        if category == "Uncategorised" \{ category = product.category \}\par
+                        if selectedUOM == nil || selectedUOM?.isDefault == true \{\par
+                            if let matched = uoms.first(where: \{ $0.symbol == product.uomSymbol \}) \{\par
+                                selectedUOM = matched\par
+                            \}\par
+                        \}\par
+                    \}\par
+                \}\par
+            \}\par
+        \}\par
+    \}\par
+)\par
+\par
+Step 3 — Add loading indicator in the barcode HStack of AddItemView's form. Currently:\par
+\par
+HStack \{\par
+    TextField("Barcode (Optional)", text: $barcode)\par
+    if barcode.isEmpty \{\par
+        Button(action: \{ showingBarcodeScanner = true \}) \{\par
+            Image(systemName: "barcode.viewfinder")\par
+        \}\par
+    \}\par
+\}\par
+\par
+Add the loading indicator AFTER this HStack (as a new row in the same Section):\par
+\par
+if isEnriching \{\par
+    HStack(spacing: 8) \{\par
+        ProgressView().scaleEffect(0.8)\par
+        Text("Looking up product...")\par
+            .font(.caption).foregroundColor(.secondary)\par
+    \}\par
+\}\par
+\par
+This matches the identical pattern in EditItemView (lines 54-62).\par
+\par
+---\par
+
+{\b Build verification}\par
+\par
+After all four changes:\par
+1. Build must succeed with zero errors and zero new warnings.\par
+2. Swift compiler must not warn about unused variables or async tasks.\par
+3. No "non-exhaustive switch" warnings — all enum cases must be handled.\par
+\par
+{\b Manual device test checklist}\par
+\par
+SC-1:\par
+1. Open Smart Sales -> CSV/Excel -> choose an XLSX file created in Excel or Numbers.\par
+2. Map Columns screen: column names from the file appear on the LEFT side (not blank).\par
+3. "AI is suggesting column matches..." banner appears briefly then disappears.\par
+4. Column mappings update to better matches after AI suggestion completes.\par
+5. Repeat with CSV — should also work and show AI suggestions.\par
+6. Repeat for Purchase Invoice -> CSV/Excel — same behaviour.\par
+\par
+SC-2:\par
+1. Open Storage -> Smart Count icon.\par
+2. Mode picker shows four options: Voice, Photo, Sheet, CSV/Excel.\par
+3. Select CSV/Excel — file picker appears.\par
+4. Load a CSV with item names and quantities.\par
+5. Map columns, preview, confirm — item quantities update in the storage.\par
+6. ActivityEvent "BulkCountImported" appears in activity feed.\par
+\par
+SC-3:\par
+1. Open Storage -> Import Invoice -> PDF.\par
+2. Choose a PDF, tap Analyse PDF, review items, tap Confirm.\par
+3. BOTH the PDF review sheet AND the Import Invoice sheet dismiss together.\par
+4. Within 1-2 seconds, "X items received into stock" toast appears at the top of StorageDetailView.\par
+5. Repeat for Photo and CSV invoice import — same auto-dismiss and toast.\par
+\par
+SC-4:\par
+1. Open any Storage -> tap + (Add Item).\par
+2. In Add Item form, tap the barcode scanner icon.\par
+3. Scan a barcode (use any retail product).\par
+4. "Looking up product..." spinner appears briefly.\par
+5. Item Name, Description, and Category fields auto-fill from the barcode lookup.\par
+6. Verify this does NOT happen for free users (isPro = false) — barcode field fills but no enrichment.\par
+\par
+Update smart-inventory/automation_results.rtf with:\par
+{\b BUG SPRINT 9 — SC-1 through SC-4}\par
+[COMPLETED or FAILED for each]\par
+\bullet SC-1: XLSX shared strings case-insensitive + AI column mapping\par
+\bullet SC-2: CSV/Excel mode in SmartCountView\par
+\bullet SC-3: Invoice import auto-dismiss + toast chain\par
+\bullet SC-4: AddItemView barcode enrichment\par
+
+\par
+---\par
+\par
+{\b APP STORE REJECTION FIXES \emdash Build 14}\par
+\par
+Two App Store guideline violations identified in submission accc3d0f. Fix all items below then submit build 14.\par
+\par
+CRITICAL RULES (never violate):\par
+- Use modelContext.safeSave(context:) -- never try? modelContext.save()\par
+- Insert ActivityEvent BEFORE modelContext.delete(item)\par
+- Never set isPro = true in any code\par
+- Never add NavigationStack inside a sheet/modal that already has one\par
+\par
+---\par
+\par
+{\b ITEM 1 \emdash EULA + Privacy Policy links in PaywallView (fixes Guideline 3.1.2c)}\par
+\par
+File: AITest/Models/SubscriptionManager.swift\par
+Location: PaywallView body \emdash the "Legal" VStack(spacing: 12) block (around line 491)\par
+\par
+Find this VStack block inside PaywallView.body:\par
+\par
+    // Legal\par
+    VStack(spacing: 12) \{\par
+        Button("Restore Purchases") \{\par
+            AnalyticsManager.shared.track(.restorePurchaseTapped)\par
+            Task \{ await sub.restorePurchases() \}\par
+        \}\par
+        .font(.subheadline).foregroundColor(.blue)\par
+\par
+        if selectedTab == .pro \{\par
+            Text("Pro subscriptions auto-renew...")\par
+\par
+Replace it with:\par
+\par
+    // Legal\par
+    VStack(spacing: 12) \{\par
+        Button("Restore Purchases") \{\par
+            AnalyticsManager.shared.track(.restorePurchaseTapped)\par
+            Task \{ await sub.restorePurchases() \}\par
+        \}\par
+        .font(.subheadline).foregroundColor(.blue)\par
+\par
+        // Required by App Store guideline 3.1.2(c)\par
+        HStack(spacing: 16) \{\par
+            Link("Terms of Use",\par
+                 destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)\par
+            Text("·").foregroundColor(.secondary)\par
+            Link("Privacy Policy",\par
+                 destination: URL(string: "https://vishuddhi.in/privacy.html")!)\par
+        \}\par
+        .font(.caption)\par
+        .foregroundColor(.blue)\par
+\par
+        if selectedTab == .pro \{\par
+            Text("Pro subscriptions auto-renew...")\par
+\par
+(keep the rest of the if/else and closing braces unchanged)\par
+\par
+---\par
+\par
+{\b ITEM 2 \emdash Sign in with Apple backend in AuthManager (fixes Guideline 4.8)}\par
+\par
+File: AITest/Models/AuthManager.swift\par
+\par
+Step A \emdash Add imports at the TOP of the file after existing imports:\par
+    import CryptoKit\par
+    import AuthenticationServices\par
+\par
+Step B \emdash Add this private property inside the AuthManager class body, after "static let shared = AuthManager()":\par
+    private var currentNonce: String?\par
+\par
+Step C \emdash Add these methods after the existing signInWithGoogle() method:\par
+\par
+    // MARK: - Sign in with Apple\par
+\par
+    func prepareAppleSignIn() -> String \{\par
+        let nonce = randomNonceString()\par
+        currentNonce = nonce\par
+        return sha256(nonce)\par
+    \}\par
+\par
+    func signInWithApple(authorization: ASAuthorization) async \{\par
+        guard\par
+            let appleCredential = authorization.credential as? ASAuthorizationAppleIDCredential,\par
+            let nonce = currentNonce,\par
+            let appleIDToken = appleCredential.identityToken,\par
+            let idTokenString = String(data: appleIDToken, encoding: .utf8)\par
+        else \{\par
+            errorMessage = "Unable to fetch identity token from Apple."\par
+            showError = true\par
+            return\par
+        \}\par
+        let firebaseCredential = OAuthProvider.appleCredential(\par
+            withIDToken: idTokenString,\par
+            rawNonce: nonce,\par
+            fullName: appleCredential.fullName\par
+        )\par
+        isLoading = true\par
+        defer \{ isLoading = false \}\par
+        do \{\par
+            let result = try await Auth.auth().signIn(with: firebaseCredential)\par
+            currentUser = result.user\par
+            isAuthenticated = true\par
+        \} catch \{\par
+            handleAuthError(error)\par
+        \}\par
+    \}\par
+\par
+    private func randomNonceString(length: Int = 32) -> String \{\par
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")\par
+        var result = ""\par
+        var remainingLength = length\par
+        while remainingLength > 0 \{\par
+            let randoms: [UInt8] = (0 ..< 16).map \{ _ in\par
+                var random: UInt8 = 0\par
+                _ = SecRandomCopyBytes(kSecRandomDefault, 1, &random)\par
+                return random\par
+            \}\par
+            randoms.forEach \{ random in\par
+                if remainingLength == 0 \{ return \}\par
+                if random < charset.count \{\par
+                    result.append(charset[Int(random)])\par
+                    remainingLength -= 1\par
+                \}\par
+            \}\par
+        \}\par
+        return result\par
+    \}\par
+\par
+    private func sha256(_ input: String) -> String \{\par
+        let inputData = Data(input.utf8)\par
+        let hashedData = SHA256.hash(data: inputData)\par
+        return hashedData.compactMap \{ String(format: "%02x", $0) \}.joined()\par
+    \}\par
+\par
+---\par
+\par
+{\b ITEM 3 \emdash Sign in with Apple button in AuthView (fixes Guideline 4.8)}\par
+\par
+File: AITest/Views/AuthView.swift\par
+\par
+Step A \emdash Add this import at the top of the file after existing imports:\par
+    import AuthenticationServices\par
+\par
+Step B \emdash Find the Google Sign-In button block ending with:\par
+    .disabled(authManager.isLoading)\par
+\par
+    // Forgot Password (Sign In only)\par
+    if !isSignUp \{\par
+\par
+INSERT the following between the Google button's .disabled() modifier and the Forgot Password block:\par
+\par
+            // "OR" divider before Apple button\par
+            HStack \{\par
+                Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.3))\par
+                Text("OR")\par
+                    .font(.caption).foregroundColor(.white.opacity(0.7))\par
+                    .padding(.horizontal, 16)\par
+                Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.3))\par
+            \}\par
+\par
+            // Sign in with Apple -- required by App Store guideline 4.8\par
+            SignInWithAppleButton(\par
+                .continue,\par
+                onRequest: \{ request in\par
+                    request.requestedScopes = [.fullName, .email]\par
+                    request.nonce = authManager.prepareAppleSignIn()\par
+                \},\par
+                onCompletion: \{ result in\par
+                    switch result \{\par
+                    case .success(let authorization):\par
+                        Task \{ await authManager.signInWithApple(authorization: authorization) \}\par
+                    case .failure:\par
+                        break // user cancelled -- no error needed\par
+                    \}\par
+                \}\par
+            )\par
+            .signInWithAppleButtonStyle(.white)\par
+            .frame(height: 50)\par
+            .cornerRadius(12)\par
+            .disabled(authManager.isLoading)\par
+\par
+---\par
+\par
+{\b ITEM 4 \emdash Add Sign in with Apple entitlement}\par
+\par
+File: AITest/AITest.entitlements\par
+\par
+Replace the entire file content with:\par
+\par
+    <?xml version="1.0" encoding="UTF-8"?>\par
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\par
+    <plist version="1.0">\par
+    <dict>\par
+        <key>aps-environment</key>\par
+        <string>production</string>\par
+        <key>com.apple.developer.applesignin</key>\par
+        <array>\par
+            <string>Default</string>\par
+        </array>\par
+    </dict>\par
+    </plist>\par
+\par
+---\par
+\par
+{\b Build verification}\par
+\par
+After all four changes:\par
+1. Build must succeed with zero errors and zero new warnings.\par
+2. CryptoKit and AuthenticationServices import cleanly -- no "No such module" errors.\par
+3. SignInWithAppleButton renders in the auth screen (white button, below Google button).\par
+4. Terms of Use and Privacy Policy links appear at the bottom of PaywallView.\par
+5. Tapping Terms of Use opens https://www.apple.com/legal/internet-services/itunes/dev/stdeula/ in Safari.\par
+6. Tapping Privacy Policy opens https://vishuddhi.in/privacy.html in Safari.\par
+\par
+{\b Manual test checklist}\par
+\par
+ITEM 1 \emdash PaywallView legal links:\par
+1. Open app -> Settings -> tap "Upgrade to Pro"\par
+2. Scroll to bottom of PaywallView\par
+3. Confirm "Terms of Use" and "Privacy Policy" links visible below "Restore Purchases"\par
+4. Tap Terms of Use -> Apple EULA page opens in Safari\par
+5. Tap Privacy Policy -> https://vishuddhi.in/privacy.html opens in Safari\par
+\par
+ITEMs 2+3 \emdash Sign in with Apple:\par
+1. Log out of app\par
+2. "Continue with Apple" button visible below "Continue with Google"\par
+3. Tap it -> Face ID/Touch ID sheet from Apple appears\par
+4. Complete authentication -> app opens InventoryAppView\par
+5. Tap "Continue with Apple" again with same Apple ID -> logs in without prompting email again\par
+\par
+Update smart-inventory/automation_results.rtf with:\par
+{\b APP STORE REJECTION FIXES \emdash Build 14}\par
+[COMPLETED or FAILED for each]\par
+\bullet ITEM 1: EULA + Privacy Policy links in PaywallView\par
+\bullet ITEM 2: Sign in with Apple -- AuthManager backend\par
+\bullet ITEM 3: Sign in with Apple -- AuthView button\par
+\bullet ITEM 4: AITest.entitlements updated\par
+
+\par
+---\par
+\par
+{\b ADDENDUM to ITEM 2 \emdash Save display name on first Apple Sign-Up}\par
+\par
+Apple only returns the user's full name on the VERY FIRST sign-in. On all subsequent\par
+sign-ins, fullName fields are nil. Firebase will not retry asking Apple for it.\par
+So the name must be saved to the Firebase user profile immediately.\par
+\par
+In the signInWithApple() method in AuthManager.swift, after the successful\par
+Auth.auth().signIn(with: firebaseCredential) call, add:\par
+\par
+    // Save display name to Firebase profile on first Apple sign-up\par
+    // Apple only provides fullName once -- save it immediately or it is lost forever\par
+    if let fullName = appleCredential.fullName,\par
+       let givenName = fullName.givenName \{\par
+        let displayName = [givenName, fullName.familyName]\par
+            .compactMap \{ $0 \}\par
+            .joined(separator: " ")\par
+        if !displayName.isEmpty \{\par
+            let changeRequest = result.user.createProfileChangeRequest()\par
+            changeRequest.displayName = displayName\par
+            try? await changeRequest.commitChanges()\par
+        \}\par
+    \}\par
+    currentUser = Auth.auth().currentUser  // refresh after profile update\par
+\par
+This goes directly after:\par
+    let result = try await Auth.auth().signIn(with: firebaseCredential)\par
+And before:\par
+    currentUser = result.user\par
+    isAuthenticated = true\par
+\par
+(Replace the "currentUser = result.user" line with "currentUser = Auth.auth().currentUser"\par
+so it picks up the updated displayName after commitChanges.)\par

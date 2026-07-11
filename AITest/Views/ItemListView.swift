@@ -14,6 +14,7 @@ struct ItemListView: View {
     @State private var showingNoStorageAlert = false
     @State private var showingExport = false
     @State private var showingSmartCount = false
+    @State private var showingPurchaseInvoice = false
     @State private var showingEditItem: InventoryItem?
     @State private var showingDeleteAlert: InventoryItem?
     @State private var showingQuickCount: InventoryItem? = nil
@@ -34,6 +35,8 @@ struct ItemListView: View {
     /// Bottom toast confirming a destructive action (item deletion). Auto-clears
     /// after ~2 seconds via the `.toast(message:)` view modifier.
     @State private var toastMessage: String? = nil
+    @State private var savedPurchaseCount = 0
+    @State private var showPurchaseToast = false
     @State private var selectedSpotlightItem: InventoryItem? = nil
 
     /// Identifiable wrapper for the "scanned barcode that didn't match any
@@ -65,6 +68,14 @@ struct ItemListView: View {
                                 .foregroundColor(.stoqlyPrimary)
                         }
                         .accessibilityLabel("Export Data")
+
+                        Button(action: { showingPurchaseInvoice = true }) {
+                            Image(systemName: "arrow.down.doc.fill")
+                                .font(.title2)
+                                .foregroundColor(.stoqlyPrimary)
+                        }
+                        .accessibilityLabel("Import Invoice")
+                        .accessibilityIdentifier("globalInvoiceImportButton")
 
                         Button(action: { showingScanToFind = true }) {
                             Image(systemName: "barcode.viewfinder")
@@ -161,6 +172,7 @@ struct ItemListView: View {
                             }
                             .padding(.horizontal)
                         }
+                        .padding(.bottom, 10)
                     }
 
                     SearchBar(text: $viewModel.searchText, placeholder: "Search items...")
@@ -258,6 +270,12 @@ struct ItemListView: View {
         }
         .sheet(isPresented: $showingSmartCount) {
             SmartCountView().sheetStyle()
+        }
+        .sheet(isPresented: $showingPurchaseInvoice) {
+            PurchaseInvoiceImportView(defaultStorage: nil)
+                .environmentObject(currencyManager)
+                .environmentObject(subscriptionManager)
+                .sheetStyle()
         }
         .sheet(item: $showingEditItem) { item in
             EditItemView(item: item)
@@ -379,6 +397,26 @@ struct ItemListView: View {
             .sheetStyle()
         }
         .toast(message: $toastMessage)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("stoqly.purchaseInvoiceConfirmed"))) { note in
+            savedPurchaseCount = note.userInfo?["itemCount"] as? Int ?? 0
+            showPurchaseToast = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { showPurchaseToast = false }
+        }
+        .overlay(alignment: .top) {
+            if showPurchaseToast {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                    Text("\(savedPurchaseCount) item\(savedPurchaseCount == 1 ? "" : "s") received into stock")
+                        .font(.subheadline).fontWeight(.medium)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .background(.regularMaterial, in: Capsule())
+                .shadow(radius: 4)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .animation(.spring(response: 0.4), value: showPurchaseToast)
+            }
+        }
     }
 
     private func beginAddItem() {

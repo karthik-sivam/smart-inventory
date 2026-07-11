@@ -111,6 +111,10 @@ env:
 - runFlow: flows/89_sales_item_picker.yaml
 - runFlow: flows/90_smart_sales_pro_gate.yaml
 
+# ── Pre-Ship Polish (91–92) ─────────────────────
+- runFlow: flows/91_smart_insights_data_health.yaml
+- runFlow: flows/92_global_invoice_import_entry.yaml
+
 # ── Paywall flows (manual — need seeded data) ────
 # - runFlow: flows/17_paywall_storage_limit.yaml
 # - runFlow: flows/18_paywall_item_limit.yaml

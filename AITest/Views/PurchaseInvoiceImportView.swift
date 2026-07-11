@@ -4,7 +4,8 @@ import PDFKit
 import UniformTypeIdentifiers
 
 struct PurchaseInvoiceImportView: View {
-    let defaultStorage: Storage
+    let defaultStorage: Storage?
+    var onCompleted: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
@@ -25,9 +26,15 @@ struct PurchaseInvoiceImportView: View {
                             .foregroundStyle(Color.stoqlyPrimary)
                         Text("Import Invoice")
                             .font(.title2).fontWeight(.bold)
-                        Text("Upload a supplier invoice for \(defaultStorage.name). AI extracts items — you review before stock is updated.")
-                            .font(.subheadline).foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
+                        if let storage = defaultStorage {
+                            Text("Upload a supplier invoice for \(storage.name). AI extracts items — you review before stock is updated.")
+                                .font(.subheadline).foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        } else {
+                            Text("AI extracts items across all your storages — review and assign storage before saving.")
+                                .font(.subheadline).foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
                     }
                     .padding(.top, 8)
 
@@ -51,17 +58,26 @@ struct PurchaseInvoiceImportView: View {
             }
         }
         .sheet(isPresented: $showingPhoto) {
-            PurchaseInvoicePhotoView(defaultStorage: defaultStorage)
+            PurchaseInvoicePhotoView(
+                defaultStorage: defaultStorage,
+                onCompleted: { onCompleted?(); dismiss() }
+            )
                 .environmentObject(currencyManager)
                 .sheetStyle()
         }
         .sheet(isPresented: $showingPDF) {
-            PurchaseInvoicePDFView(defaultStorage: defaultStorage)
+            PurchaseInvoicePDFView(
+                defaultStorage: defaultStorage,
+                onCompleted: { onCompleted?(); dismiss() }
+            )
                 .environmentObject(currencyManager)
                 .sheetStyle()
         }
         .sheet(isPresented: $showingCSV) {
-            PurchaseInvoiceCSVView(defaultStorage: defaultStorage)
+            PurchaseInvoiceCSVView(
+                defaultStorage: defaultStorage,
+                onCompleted: { onCompleted?(); dismiss() }
+            )
                 .environmentObject(currencyManager)
                 .sheetStyle()
         }
@@ -95,7 +111,8 @@ struct PurchaseInvoiceImportView: View {
 // MARK: - Photo mode
 
 struct PurchaseInvoicePhotoView: View {
-    let defaultStorage: Storage
+    let defaultStorage: Storage?
+    var onCompleted: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
 
@@ -116,14 +133,20 @@ struct PurchaseInvoicePhotoView: View {
                     PurchaseReviewView(
                         rows: $parsedRows,
                         defaultStorage: defaultStorage,
-                        onConfirm: { dismiss() },
+                        onConfirm: { onCompleted?() ?? dismiss() },
                         onCancel: { step = 0 }
                     )
                     .environmentObject(currencyManager)
                 }
             }
             .navigationTitle("Photo Invoice")
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if step < 2 {
+                        Button("Cancel") { dismiss() }
+                    }
+                }
+            }
         }
         .fullScreenCover(isPresented: $showingCamera) {
             CameraPickerView(image: $capturedImage)
@@ -177,11 +200,14 @@ struct PurchaseInvoicePhotoView: View {
 // MARK: - PDF mode
 
 struct PurchaseInvoicePDFView: View {
-    let defaultStorage: Storage
+    let defaultStorage: Storage?
+    var onCompleted: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
 
     @State private var pdfURL: URL?
+    @State private var pdfThumbnail: UIImage?
+    @State private var pdfFileName: String?
     @State private var parsedRows: [ParsedPurchaseRow] = []
     @State private var step = 0
     @State private var showingFilePicker = false
@@ -196,17 +222,36 @@ struct PurchaseInvoicePDFView: View {
                     PurchaseReviewView(
                         rows: $parsedRows,
                         defaultStorage: defaultStorage,
-                        onConfirm: { dismiss() },
+                        onConfirm: { onCompleted?() ?? dismiss() },
                         onCancel: { step = 0 }
                     )
                     .environmentObject(currencyManager)
                 }
             }
             .navigationTitle("PDF Invoice")
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if step < 2 {
+                        Button("Cancel") { dismiss() }
+                    }
+                }
+            }
         }
         .fileImporter(isPresented: $showingFilePicker, allowedContentTypes: [.pdf]) { result in
             if case .success(let url) = result { pdfURL = url }
+        }
+        .onChange(of: pdfURL) { _, url in
+            guard let url else {
+                pdfThumbnail = nil
+                pdfFileName = nil
+                return
+            }
+            guard url.startAccessingSecurityScopedResource() else { return }
+            defer { url.stopAccessingSecurityScopedResource() }
+            pdfFileName = url.lastPathComponent
+            if let pdf = PDFDocument(url: url), let page = pdf.page(at: 0) {
+                pdfThumbnail = page.thumbnail(of: CGSize(width: 280, height: 360), for: .mediaBox)
+            }
         }
     }
 
@@ -215,7 +260,21 @@ struct PurchaseInvoicePDFView: View {
             Button("Choose PDF") { showingFilePicker = true }
                 .buttonStyle(.borderedProminent).tint(.orange)
             if pdfURL != nil {
+                if let thumb = pdfThumbnail {
+                    Image(uiImage: thumb)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 220)
+                        .cornerRadius(8)
+                        .shadow(radius: 3)
+                }
+                if let pdfFileName {
+                    Text(pdfFileName)
+                        .font(.caption).foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
                 Button("Analyse PDF") { analyzePDF() }
+                    .buttonStyle(.borderedProminent).tint(.orange)
             }
             if let errorMessage { Text(errorMessage).font(.caption).foregroundColor(.red) }
             Spacer()
@@ -250,45 +309,212 @@ struct PurchaseInvoicePDFView: View {
 
 // MARK: - CSV mode
 
+enum PurchaseImportField: String, CaseIterable, Identifiable {
+    case itemName = "Item Name"
+    case quantity = "Quantity"
+    case costPerUnit = "Unit Cost"
+    case notes = "Notes"
+    case skip = "— Skip —"
+
+    var id: String { rawValue }
+}
+
+@MainActor
+final class PurchaseInvoiceCSVViewModel: ObservableObject {
+    @Published var step = 0
+    @Published var headers: [String] = []
+    @Published var rows: [[String]] = []
+    @Published var columnMapping: [Int: PurchaseImportField] = [:]
+    @Published var parseError: String?
+    @Published var isSuggestingMappings = false
+
+    var previewRows: [[String]] { Array(rows.prefix(5)) }
+
+    var canProceedToPreview: Bool {
+        columnMapping.values.contains(.itemName) && !rows.isEmpty
+    }
+
+    func loadFile(from url: URL) {
+        parseError = nil
+        let ext = url.pathExtension.lowercased()
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+        do {
+            let grid: [[String]]
+            if ext == "xlsx" || ext == "xlsm" {
+                grid = try XLSXParser.parse(url: url)
+            } else {
+                let raw = try String(contentsOf: url, encoding: .utf8)
+                grid = parseCSV(raw)
+            }
+            guard grid.count >= 2 else {
+                parseError = "The file appears empty. Make sure it has a header row and at least one data row."
+                return
+            }
+            let headerIdx = XLSXParser.findHeaderRow(in: grid)
+            headers = grid[headerIdx].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            rows = Array(grid[(headerIdx + 1)...]).filter { $0.contains(where: { !$0.isEmpty }) }
+            autoDetect()
+            step = 1
+            Task { await aiEnhanceMapping() }
+        } catch {
+            parseError = "Could not read file: \(error.localizedDescription)"
+        }
+    }
+
+    @MainActor
+    private func aiEnhanceMapping() async {
+        guard !headers.isEmpty, !rows.isEmpty else { return }
+        isSuggestingMappings = true
+        defer { isSuggestingMappings = false }
+        do {
+            let sample = rows.first ?? []
+            let suggestions = try await AIInventoryService.shared.suggestPurchaseColumnMapping(headers: headers, sampleRow: sample)
+            for (indexStr, fieldName) in suggestions {
+                guard let index = Int(indexStr) else { continue }
+                let matched = PurchaseImportField.allCases.first { $0.rawValue == fieldName } ?? .skip
+                if columnMapping[index] == .skip || columnMapping[index] == nil {
+                    columnMapping[index] = matched
+                }
+            }
+        } catch {
+            // Fall back to keyword autoDetect() already applied
+        }
+    }
+
+    func buildParsedRows() -> [ParsedPurchaseRow] {
+        rows.map { row in
+            ParsedPurchaseRow(
+                itemName: value(row, .itemName),
+                quantityReceived: Double(value(row, .quantity)) ?? 0,
+                costPerUnit: Double(value(row, .costPerUnit).replacingOccurrences(
+                    of: "[^0-9.]",
+                    with: "",
+                    options: .regularExpression
+                )) ?? 0,
+                notes: value(row, .notes)
+            )
+        }.filter { !$0.itemName.isEmpty }
+    }
+
+    private func value(_ row: [String], _ field: PurchaseImportField) -> String {
+        guard let col = columnMapping.first(where: { $0.value == field })?.key,
+              col < row.count else { return "" }
+        return row[col].trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func autoDetect() {
+        let rules: [(PurchaseImportField, [String])] = [
+            (.itemName, ["item", "name", "product", "description", "particulars", "goods"]),
+            (.quantity, ["qty", "quantity", "count", "units", "pcs", "nos", "pieces", "number"]),
+            (.costPerUnit, ["price", "rate", "cost", "unit price", "unit cost", "unit rate", "rate per unit", "basic"]),
+            (.notes, ["notes", "remarks", "hsn", "comment", "code"])
+        ]
+        var used = Set<PurchaseImportField>()
+        columnMapping = [:]
+        for (i, header) in headers.enumerated() {
+            let h = header.lowercased()
+            var matched: PurchaseImportField = .skip
+            for (field, keywords) in rules where !used.contains(field) {
+                if keywords.contains(where: { h == $0 || h.contains($0) || $0.contains(h) }) {
+                    matched = field
+                    break
+                }
+            }
+            if matched != .skip { used.insert(matched) }
+            columnMapping[i] = matched
+        }
+    }
+
+    private func parseCSV(_ text: String) -> [[String]] {
+        var result: [[String]] = []
+        var current = ""
+        var inQuotes = false
+        var row: [String] = []
+
+        for ch in text.unicodeScalars {
+            switch ch {
+            case "\"":
+                inQuotes.toggle()
+            case "," where !inQuotes:
+                row.append(current.trimmingCharacters(in: .init(charactersIn: "\r")))
+                current = ""
+            case "\n", "\r":
+                if !inQuotes {
+                    row.append(current.trimmingCharacters(in: .init(charactersIn: "\r")))
+                    current = ""
+                    if row.contains(where: { !$0.isEmpty }) { result.append(row) }
+                    row = []
+                } else {
+                    current.unicodeScalars.append(ch)
+                }
+            default:
+                current.unicodeScalars.append(ch)
+            }
+        }
+        if !row.isEmpty || !current.isEmpty {
+            row.append(current)
+            if row.contains(where: { !$0.isEmpty }) { result.append(row) }
+        }
+        return result
+    }
+}
+
 struct PurchaseInvoiceCSVView: View {
-    let defaultStorage: Storage
+    let defaultStorage: Storage?
+    var onCompleted: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
 
-    @StateObject private var vm = SmartSalesCSVViewModel()
+    @StateObject private var vm = PurchaseInvoiceCSVViewModel()
     @State private var showFilePicker = false
     @State private var parsedRows: [ParsedPurchaseRow] = []
     @State private var showingReview = false
 
     var body: some View {
         NavigationStack {
-            Form {
-                Button("Choose CSV or Excel") { showFilePicker = true }
-                if vm.step >= 1 {
-                    Text("\(vm.rows.count) rows loaded — map Item Name, Quantity, and Unit Cost columns in the file picker flow.")
-                        .font(.caption).foregroundColor(.secondary)
-                    Button("Convert & Review") {
-                        parsedRows = vm.buildParsedRows().map {
-                            ParsedPurchaseRow(
-                                itemName: $0.itemName,
-                                quantityReceived: $0.quantitySold,
-                                costPerUnit: $0.pricePerUnit,
-                                notes: $0.notes
-                            )
+            Group {
+                switch vm.step {
+                case 0: filePickerStep
+                case 1: mappingStep
+                case 2: previewStep
+                default: filePickerStep
+                }
+            }
+            .navigationTitle(stepTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if vm.step == 0 {
+                        Button("Cancel") { dismiss() }
+                    } else {
+                        Button("Back") { vm.step -= 1 }
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if vm.step == 1 {
+                        Button("Preview") { vm.step = 2 }
+                            .disabled(!vm.canProceedToPreview)
+                            .fontWeight(.semibold)
+                    } else if vm.step == 2 {
+                        Button("Review") {
+                            parsedRows = vm.buildParsedRows()
+                            showingReview = true
                         }
-                        showingReview = true
+                        .fontWeight(.semibold)
+                        .disabled(vm.buildParsedRows().isEmpty)
                     }
                 }
             }
-            .navigationTitle("CSV Invoice")
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } } }
         }
         .fileImporter(
             isPresented: $showFilePicker,
             allowedContentTypes: [
                 .commaSeparatedText,
                 UTType(filenameExtension: "csv") ?? .plainText,
-                UTType(filenameExtension: "xlsx") ?? .data
+                UTType(filenameExtension: "xlsx") ?? .data,
+                UTType(filenameExtension: "xlsm") ?? .data
             ],
             allowsMultipleSelection: false
         ) { result in
@@ -297,14 +523,107 @@ struct PurchaseInvoiceCSVView: View {
             }
         }
         .sheet(isPresented: $showingReview) {
-            PurchaseReviewView(
-                rows: $parsedRows,
-                defaultStorage: defaultStorage,
-                onConfirm: { dismiss() },
-                onCancel: { showingReview = false }
-            )
-            .environmentObject(currencyManager)
+            NavigationStack {
+                PurchaseReviewView(
+                    rows: $parsedRows,
+                    defaultStorage: defaultStorage,
+                    onConfirm: {
+                        showingReview = false
+                        onCompleted?() ?? dismiss()
+                    },
+                    onCancel: { showingReview = false }
+                )
+                .environmentObject(currencyManager)
+            }
             .sheetStyle()
         }
+    }
+
+    private var stepTitle: String {
+        switch vm.step {
+        case 0: return "CSV Invoice"
+        case 1: return "Map Columns"
+        case 2: return "Preview"
+        default: return "CSV Invoice"
+        }
+    }
+
+    private var filePickerStep: some View {
+        Form {
+            Section {
+                Button { showFilePicker = true } label: {
+                    Label("Choose CSV or Excel File", systemImage: "doc.badge.plus")
+                }
+            } footer: {
+                Text("Map columns to item name, quantity, and unit cost, then review before saving.")
+            }
+            if let err = vm.parseError {
+                Section {
+                    Text(err).font(.caption).foregroundColor(.red)
+                }
+            }
+        }
+    }
+
+    private var mappingStep: some View {
+        List {
+            if vm.isSuggestingMappings {
+                Section {
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.8)
+                        Text("AI is suggesting column matches…")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                }
+            }
+            Section("\(vm.rows.count) rows · map each column") {
+                ForEach(vm.headers.indices, id: \.self) { i in
+                    HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(vm.headers[i]).fontWeight(.medium).font(.subheadline)
+                            if let sample = vm.rows.first, i < sample.count, !sample[i].isEmpty {
+                                Text("e.g. \(sample[i])").font(.caption).foregroundColor(.secondary)
+                            }
+                        }
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { vm.columnMapping[i] ?? .skip },
+                            set: { vm.columnMapping[i] = $0 }
+                        )) {
+                            ForEach(PurchaseImportField.allCases) { field in
+                                Text(field.rawValue).tag(field)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                }
+            }
+        }
+    }
+
+    private var previewStep: some View {
+        List {
+            Section("First \(vm.previewRows.count) rows") {
+                ForEach(vm.previewRows.indices, id: \.self) { ri in
+                    let row = vm.previewRows[ri]
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(value(row, .itemName)).fontWeight(.medium)
+                        HStack {
+                            Text("Qty: \(value(row, .quantity))")
+                            Text("Cost: \(value(row, .costPerUnit))")
+                        }
+                        .font(.caption).foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func value(_ row: [String], _ field: PurchaseImportField) -> String {
+        guard let col = vm.columnMapping.first(where: { $0.value == field })?.key,
+              col < row.count else { return "—" }
+        return row[col].isEmpty ? "—" : row[col]
     }
 }

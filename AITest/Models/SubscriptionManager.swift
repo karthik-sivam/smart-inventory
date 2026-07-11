@@ -57,9 +57,7 @@ class SubscriptionManager: ObservableObject {
 
     // MARK: - Published State
 
-    // ⚠️ TESTING ONLY — isPro hardcoded true for Phase 7B-B device testing.
-    // REVERT TO false BEFORE ANY APP STORE BUILD OR TESTFLIGHT SUBMISSION.
-    @Published var isPro = true
+    @Published var isPro = false
     @Published var hasRemovedAds = false
     @Published var products: [Product] = []
     @Published var purchaseState: PurchaseState = .idle
@@ -162,6 +160,7 @@ class SubscriptionManager: ObservableObject {
                     AnalyticsManager.shared.track(.subscriptionStarted(plan: plan))
                     AnalyticsManager.shared.identify(
                         userId: AuthManager.shared.currentUser?.uid ?? "",
+                        email: AuthManager.shared.currentUser?.email,
                         isPro: true,
                         signupMethod: UserDefaults.standard.string(forKey: "signupMethod") ?? "unknown"
                     )
@@ -241,18 +240,15 @@ class SubscriptionManager: ObservableObject {
             }
         }
 
-        // ⚠️ TESTING ONLY — isPro forced true. Remove both overrides before App Store build.
-        isPro = true // was: hasPro
+        isPro = hasPro
         proSubscriptionExpirationDate = trialExpiry
         isOnProTrial = onTrial
         // Pro includes ad removal
-        hasRemovedAds = true // was: hasNoAds || hasPro
+        hasRemovedAds = hasNoAds || hasPro
 
         if hasRemovedAds {
             AdManager.shared.disableAds()
         }
-
-        print("StoreKit: isPro=\(isPro), hasRemovedAds=\(hasRemovedAds)")
     }
 
     // MARK: - Transaction Listener
@@ -499,6 +495,17 @@ struct PaywallView: View {
                             Task { await sub.restorePurchases() }
                         }
                         .font(.subheadline).foregroundColor(.blue)
+
+                        // Required by App Store guideline 3.1.2(c)
+                        HStack(spacing: 16) {
+                            Link("Terms of Use",
+                                 destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+                            Text("·").foregroundColor(.secondary)
+                            Link("Privacy Policy",
+                                 destination: URL(string: "https://vishuddhi.in/privacy.html")!)
+                        }
+                        .font(.caption)
+                        .foregroundColor(.blue)
 
                         if selectedTab == .pro {
                             Text("Pro subscriptions auto-renew. Cancel anytime in Settings → Apple ID → Subscriptions.")

@@ -614,6 +614,91 @@ class FirestoreManager: ObservableObject {
             }
             modelContext.safeSave(context: "pullFromCloud activity events")
 
+            // Pull ALL sale events so sales data fully survives reinstall.
+            // No limit — SMBs won't accumulate millions of records, and this
+            // fetch only happens once per install (not on every launch).
+            let saleEventsSnap = try await db
+                .collection("users").document(uid)
+                .collection("saleEvents")
+                .order(by: "occurredAt", descending: true)
+                .getDocuments()
+
+            for doc in saleEventsSnap.documents {
+                let d = doc.data()
+                guard let idString = d["id"] as? String,
+                      let id = UUID(uuidString: idString),
+                      let occurredTs = d["occurredAt"] as? Timestamp else { continue }
+
+                let existing = (try? modelContext.fetch(
+                    FetchDescriptor<SaleEvent>(
+                        predicate: #Predicate { $0.id == id }
+                    )
+                )) ?? []
+                guard existing.isEmpty else { continue }
+
+                let saleEvent = SaleEvent(
+                    item: nil,
+                    itemName: d["itemName"] as? String ?? "",
+                    itemSKU: d["itemSKU"] as? String ?? "",
+                    storageName: d["storageName"] as? String ?? "",
+                    category: d["category"] as? String ?? "",
+                    quantitySold: d["quantitySold"] as? Double ?? 0,
+                    pricePerUnit: d["pricePerUnit"] as? Double ?? 0,
+                    costPerUnit: d["costPerUnit"] as? Double ?? 0,
+                    notes: d["notes"] as? String ?? "",
+                    occurredAt: occurredTs.dateValue()
+                )
+                saleEvent.id = id
+                if let createdTs = d["createdAt"] as? Timestamp {
+                    saleEvent.createdAt = createdTs.dateValue()
+                }
+                modelContext.insert(saleEvent)
+            }
+            modelContext.safeSave(context: "pullFromCloud saleEvents")
+
+            // Pull all inventory movements so the Movements tab survives reinstall.
+            let movementsSnap = try await db
+                .collection("users").document(uid)
+                .collection("inventoryMovements")
+                .order(by: "occurredAt", descending: true)
+                .getDocuments()
+
+            for doc in movementsSnap.documents {
+                let d = doc.data()
+                guard let idString = d["id"] as? String,
+                      let id = UUID(uuidString: idString),
+                      let occurredTs = d["occurredAt"] as? Timestamp else { continue }
+
+                let existing = (try? modelContext.fetch(
+                    FetchDescriptor<InventoryMovement>(
+                        predicate: #Predicate { $0.id == id }
+                    )
+                )) ?? []
+                guard existing.isEmpty else { continue }
+
+                let linkedIdString = d["linkedSaleEventId"] as? String ?? ""
+                let movement = InventoryMovement(
+                    item: nil,
+                    itemName: d["itemName"] as? String ?? "",
+                    itemSKU: d["itemSKU"] as? String ?? "",
+                    storageName: d["storageName"] as? String ?? "",
+                    category: d["category"] as? String ?? "",
+                    direction: d["direction"] as? String ?? "IN",
+                    movementType: d["movementType"] as? String ?? "",
+                    quantity: d["quantity"] as? Double ?? 0,
+                    pricePerUnit: d["pricePerUnit"] as? Double ?? 0,
+                    notes: d["notes"] as? String ?? "",
+                    occurredAt: occurredTs.dateValue(),
+                    linkedSaleEventId: linkedIdString.isEmpty ? nil : UUID(uuidString: linkedIdString)
+                )
+                movement.id = id
+                if let createdTs = d["createdAt"] as? Timestamp {
+                    movement.createdAt = createdTs.dateValue()
+                }
+                modelContext.insert(movement)
+            }
+            modelContext.safeSave(context: "pullFromCloud inventoryMovements")
+
             modelContext.safeSave(context: "pullFromCloud")
             syncState = .success
             lastSyncDate = Date()

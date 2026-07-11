@@ -35,17 +35,22 @@ struct DashboardView: View {
     @State private var showingPaywall = false
     @State private var showingHealthDetail = false
     @State private var showingValueByCategory = false
-    @State private var showingInsightDetail = false
-    @State private var insightDetailItems: [InventoryItem] = []
-    @State private var insightDetailTitle = ""
+    @State private var insightDetailContext: InsightDetailContext? = nil
     @State private var scrollOffset: CGFloat = 0
-    @State private var dashboardSalesPeriod: DashboardSalesPeriod = .thisWeek
+    @State private var dashboardSalesPeriod: DashboardSalesPeriod = .lastThirtyDays
     @State private var showingReports = false
     @State private var localeChangeCurrency: Currency? = nil
+
+    private struct InsightDetailContext: Identifiable {
+        let id = UUID()
+        let title: String
+        let items: [InventoryItem]
+    }
 
     enum DashboardSalesPeriod: String, CaseIterable {
         case today = "Today"
         case thisWeek = "This Week"
+        case lastThirtyDays = "Last 30 Days"
         case thisMonth = "This Month"
     }
 
@@ -214,7 +219,7 @@ struct DashboardView: View {
                                 value: currencyManager.formatPrice(dashboardPeriodRevenue),
                                 icon: "cart.fill",
                                 gradient: AppTheme.kpiGradients[0],
-                                deltaText: "This \(dashboardSalesPeriod.rawValue.lowercased())",
+                                deltaText: dashboardSalesPeriod.rawValue,
                                 deltaPositive: dashboardPeriodRevenue > 0 ? true : nil,
                                 action: { showingReports = true }
                             )
@@ -273,9 +278,7 @@ struct DashboardView: View {
 
                         if !priceCreepItems.isEmpty {
                             Button {
-                                insightDetailTitle = "Price Above Unit Cost"
-                                insightDetailItems = priceCreepItems
-                                showingInsightDetail = true
+                                insightDetailContext = InsightDetailContext(title: "Price Above Unit Cost", items: priceCreepItems)
                             } label: {
                                 HStack(spacing: 10) {
                                     Image(systemName: "chart.line.uptrend.xyaxis")
@@ -301,9 +304,7 @@ struct DashboardView: View {
                             SmartInsightsCard(
                                 items: Array(items),
                                 onShowItems: { title, detailItems in
-                                    insightDetailTitle = title
-                                    insightDetailItems = Array(detailItems)
-                                    showingInsightDetail = true
+                                    insightDetailContext = InsightDetailContext(title: title, items: Array(detailItems))
                                 }
                             )
                             .padding(.horizontal)
@@ -458,8 +459,8 @@ struct DashboardView: View {
                 .environmentObject(currencyManager)
                 .sheetStyle()
         }
-        .sheet(isPresented: $showingInsightDetail) {
-            InsightDetailView(title: insightDetailTitle, items: insightDetailItems)
+        .sheet(item: $insightDetailContext) { ctx in
+            InsightDetailView(title: ctx.title, items: ctx.items)
                 .environmentObject(currencyManager)
                 .sheetStyle()
         }
@@ -479,6 +480,9 @@ struct DashboardView: View {
             return cal.startOfDay(for: now)...now
         case .thisWeek:
             let start = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
+            return start...now
+        case .lastThirtyDays:
+            let start = cal.date(byAdding: .day, value: -30, to: now) ?? now
             return start...now
         case .thisMonth:
             let start = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
@@ -512,6 +516,7 @@ struct DashboardView: View {
         switch dashboardSalesPeriod {
         case .today: return .today
         case .thisWeek: return .thisWeek
+        case .lastThirtyDays: return .last30Days
         case .thisMonth: return .thisMonth
         }
     }
@@ -1000,6 +1005,43 @@ private struct SmartInsightsCard: View {
 
     private var insights: [Insight] {
         var result: [Insight] = []
+
+        // --- Data-health nudges (shown first so users fix data quality before acting on insights) ---
+
+        let noCost = items.filter { $0.unitCost == 0 && $0.lastPurchasePrice == 0 }
+        if !noCost.isEmpty {
+            result.append(Insight(
+                icon: "cart.badge.questionmark",
+                iconColor: .purple,
+                title: "Missing cost prices",
+                subtitle: "\(noCost.count) item\(noCost.count == 1 ? "" : "s") have no cost price — profit margin tracking is incomplete",
+                relatedItems: noCost
+            ))
+        }
+
+        let noSelling = items.filter { $0.sellingPrice == 0 }
+        if !noSelling.isEmpty {
+            result.append(Insight(
+                icon: "tag.slash",
+                iconColor: .teal,
+                title: "Missing selling prices",
+                subtitle: "\(noSelling.count) item\(noSelling.count == 1 ? "" : "s") have no selling price — revenue tracking won't be accurate",
+                relatedItems: noSelling
+            ))
+        }
+
+        let noMin = items.filter { $0.minQuantity == 0 && $0.reorderPercentage == 0 }
+        if !noMin.isEmpty {
+            result.append(Insight(
+                icon: "bell.slash",
+                iconColor: .orange,
+                title: "Low-stock alerts disabled",
+                subtitle: "\(noMin.count) item\(noMin.count == 1 ? "" : "s") have no minimum quantity — you won't get restock alerts",
+                relatedItems: noMin
+            ))
+        }
+
+        // --- Operational insights ---
 
         let soonOOS = items.compactMap { item -> (InventoryItem, Int)? in
             guard item.currentQuantity > 0 else { return nil }

@@ -377,6 +377,77 @@ final class AIInventoryService {
         return try await callClaudeForPurchase(textPrompt: prompt, imageDataList: [])
     }
 
+    func suggestSalesColumnMapping(headers: [String], sampleRow: [String]) async throws -> [String: String] {
+        let headerList = headers.enumerated().map { "Column \($0.offset): \"\($0.element)\"" }.joined(separator: ", ")
+        let sampleList = sampleRow.enumerated().map { "Column \($0.offset): \"\($0.element)\"" }.joined(separator: ", ")
+        let prompt = """
+        You are mapping spreadsheet columns for a sales import. Available fields: "Item Name", "Quantity", "Price Per Unit", "Date", "Notes", "— Skip —".
+        Headers: \(headerList)
+        First data row: \(sampleList)
+        Reply with ONLY a JSON object mapping column index (as string) to field name. Example: {"0":"Item Name","1":"Quantity","2":"Price Per Unit","3":"— Skip —"}
+        Map every column index. Use "— Skip —" for unrecognised columns.
+        """
+        let text = try await callClaudeRaw(
+            systemPrompt: "You map spreadsheet columns to import fields. Reply with JSON only.",
+            userPrompt: prompt,
+            imageDataList: [],
+            maxTokens: 200
+        )
+        return try parseColumnMappingJSON(text)
+    }
+
+    func suggestPurchaseColumnMapping(headers: [String], sampleRow: [String]) async throws -> [String: String] {
+        let headerList = headers.enumerated().map { "Column \($0.offset): \"\($0.element)\"" }.joined(separator: ", ")
+        let sampleList = sampleRow.enumerated().map { "Column \($0.offset): \"\($0.element)\"" }.joined(separator: ", ")
+        let prompt = """
+        You are mapping spreadsheet columns for a purchase invoice import. Available fields: "Item Name", "Quantity", "Unit Cost", "Notes", "— Skip —".
+        Headers: \(headerList)
+        First data row: \(sampleList)
+        Reply with ONLY a JSON object mapping column index (as string) to field name. Example: {"0":"Item Name","1":"Quantity","2":"Unit Cost"}
+        Map every column index. Use "— Skip —" for unrecognised columns.
+        """
+        let text = try await callClaudeRaw(
+            systemPrompt: "You map spreadsheet columns to import fields. Reply with JSON only.",
+            userPrompt: prompt,
+            imageDataList: [],
+            maxTokens: 200
+        )
+        return try parseColumnMappingJSON(text)
+    }
+
+    func suggestCountColumnMapping(headers: [String], sampleRow: [String]) async throws -> [String: String] {
+        let headerList = headers.enumerated().map { "Column \($0.offset): \"\($0.element)\"" }.joined(separator: ", ")
+        let sampleList = sampleRow.enumerated().map { "Column \($0.offset): \"\($0.element)\"" }.joined(separator: ", ")
+        let prompt = """
+        You are mapping spreadsheet columns for an inventory count import. Available fields: "Item Name", "Quantity", "— Skip —".
+        Headers: \(headerList)
+        First data row: \(sampleList)
+        Reply with ONLY a JSON object mapping column index (as string) to field name. Example: {"0":"Item Name","1":"Quantity"}
+        Map every column index. Use "— Skip —" for unrecognised columns.
+        """
+        let text = try await callClaudeRaw(
+            systemPrompt: "You map spreadsheet columns to import fields. Reply with JSON only.",
+            userPrompt: prompt,
+            imageDataList: [],
+            maxTokens: 200
+        )
+        return try parseColumnMappingJSON(text)
+    }
+
+    private func parseColumnMappingJSON(_ text: String) throws -> [String: String] {
+        var clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.hasPrefix("```") {
+            clean = clean.components(separatedBy: "\n").dropFirst().joined(separator: "\n")
+            if clean.hasSuffix("```") { clean = String(clean.dropLast(3)) }
+            clean = clean.replacingOccurrences(of: "```json", with: "").replacingOccurrences(of: "```", with: "")
+        }
+        guard let data = clean.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: String] else {
+            throw AIInventoryError.invalidResponse
+        }
+        return json
+    }
+
     private func callClaudeForSales(textPrompt: String, imageDataList: [Data]) async throws -> [ParsedSaleRow] {
         let text = try await callClaudeRaw(systemPrompt: Self.salesSystemPrompt, userPrompt: textPrompt, imageDataList: imageDataList)
         let dtos = try decodeJSON(text, as: [ParsedSaleRowDTO].self)
@@ -393,7 +464,7 @@ final class AIInventoryService {
         return rows
     }
 
-    private func callClaudeRaw(systemPrompt: String, userPrompt: String, imageDataList: [Data]) async throws -> String {
+    private func callClaudeRaw(systemPrompt: String, userPrompt: String, imageDataList: [Data], maxTokens: Int = 4096) async throws -> String {
         guard let apiKey = SecretsManager.effectiveAnthropicKey else {
             throw AIInventoryError.missingAPIKey
         }
@@ -413,7 +484,7 @@ final class AIInventoryService {
 
         let body: [String: Any] = [
             "model": model,
-            "max_tokens": 4096,
+            "max_tokens": maxTokens,
             "system": systemPrompt,
             "messages": [["role": "user", "content": contentArray]]
         ]

@@ -110,8 +110,9 @@ final class BulkImportViewModel: ObservableObject {
                 parseError = "The spreadsheet appears empty. Make sure it has a header row and at least one data row."
                 return
             }
-            csvHeaders = grid[0].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            rows = Array(grid.dropFirst()).filter { $0.contains(where: { !$0.isEmpty }) }
+            let headerIdx = XLSXParser.findHeaderRow(in: grid)
+            csvHeaders = grid[headerIdx].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            rows = Array(grid[(headerIdx + 1)...]).filter { $0.contains(where: { !$0.isEmpty }) }
             autoDetect()
             step = 1
 
@@ -578,24 +579,24 @@ struct BulkImportView: View {
         List {
             Section(header: Text("\(vm.rows.count) rows found · Map each column to a field")) {
                 ForEach(vm.csvHeaders.indices, id: \.self) { i in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Image(systemName: vm.columnMapping[i]?.icon ?? "questionmark")
-                                .foregroundColor(.blue)
-                                .frame(width: 20)
-                            Text(vm.csvHeaders[i])
-                                .fontWeight(.medium)
-                            Spacer()
+                    HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Image(systemName: vm.columnMapping[i]?.icon ?? "questionmark")
+                                    .foregroundColor(.blue)
+                                    .frame(width: 20)
+                                Text(vm.csvHeaders[i])
+                                    .fontWeight(.medium)
+                                    .font(.subheadline)
+                            }
+                            if let sample = vm.rows.first, i < sample.count, !sample[i].isEmpty {
+                                Text("e.g. \(sample[i])")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
                         }
-
-                        // Sample value from first row
-                        if let sample = vm.rows.first, i < sample.count, !sample[i].isEmpty {
-                            Text("e.g. \(sample[i])")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                        }
-
+                        Spacer()
                         Picker("", selection: Binding(
                             get: { vm.columnMapping[i] ?? .skip },
                             set: { vm.columnMapping[i] = $0 }
@@ -606,6 +607,7 @@ struct BulkImportView: View {
                         }
                         .pickerStyle(.menu)
                         .labelsHidden()
+                        .fixedSize()
                     }
                     .padding(.vertical, 4)
                 }

@@ -65,7 +65,12 @@ struct ProfileView: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
-                                Text(authManager.currentUser?.displayName ?? "User")
+                                Text({
+                                    if let name = authManager.currentUser?.displayName, !name.isEmpty { return name }
+                                    let email = authManager.currentUser?.email ?? ""
+                                    if email.contains("privaterelay.appleid.com") { return "Apple User" }
+                                    return email.components(separatedBy: "@").first?.capitalized ?? "User"
+                                }())
                                     .font(.headline)
                                     .fontWeight(.semibold)
 
