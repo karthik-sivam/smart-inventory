@@ -688,6 +688,7 @@ struct VoiceInventoryView: View {
 
     private func saveItems() async {
         guard let storage = selectedStorage else { return }
+        errorMessage = nil
         step = .saving
 
         let itemsToSave = editableItems.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }

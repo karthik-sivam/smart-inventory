@@ -226,4 +226,11 @@
 \bullet Example: stock 10, sell 3 then 2 → events 10→7 and 7→5; feed shows "3 sold" / "2 sold"; final qty 5\par
 \bullet Rejected alternate (snapshot opening stock for every row): would make quantityAfter wrong for later rows (e.g. 10→8 while stock is 5)\par
 \bullet Files reviewed: AITest/Views/SaleEntryReviewView.swift, AITest/Models/ActivityEvent.swift, AITest/Views/QuickSaleSheet.swift\par
+\par
+{\b Fix \emdash Voice inventory dismisses even when safeSave fails}\par
+[COMPLETED]\par
+\bullet Verified bug: VoiceInventoryView.saveItems always called onComplete + dismiss after safeSave, which previously returned Void and only posted a banner on failure\par
+\bullet ModelContext.safeSave now returns Bool (@discardableResult) so callers can gate success paths\par
+\bullet VoiceInventoryView: on save failure stay on review, show error; only track/sync/complete/dismiss on success\par
+\bullet Files: AITest/Utilities/ModelContextExtension.swift, AITest/Views/VoiceInventoryView.swift\par
 }
