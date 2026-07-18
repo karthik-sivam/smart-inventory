@@ -220,10 +220,16 @@ struct PurchaseReviewView: View {
             guard let movStorage else { continue }
             let storageName = movStorage.name
 
+            // Capture stock before/after so the activity feed shows "+N" instead of a generic line.
+            let qBefore = item.currentQuantity
+            let qAfter = qBefore + row.quantityReceived
+
             let event = ActivityEvent(
                 eventType: "MovementLogged",
                 itemName: item.name,
                 storageName: storageName,
+                quantityBefore: qBefore,
+                quantityAfter: qAfter,
                 notes: "Purchase invoice import"
             )
             modelContext.insert(event)
@@ -245,7 +251,7 @@ struct PurchaseReviewView: View {
             modelContext.insert(movement)
             savedMovements.append(movement)
 
-            item.currentQuantity += row.quantityReceived
+            item.currentQuantity = qAfter
             if row.costPerUnit > 0 {
                 item.lastPurchasePrice = row.costPerUnit
                 item.lastPurchasedAt = now
