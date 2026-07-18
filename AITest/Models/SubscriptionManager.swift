@@ -59,6 +59,8 @@ class SubscriptionManager: ObservableObject {
 
     @Published var isPro = false
     @Published var hasRemovedAds = false
+    /// True when Firestore manualProUntil grants Pro independent of StoreKit.
+    @Published private(set) var manualProGrantActive = false
     @Published var products: [Product] = []
     @Published var purchaseState: PurchaseState = .idle
     @Published var isLoading = false
@@ -240,13 +242,27 @@ class SubscriptionManager: ObservableObject {
             }
         }
 
-        isPro = hasPro
+        isPro = hasPro || manualProGrantActive
         proSubscriptionExpirationDate = trialExpiry
         isOnProTrial = onTrial
         // Pro includes ad removal
-        hasRemovedAds = hasNoAds || hasPro
+        hasRemovedAds = hasNoAds || hasPro || manualProGrantActive
+
+        FirestoreManager.shared.writeProStatus(hasPro)
 
         if hasRemovedAds {
+            AdManager.shared.disableAds()
+        }
+    }
+
+    /// Applies a manual Pro grant from Firestore (manualProUntil field in Firebase console).
+    /// Sets manualProGrantActive so refreshPurchaseStatus() cannot overwrite it.
+    func applyManualProGrantIfNeeded() async {
+        let hasManualGrant = await FirestoreManager.shared.fetchManualProGrant()
+        manualProGrantActive = hasManualGrant
+        if hasManualGrant {
+            isPro = true
+            hasRemovedAds = true
             AdManager.shared.disableAds()
         }
     }

@@ -156,6 +156,34 @@ class FirestoreManager: ObservableObject {
         }
     }
 
+    /// Writes the current isPro status to the user's Firestore document.
+    /// Called every time SubscriptionManager resolves StoreKit entitlements.
+    func writeProStatus(_ isPro: Bool) {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        db.collection("users").document(uid).setData(
+            ["isPro": isPro],
+            merge: true
+        ) { error in
+            if let error {
+                print("[Firestore] Failed to write isPro: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Fetches manualProUntil from Firestore. Returns true if a valid future date exists.
+    func fetchManualProGrant() async -> Bool {
+        guard let uid = Auth.auth().currentUser?.uid else { return false }
+        do {
+            let doc = try await db.collection("users").document(uid).getDocument()
+            if let timestamp = doc.data()?["manualProUntil"] as? Timestamp {
+                return timestamp.dateValue() > Date()
+            }
+        } catch {
+            print("[Firestore] Failed to fetch manualProUntil: \(error.localizedDescription)")
+        }
+        return false
+    }
+
     // MARK: - Storage CRUD
 
     /// Push a storage area to Firestore. Debounced — rapid updates collapse to one write.

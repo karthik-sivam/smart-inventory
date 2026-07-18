@@ -154,4 +154,43 @@
 \bullet ITEM 3: Sign in with Apple button in AuthView — SignInWithAppleButton below Google sign-in\par
 \bullet ITEM 4: AITest.entitlements — com.apple.developer.applesignin Default + aps-environment production\par
 \bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b BUILD 15 HOTFIX \emdash Activity History "?" Bug Fix}\par
+[COMPLETED]\par
+\bullet ITEM 1: ActivityEvent.displayDescription — graceful fallbacks for ItemCounted; SaleMade sold-qty from before−after; MovementLogged shows +/- change\par
+\bullet ITEM 2: ImageInventoryView — quantityBefore/quantityAfter on ItemCounted events (single photo + shelf scan)\par
+\bullet ITEM 3: VoiceInventoryView — quantityBefore/quantityAfter on ItemCounted events\par
+\bullet ITEM 4: SaleEntryReviewView — quantityBefore/quantityAfter on SaleMade events (stock before sale applied)\par
+\bullet Addendum (Build 14): Apple display name saved on first sign-in — already present in AuthManager.signInWithApple\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S7 \emdash AI Depth + User Education}\par
+[COMPLETED]\par
+\bullet S7-0: targetStorage on ParsedPurchaseRow — storage picker sheet, Pick storage button, confirm blocked without storage assignment\par
+\bullet S7-1: HelpCentreView.swift (searchable FAQ) + Settings Help & FAQ link + SmartCount first-use tip banner + Dashboard onboarding tip cards (<10 items)\par
+\bullet S7-2: Photo Inventory — improved shelf/fluid Claude prompt, fluid mode toggle, fillPercent/remainingVolume in review\par
+\bullet S7-3: Voice Inventory — en-IN default locale, locale pills, editable live transcript, low-confidence warning, inventory name hints + Indian qty expressions in prompt\par
+\bullet S7-4: GADMobileAds already via AdManager; SKAdNetwork keys already in Info.plist; first_open Firebase Analytics event in ContentView\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S8 \emdash AI Help Centre}\par
+[COMPLETED]\par
+\bullet S8-1: AIUsageManager.helpChat case — 5/month free limit, unlimited Pro\par
+\bullet S8-2: AIInventoryService.askHelpQuestion() with full Stoqly system prompt (no free trial language)\par
+\bullet S8-3: HelpCentreView Ask AI section — suggested chips, input, answer card, usage gate + paywall\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S9 \emdash Firestore Pro Status Sync}\par
+[COMPLETED]\par
+\bullet S9-1: FirestoreManager.writeProStatus() + fetchManualProGrant() for manualProUntil\par
+\bullet S9-2: writeProStatus(hasPro) called after StoreKit refresh in SubscriptionManager\par
+\bullet S9-3: applyManualProGrantIfNeeded() on app launch + after email/Google/Apple sign-in\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S10 \emdash Floating AI Help + Voice Confirm Fix}\par
+[COMPLETED]\par
+\bullet S10-1: Voice Inventory confirm dismiss fix — onComplete?(count) + dismiss() both called (verified in place)\par
+\bullet S10-2: AIHelpChatView.swift — standalone Ask AI chat with suggested chips, usage gate, Done toolbar\par
+\bullet S10-3: Floating AI Help bubble in MainAppContent ZStack — sheet presents AIHelpChatView on all tabs\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
 }

@@ -42,12 +42,16 @@ final class ActivityEvent {
         case "ItemAdded":
             return "Added to \(storageName)"
         case "ItemCounted":
+            // Only show "?" if BOTH values are missing. If one is nil, fall back gracefully.
+            if quantityBefore == nil && quantityAfter == nil {
+                return "Count recorded in \(storageName)"
+            }
             let before = quantityBefore.map { $0.smartFormatted } ?? "?"
-            let after = quantityAfter.map { $0.smartFormatted } ?? "?"
+            let after  = quantityAfter.map  { $0.smartFormatted } ?? "?"
             return "Count updated: \(before) → \(after)"
         case "ItemUpdated":
             let before = quantityBefore.map { $0.smartFormatted } ?? "?"
-            let after = quantityAfter.map { $0.smartFormatted } ?? "?"
+            let after  = quantityAfter.map  { $0.smartFormatted } ?? "?"
             return before == after
                 ? "Item details updated"
                 : "Quantity: \(before) -> \(after)"
@@ -58,9 +62,20 @@ final class ActivityEvent {
         case "StorageCreated":
             return "Storage area created"
         case "SaleMade":
-            let qty = quantityAfter.map { $0.smartFormatted } ?? "?"
-            return "Sale recorded: \(qty) sold from \(storageName)"
+            // quantityBefore = stock before sale, quantityAfter = stock after sale
+            // soldQty = before - after
+            if let before = quantityBefore, let after = quantityAfter {
+                let soldQty = (before - after).smartFormatted
+                return "Sale recorded: \(soldQty) sold from \(storageName)"
+            }
+            return "Sale recorded from \(storageName)"
         case "MovementLogged":
+            // quantityBefore = stock before, quantityAfter = stock after
+            if let before = quantityBefore, let after = quantityAfter {
+                let change = after - before
+                let sign = change >= 0 ? "+" : ""
+                return "Movement: \(sign)\(change.smartFormatted) in \(storageName)"
+            }
             return "Movement logged in \(storageName)"
         case "BulkCountImported":
             return "Bulk count imported in \(storageName)"

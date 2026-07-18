@@ -286,6 +286,17 @@ struct MainAppContent: View {
     @EnvironmentObject private var firestoreManager: FirestoreManager
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
 
+    @State private var showingAIHelp = false
+
+    // Draggable bubble state
+    @AppStorage("aiHelpBubbleX") private var savedBubbleX: Double = 0
+    @AppStorage("aiHelpBubbleY") private var savedBubbleY: Double = 0
+    @State private var bubblePos: CGPoint = CGPoint(
+        x: UIScreen.main.bounds.width - 46,
+        y: UIScreen.main.bounds.height - 120
+    )
+    @State private var isDraggingBubble = false
+
     var body: some View {
         ZStack(alignment: .top) {
             // Native TabView — handles bottom safe area automatically so all tabs
@@ -318,6 +329,61 @@ struct MainAppContent: View {
                     .tag(4)
             }
             .tint(.stoqlyAccent)   // teal — matches the brand palette
+
+            // Floating AI Help button — draggable
+            GeometryReader { geo in
+                Circle()
+                    .fill(Color.stoqlyPrimary)
+                    .frame(width: 56, height: 56)
+                    .overlay(
+                        Image(systemName: "wand.and.stars")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundColor(.white)
+                    )
+                    .shadow(color: .black.opacity(0.28), radius: 10, x: 0, y: 4)
+                    .scaleEffect(isDraggingBubble ? 1.10 : 1.0)
+                    .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isDraggingBubble)
+                    .position(bubblePos)
+                    .gesture(
+                        DragGesture(minimumDistance: 6, coordinateSpace: .local)
+                            .onChanged { value in
+                                isDraggingBubble = true
+                                bubblePos = value.location
+                            }
+                            .onEnded { value in
+                                isDraggingBubble = false
+                                let halfBubble: CGFloat = 32
+                                let safeTop: CGFloat = 80
+                                let safeBottom: CGFloat = geo.size.height - 90
+                                let x = max(halfBubble, min(geo.size.width - halfBubble, value.location.x))
+                                let y = max(safeTop, min(safeBottom, value.location.y))
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.72)) {
+                                    bubblePos = CGPoint(x: x, y: y)
+                                }
+                                savedBubbleX = Double(x)
+                                savedBubbleY = Double(y)
+                            }
+                    )
+                    .onTapGesture {
+                        guard !isDraggingBubble else { return }
+                        showingAIHelp = true
+                    }
+                    .accessibilityLabel("Ask AI")
+                    .accessibilityAddTraits(.isButton)
+                    .onAppear {
+                        if savedBubbleX > 0 && savedBubbleY > 0 {
+                            bubblePos = CGPoint(x: CGFloat(savedBubbleX), y: CGFloat(savedBubbleY))
+                        } else {
+                            bubblePos = CGPoint(x: geo.size.width - 46, y: geo.size.height - 120)
+                        }
+                    }
+            }
+            .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showingAIHelp) {
+            AIHelpChatView()
+                .environmentObject(subscriptionManager)
+                .sheetStyle()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("stoqly.switchToStoragesTab"))) { _ in
             selectedTab = 1

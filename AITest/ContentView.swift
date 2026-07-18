@@ -7,10 +7,19 @@
 
 import SwiftUI
 import SwiftData
+import FirebaseAnalytics
 
 struct ContentView: View {
+    @AppStorage("stoqly_hasLoggedFirstOpen") private var hasLoggedFirstOpen = false
+
     var body: some View {
         SplashScreenView()
+            .onAppear {
+                if !hasLoggedFirstOpen {
+                    Analytics.logEvent(AnalyticsEventAppOpen, parameters: nil)
+                    hasLoggedFirstOpen = true
+                }
+            }
     }
 }
 

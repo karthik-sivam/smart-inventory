@@ -88,6 +88,7 @@ struct SmartInventoryApp: App {
                 .task {
                     // Restore StoreKit purchases on launch (handles renewals / reinstalls)
                     await subscriptionManager.refreshPurchaseStatus()
+                    await subscriptionManager.applyManualProGrantIfNeeded()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     // Refresh subscription status when app returns to foreground

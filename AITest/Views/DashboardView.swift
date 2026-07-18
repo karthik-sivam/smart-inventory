@@ -40,6 +40,28 @@ struct DashboardView: View {
     @State private var dashboardSalesPeriod: DashboardSalesPeriod = .lastThirtyDays
     @State private var showingReports = false
     @State private var localeChangeCurrency: Currency? = nil
+    @AppStorage("stoqly_dismissedTips") private var dismissedTipsRaw = ""
+
+    private struct TipCard: Identifiable {
+        let id: String
+        let icon: String
+        let text: String
+        let action: String
+    }
+
+    private var dismissedTips: Set<String> { Set(dismissedTipsRaw.split(separator: ",").map(String.init)) }
+    private func dismissTip(_ id: String) { dismissedTipsRaw = dismissedTips.union([id]).joined(separator: ",") }
+
+    private let onboardingTips: [TipCard] = [
+        TipCard(id: "smartcount", icon: "camera.viewfinder", text: "Count inventory with your camera", action: "Try SmartCount"),
+        TipCard(id: "reorder", icon: "bell.badge", text: "Set alerts before you run out", action: "Set Reorder Level"),
+        TipCard(id: "barcode", icon: "barcode.viewfinder", text: "Scan a barcode to add items fast", action: "Scan Now"),
+        TipCard(id: "import", icon: "square.and.arrow.down", text: "Import your existing stock list", action: "Import CSV"),
+    ]
+
+    private var visibleOnboardingTips: [TipCard] {
+        onboardingTips.filter { !dismissedTips.contains($0.id) }
+    }
 
     private struct InsightDetailContext: Identifiable {
         let id = UUID()
@@ -268,6 +290,31 @@ struct DashboardView: View {
                             )
                         }
                         .padding(.horizontal)
+
+                        if items.count < 10 && !visibleOnboardingTips.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(visibleOnboardingTips) { tip in
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            HStack {
+                                                Image(systemName: tip.icon).foregroundColor(.stoqlyPrimary)
+                                                Spacer()
+                                                Button { dismissTip(tip.id) } label: {
+                                                    Image(systemName: "xmark").font(.caption2).foregroundColor(.secondary)
+                                                }
+                                            }
+                                            Text(tip.text).font(.caption).bold()
+                                            Text(tip.action).font(.caption2).foregroundColor(.stoqlyPrimary)
+                                        }
+                                        .padding(12)
+                                        .frame(width: 160)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(12)
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
 
                         if !items.isEmpty {
                             InventoryHealthCard(items: Array(items))
