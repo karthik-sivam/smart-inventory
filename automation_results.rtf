@@ -202,4 +202,12 @@
 \bullet S10-2: AIHelpChatView.swift — standalone Ask AI chat with suggested chips, usage gate, Done toolbar\par
 \bullet S10-3: Floating AI Help bubble in MainAppContent ZStack — sheet presents AIHelpChatView on all tabs\par
 \bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b Fix \emdash writeProStatus missing from updateEntitlements}\par
+[COMPLETED]\par
+\bullet Verified bug: purchase() and Transaction.updates call updateEntitlements(for:), which set isPro locally but never wrote users.isPro to Firestore\par
+\bullet refreshPurchaseStatus() already called writeProStatus(isPro); cloud status stayed false until a later refresh\par
+\bullet SubscriptionManager.updateEntitlements(for:): call FirestoreManager.shared.writeProStatus(isPro) after Pro monthly/annual entitlement is applied\par
+\bullet Files: AITest/Models/SubscriptionManager.swift\par
+\bullet Build: xcodebuild not available in this Linux cloud environment; change is a one-line Firestore mirror call matching existing refresh path\par
 }

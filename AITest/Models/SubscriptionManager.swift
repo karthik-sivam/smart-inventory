@@ -298,6 +298,8 @@ class SubscriptionManager: ObservableObject {
             isPro = true
             hasRemovedAds = true
             AdManager.shared.disableAds()
+            // Mirror immediately — do not wait for a later refreshPurchaseStatus().
+            FirestoreManager.shared.writeProStatus(isPro)
         case ProductID.removeAds.rawValue:
             hasRemovedAds = true
             AdManager.shared.disableAds()
