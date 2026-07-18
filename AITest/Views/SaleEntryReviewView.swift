@@ -136,10 +136,15 @@ struct SaleEntryReviewView: View {
             let storageName = row.resolvedItem?.storage?.name ?? ""
             let category = row.resolvedItem?.category ?? ""
 
+            // Capture stock BEFORE the sale is applied.
+            // quantityBefore = current stock, quantityAfter = stock after selling row.quantitySold
+            let stockBefore = row.resolvedItem?.currentQuantity ?? 0
             let event = ActivityEvent(
                 eventType: "SaleMade",
                 itemName: row.itemName,
                 storageName: storageName,
+                quantityBefore: stockBefore,
+                quantityAfter: stockBefore - row.quantitySold,
                 notes: "Smart Sales Entry batch"
             )
             modelContext.insert(event)

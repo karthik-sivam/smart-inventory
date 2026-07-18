@@ -49,6 +49,9 @@ struct ImageInventoryView: View {
 
     @State private var errorMessage: String?
     @State private var showingPaywall = false
+    @State private var fluidMode = false
+    @State private var editableFillPercent: Double?
+    @State private var editableRemainingVolume: String?
 
     private var isStorageSelected: Bool {
         selectedStorage != nil && !storages.isEmpty
@@ -124,6 +127,13 @@ struct ImageInventoryView: View {
                 }
 
                 storagePickerSection
+
+                Toggle(isOn: $fluidMode) {
+                    Label("Measuring fluid level", systemImage: "drop.fill")
+                        .font(.subheadline)
+                }
+                .tint(.stoqlyPrimary)
+                .padding(.horizontal)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Works for single items and full shelves", systemImage: "lightbulb")
@@ -270,6 +280,8 @@ struct ImageInventoryView: View {
                             TextField("pcs", text: $editableUnit)
                         }
                     }
+
+                    fluidInfoView(fillPercent: editableFillPercent, remainingVolume: editableRemainingVolume, unit: editableUnit)
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Category")
@@ -454,7 +466,21 @@ struct ImageInventoryView: View {
         parsedItem = nil
         parsedItems = []
         matchedExistingItem = nil
+        editableFillPercent = nil
+        editableRemainingVolume = nil
         step = .capture
+    }
+
+    @ViewBuilder
+    private func fluidInfoView(fillPercent: Double?, remainingVolume: String?, unit: String) -> some View {
+        if let fill = fillPercent {
+            Text("~\(Int(fill))% full\(remainingVolume.map { " · \($0)" } ?? "")")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        } else if fluidMode && (unit.lowercased().contains("l") || unit.lowercased() == "ml") {
+            Text("Fill level not visible — enter quantity manually")
+                .font(.caption).foregroundColor(.orange)
+        }
     }
 
     // MARK: - Logic: Analyse
@@ -474,7 +500,7 @@ struct ImageInventoryView: View {
         let compressed = image.jpegData(compressionQuality: 0.7) ?? Data()
 
         do {
-            let items = try await AIInventoryService.shared.identifyProduct(imageData: compressed)
+            let items = try await AIInventoryService.shared.identifyProduct(imageData: compressed, fluidMode: fluidMode)
             usageManager.recordUse(.image)
 
             let storage = selectedStorage
@@ -495,6 +521,12 @@ struct ImageInventoryView: View {
                 }()
                 editableUnit     = parsed?.unitSymbol ?? "pcs"
                 editableCategory = parsed?.category ?? "Uncategorised"
+                editableFillPercent = parsed?.fillPercent
+                editableRemainingVolume = parsed?.remainingVolume
+                if let vol = parsed?.remainingVolume?.lowercased() {
+                    if vol.contains("ml") { editableUnit = "mL" }
+                    else if vol.contains("l") { editableUnit = "L" }
+                }
 
                 // Only attempt fuzzy match when a single product was returned
                 if items.count == 1, let name = parsed?.name, let storage {
@@ -544,6 +576,8 @@ struct ImageInventoryView: View {
                 eventType: "ItemCounted",
                 itemName: existing.name,
                 storageName: storage.name,
+                quantityBefore: count.previousQuantity,
+                quantityAfter: qty,
                 notes: "Updated via photo inventory",
                 performedBy: "You"
             )
@@ -606,6 +640,8 @@ struct ImageInventoryView: View {
                     eventType: "ItemCounted",
                     itemName: existing.name,
                     storageName: storage.name,
+                    quantityBefore: count.previousQuantity,
+                    quantityAfter: qty,
                     notes: "Photo shelf scan",
                     performedBy: "You"
                 )

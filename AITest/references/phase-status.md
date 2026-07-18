@@ -156,6 +156,16 @@ Added directly to `StorageDetailView.swift`:
 
 ---
 
+## Phase 7 — Pro+ Tier & Live AI Camera 📋 Future
+
+- 7.1 **Live AI Camera (SmartCount Pro+)** — AVFoundation live camera feed, samples 1 frame every 2s, sends each to Claude Vision, aggregates and deduplicates items across frames as the user pans the shelf. Solves the hidden-items problem that single-photo can't handle. Running count overlay updates progressively on screen. Tap Done → review → save. Estimated cost: ~15 Claude Haiku calls per session (≈ ₹5–10). Gated behind a Pro+ tier.
+- 7.2 **Pro+ tier** — Pricing ladder: Free → Pro → Pro+. Pro+ includes: Live AI Camera (unlimited sessions), deeper analytics history (all-time), priority support. Gives a natural upsell path for larger SMBs (warehouses, multi-location retail).
+- 7.3 Multi-location / franchise support — one owner account, multiple branch workspaces.
+
+> 💡 Live AI Camera idea originated from a LinkedIn comment on the Stoqly launch post (July 2026): commenter pointed out that shelves have hidden items that a single photo can't count. Video/multi-frame scanning is the right answer — captures multiple angles as user walks, accumulates a full count.
+
+---
+
 ## Critical Pre-Ship Checklist
 
 Before any App Store submission:

@@ -64,12 +64,33 @@ enum SpeechKit {
 @MainActor
 final class VoiceRecordingController: ObservableObject {
     let audioEngine = AVAudioEngine()
-    let recognizer  = SFSpeechRecognizer(locale: .current)
+    var recognizer: SFSpeechRecognizer?
     var request:  SFSpeechAudioBufferRecognitionRequest?
     var task:     SFSpeechRecognitionTask?
 
+    @Published var showLowConfidenceWarning = false
+
     private(set) var isRunning = false
     private var tapInstalled = false
+
+    init() {
+        recognizer = SFSpeechRecognizer(locale: Self.preferredRecognitionLocale())
+    }
+
+    static func defaultLocaleID() -> String {
+        Locale.current.region?.identifier == "IN" ? "en-IN" : "en-US"
+    }
+
+    static func preferredRecognitionLocale() -> Locale {
+        let region = Locale.current.region?.identifier ?? ""
+        return region == "IN" ? Locale(identifier: "en-IN") : .current
+    }
+
+    func setRecognizerLocale(_ locale: Locale) {
+        stop()
+        recognizer = SFSpeechRecognizer(locale: locale)
+        showLowConfidenceWarning = false
+    }
 
     enum RecordingError: LocalizedError {
         case invalidInputFormat
@@ -170,6 +191,7 @@ struct VoiceInventoryView: View {
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
     @Query private var storages: [Storage]
     @Query private var uoms: [UOM]
+    @Query(sort: \InventoryItem.name) private var allItems: [InventoryItem]
 
     // Audio controller — @StateObject ensures single ownership, main-thread init.
     @StateObject private var audio = VoiceRecordingController()
@@ -194,6 +216,9 @@ struct VoiceInventoryView: View {
     @State private var showingPaywall = false
     @State private var recordingPermissionDenied = false
     @State private var didRequestRecordingPermissions = false
+    @State private var selectedLocale: String = VoiceRecordingController.defaultLocaleID()
+
+    private let availableLocales = [("en-IN", "English (India)"), ("en-US", "English (US)"), ("en-GB", "English (UK)")]
 
     private var isStorageSelected: Bool {
         selectedStorage != nil && !storages.isEmpty
@@ -230,6 +255,11 @@ struct VoiceInventoryView: View {
             guard !didRequestRecordingPermissions else { return }
             didRequestRecordingPermissions = true
             requestRecordingPermissions()
+            audio.setRecognizerLocale(Locale(identifier: selectedLocale))
+        }
+        .onChange(of: selectedLocale) { _, newLocale in
+            if isRecording { stopRecording() }
+            audio.setRecognizerLocale(Locale(identifier: newLocale))
         }
     }
 
@@ -238,6 +268,20 @@ struct VoiceInventoryView: View {
     private var recordView: some View {
         ScrollView {
             VStack(spacing: 24) {
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(availableLocales, id: \.0) { id, label in
+                            Button(label) { selectedLocale = id }
+                                .font(.caption)
+                                .padding(.horizontal, 12).padding(.vertical, 6)
+                                .background(selectedLocale == id ? Color.stoqlyPrimary : Color(.systemGray5))
+                                .foregroundColor(selectedLocale == id ? .white : .primary)
+                                .cornerRadius(20)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
 
                 // Usage badge
                 if !subscriptionManager.isPro {
@@ -303,26 +347,34 @@ struct VoiceInventoryView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Transcript")
                         .font(.subheadline).fontWeight(.semibold)
-                    ZStack(alignment: .topLeading) {
-                        RoundedRectangle(cornerRadius: AppTheme.radiusMd)
-                            .fill(Color.stoqlyCard)
-                            .frame(minHeight: 140)
-                        if transcript.isEmpty {
-                            Text("Your speech will appear here…")
-                                .font(.body)
-                                .foregroundColor(.secondary)
-                                .padding(14)
-                        } else {
-                            Text(transcript)
-                                .font(.body)
-                                .padding(14)
-                                .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                    if audio.showLowConfidenceWarning {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.yellow)
+                            Text("Low confidence — please check and edit the text below before analysing.")
+                                .font(.caption)
                         }
                     }
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.radiusMd)
-                            .stroke(isRecording ? Color.stoqlyDanger.opacity(0.5) : Color(.separator), lineWidth: 1)
-                    )
+
+                    TextEditor(text: $transcript)
+                        .font(.body)
+                        .frame(minHeight: 140)
+                        .padding(8)
+                        .background(Color.stoqlyCard)
+                        .cornerRadius(AppTheme.radiusMd)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.radiusMd)
+                                .stroke(isRecording ? Color.stoqlyDanger.opacity(0.5) : Color(.separator), lineWidth: 1)
+                        )
+                        .overlay(alignment: .topLeading) {
+                            if transcript.isEmpty {
+                                Text("Your speech will appear here…")
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                    .padding(16)
+                                    .allowsHitTesting(false)
+                            }
+                        }
                 }
 
                 // Error
@@ -449,10 +501,18 @@ struct VoiceInventoryView: View {
 
                 VStack(spacing: 12) {
                     Divider()
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundColor(.stoqlyDanger)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
                     HStack(spacing: 12) {
                         Button("Re-record") {
                             transcript = ""
                             editableItems = []
+                            errorMessage = nil
                             step = .record
                         }
                         .font(.subheadline)
@@ -516,6 +576,7 @@ struct VoiceInventoryView: View {
         }
 
         errorMessage = nil
+        audio.showLowConfidenceWarning = false
         audio.stop()
 
         let audioSession = AVAudioSession.sharedInstance()
@@ -529,6 +590,7 @@ struct VoiceInventoryView: View {
 
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
+        req.requiresOnDeviceRecognition = false
         audio.request = req
 
         guard let recognizer = audio.recognizer, recognizer.isAvailable else {
@@ -540,8 +602,14 @@ struct VoiceInventoryView: View {
         audio.task = SpeechKit.startTask(on: recognizer, with: req) { result, error in
             let transcriptText = result?.bestTranscription.formattedString
             let isFinal        = result?.isFinal ?? false
+            let minConfidence  = result?.bestTranscription.segments.map(\.confidence).min()
             DispatchQueue.main.async {
-                handleRecognitionUpdate(transcriptText: transcriptText, isFinal: isFinal, error: error)
+                handleRecognitionUpdate(
+                    transcriptText: transcriptText,
+                    isFinal: isFinal,
+                    minConfidence: minConfidence,
+                    error: error
+                )
             }
         }
 
@@ -555,11 +623,20 @@ struct VoiceInventoryView: View {
         }
     }
 
-    private func handleRecognitionUpdate(transcriptText: String?, isFinal: Bool, error: (any Error)?) {
+    private func handleRecognitionUpdate(
+        transcriptText: String?,
+        isFinal: Bool,
+        minConfidence: Float?,
+        error: (any Error)?
+    ) {
         guard isRecording || audio.isRunning else { return }
 
         if let transcriptText {
             transcript = transcriptText
+        }
+
+        if let minConfidence, minConfidence < 0.6 {
+            audio.showLowConfidenceWarning = true
         }
 
         if isFinal {
@@ -594,7 +671,8 @@ struct VoiceInventoryView: View {
 
         step = .parsing
         do {
-            let items = try await AIInventoryService.shared.parseVoiceTranscript(transcript)
+            let hints = allItems.prefix(50).map(\.name)
+            let items = try await AIInventoryService.shared.parseVoiceTranscript(transcript, inventoryHints: Array(hints))
             usageManager.recordUse(.voice)
             editableItems = items.map { EditableItem(from: $0) }
             editableItems.applyNameMatching(in: selectedStorage)
@@ -610,6 +688,7 @@ struct VoiceInventoryView: View {
 
     private func saveItems() async {
         guard let storage = selectedStorage else { return }
+        errorMessage = nil
         step = .saving
 
         let itemsToSave = editableItems.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -628,6 +707,8 @@ struct VoiceInventoryView: View {
                     eventType: "ItemCounted",
                     itemName: existing.name,
                     storageName: storage.name,
+                    quantityBefore: count.previousQuantity,
+                    quantityAfter: qty,
                     notes: "Voice inventory",
                     performedBy: "You"
                 )
@@ -653,7 +734,11 @@ struct VoiceInventoryView: View {
             }
         }
 
-        modelContext.safeSave(context: "VoiceInventorySave")
+        guard modelContext.safeSave(context: "VoiceInventorySave") else {
+            errorMessage = "Couldn't save your inventory changes. Please try again."
+            step = .review
+            return
+        }
 
         AnalyticsManager.shared.track(.smartCountCompleted(
             mode: "voice",
@@ -667,11 +752,8 @@ struct VoiceInventoryView: View {
             }
         }
 
-        if let onComplete {
-            onComplete(itemsToSave.count)
-        } else {
-            dismiss()
-        }
+        onComplete?(itemsToSave.count)
+        dismiss()
     }
 }
 
@@ -689,6 +771,8 @@ struct EditableItem: Identifiable {
     var unitSymbol: String?
     var category: String?
     var confidence: Double
+    var fillPercent: Double?
+    var remainingVolume: String?
     var match: ItemMatch = .new
 
     init(from parsed: ParsedInventoryItem) {
@@ -698,6 +782,12 @@ struct EditableItem: Identifiable {
         unitSymbol   = parsed.unitSymbol
         category     = parsed.category
         confidence   = parsed.confidence
+        fillPercent  = parsed.fillPercent
+        remainingVolume = parsed.remainingVolume
+        if let vol = parsed.remainingVolume?.lowercased() {
+            if vol.contains("ml") { unitSymbol = "mL" }
+            else if vol.contains("l") { unitSymbol = "L" }
+        }
     }
 }
 
@@ -786,6 +876,17 @@ struct EditableItemRow: View {
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(Color.stoqlyWarningTint)
                         .cornerRadius(4)
+                }
+            }
+
+            if let fill = item.fillPercent {
+                Text("~\(Int(fill))% full\(item.remainingVolume.map { " · \($0)" } ?? "")")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else if item.remainingVolume != nil || (item.unitSymbol?.lowercased().contains("l") == true) {
+                if item.fillPercent == nil && item.unitSymbol?.lowercased().contains("l") == true {
+                    Text("Fill level not visible — enter quantity manually")
+                        .font(.caption).foregroundColor(.orange)
                 }
             }
         }

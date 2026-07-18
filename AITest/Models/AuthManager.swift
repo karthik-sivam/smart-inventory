@@ -65,6 +65,8 @@ class AuthManager: ObservableObject {
             currentUser = result.user
             isAuthenticated = true
 
+            Task { await SubscriptionManager.shared.applyManualProGrantIfNeeded() }
+
             // Track completion for ad system
             // Analytics
             AnalyticsManager.shared.track(.userSignedUp(method: "email"))
@@ -87,6 +89,8 @@ class AuthManager: ObservableObject {
             let result = try await Auth.auth().signIn(withEmail: email, password: password)
             currentUser = result.user
             isAuthenticated = true
+
+            Task { await SubscriptionManager.shared.applyManualProGrantIfNeeded() }
 
             // Analytics
             AnalyticsManager.shared.track(.userSignedIn(method: "email"))
@@ -121,6 +125,8 @@ class AuthManager: ObservableObject {
             
             currentUser = authResult.user
             isAuthenticated = true
+
+            Task { await SubscriptionManager.shared.applyManualProGrantIfNeeded() }
 
             // Analytics
             AnalyticsManager.shared.track(.userSignedIn(method: "google"))
@@ -177,6 +183,8 @@ class AuthManager: ObservableObject {
             }
             currentUser = Auth.auth().currentUser // refresh after potential profile update
             isAuthenticated = true
+
+            Task { await SubscriptionManager.shared.applyManualProGrantIfNeeded() }
 
             // Analytics
             AnalyticsManager.shared.track(.userSignedIn(method: "apple"))

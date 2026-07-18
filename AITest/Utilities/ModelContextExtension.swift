@@ -6,9 +6,13 @@ import SwiftUI
 // On failure: logs to console and posts a notification for the error banner.
 
 extension ModelContext {
-    func safeSave(context: String = "") {
+    /// Saves the context. Returns `true` on success, `false` on failure.
+    /// On failure: logs to console and posts `.swiftDataSaveError` for the error banner.
+    @discardableResult
+    func safeSave(context: String = "") -> Bool {
         do {
             try save()
+            return true
         } catch {
             let msg = context.isEmpty ? error.localizedDescription
                 : "[\(context)] \(error.localizedDescription)"
@@ -17,6 +21,7 @@ extension ModelContext {
                 name: .swiftDataSaveError,
                 object: msg
             )
+            return false
         }
     }
 }

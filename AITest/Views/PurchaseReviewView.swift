@@ -10,10 +10,12 @@ struct PurchaseReviewView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var currencyManager: CurrencyManager
     @Query(sort: \InventoryItem.name) private var allItems: [InventoryItem]
+    @Query(sort: \Storage.name) private var allStorages: [Storage]
 
     @State private var isSaving = false
     @State private var validationError: String?
     @State private var pickingItemRowID: UUID?
+    @State private var pickingStorageRowID: UUID?
 
     private var catalogItems: [InventoryItem] {
         if let defaultStorage { return defaultStorage.items }
@@ -22,6 +24,9 @@ struct PurchaseReviewView: View {
 
     private var confirmableRows: [ParsedPurchaseRow] { rows.filter { !$0.isSkipped } }
     private var unresolvedCount: Int { confirmableRows.filter { $0.resolvedItem == nil }.count }
+    private var rowsMissingStorage: [ParsedPurchaseRow] {
+        confirmableRows.filter { $0.resolvedItem == nil && $0.targetStorage == nil && defaultStorage == nil }
+    }
 
     var body: some View {
         reviewContent
@@ -42,6 +47,27 @@ struct PurchaseReviewView: View {
                     }
                     .sheetStyle()
                 }
+            }
+            .sheet(isPresented: Binding(
+                get: { pickingStorageRowID != nil },
+                set: { if !$0 { pickingStorageRowID = nil } }
+            )) {
+                NavigationStack {
+                    List(allStorages) { storage in
+                        Button(storage.name) {
+                            assignStorage(id: pickingStorageRowID, to: storage)
+                            pickingStorageRowID = nil
+                        }
+                    }
+                    .navigationTitle("Pick Storage")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("Cancel") { pickingStorageRowID = nil }
+                        }
+                    }
+                }
+                .sheetStyle()
             }
             .onAppear { autoResolveRows() }
     }
@@ -101,7 +127,8 @@ struct PurchaseReviewView: View {
                     quantityReceived: fieldBinding(row.id, \.quantityReceived),
                     costPerUnit: fieldBinding(row.id, \.costPerUnit),
                     isSkipped: fieldBinding(row.id, \.isSkipped),
-                    onRequestItemPicker: { pickingItemRowID = row.id }
+                    onRequestItemPicker: { pickingItemRowID = row.id },
+                    onRequestStoragePicker: { pickingStorageRowID = row.id }
                 )
             }
             .onDelete { rows.remove(atOffsets: $0) }
@@ -119,8 +146,13 @@ struct PurchaseReviewView: View {
         .buttonStyle(.borderedProminent)
         .tint(.stoqlyAccent)
         .controlSize(.large)
-        .disabled(isSaving || confirmableRows.isEmpty)
+        .disabled(isSaving || confirmableRows.isEmpty || !rowsMissingStorage.isEmpty)
         .padding()
+    }
+
+    private func assignStorage(id: UUID?, to storage: Storage) {
+        guard let id, let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        rows[index].targetStorage = storage
     }
 
     private func fieldBinding<T>(_ id: UUID, _ keyPath: WritableKeyPath<ParsedPurchaseRow, T>) -> Binding<T> {
@@ -166,6 +198,11 @@ struct PurchaseReviewView: View {
     private func saveAllPurchases() async {
         validationError = nil
 
+        if !rowsMissingStorage.isEmpty {
+            validationError = "Assign a storage to continue"
+            return
+        }
+
         let unmatched = confirmableRows.filter { $0.resolvedItem == nil }
         if !unmatched.isEmpty {
             validationError = "Link unmatched items to inventory items first, or skip them."
@@ -183,10 +220,16 @@ struct PurchaseReviewView: View {
             guard let movStorage else { continue }
             let storageName = movStorage.name
 
+            // Capture stock before/after so the activity feed shows "+N" instead of a generic line.
+            let qBefore = item.currentQuantity
+            let qAfter = qBefore + row.quantityReceived
+
             let event = ActivityEvent(
                 eventType: "MovementLogged",
                 itemName: item.name,
                 storageName: storageName,
+                quantityBefore: qBefore,
+                quantityAfter: qAfter,
                 notes: "Purchase invoice import"
             )
             modelContext.insert(event)
@@ -208,7 +251,7 @@ struct PurchaseReviewView: View {
             modelContext.insert(movement)
             savedMovements.append(movement)
 
-            item.currentQuantity += row.quantityReceived
+            item.currentQuantity = qAfter
             if row.costPerUnit > 0 {
                 item.lastPurchasePrice = row.costPerUnit
                 item.lastPurchasedAt = now
@@ -257,6 +300,7 @@ struct PurchaseReviewRow: View {
     @Binding var costPerUnit: Double
     @Binding var isSkipped: Bool
     let onRequestItemPicker: () -> Void
+    let onRequestStoragePicker: () -> Void
 
     private var storageLabel: String? {
         row.targetStorage?.name ?? row.resolvedItem?.storage?.name ?? defaultStorage?.name
@@ -305,12 +349,14 @@ struct PurchaseReviewRow: View {
 
     @ViewBuilder
     private var storageAssignmentRow: some View {
-        if let defaultStorage, row.targetStorage == nil {
-            storagePill("→ \(defaultStorage.name)", highlighted: false)
-        } else if let name = row.targetStorage?.name {
+        if let name = row.targetStorage?.name {
             storagePill("→ \(name)", highlighted: true)
-        } else if defaultStorage == nil {
-            storagePill("→ No storage", highlighted: false)
+        } else if let defaultStorage {
+            storagePill("→ \(defaultStorage.name)", highlighted: false)
+        } else {
+            Button("Pick storage →") { onRequestStoragePicker() }
+                .font(.caption2).foregroundColor(.orange)
+                .buttonStyle(.borderless)
         }
     }
 

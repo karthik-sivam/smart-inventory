@@ -3679,7 +3679,7 @@ CRITICAL RULES (never violate):
 
 ---
 
-ITEM M6-1 — Smart Insights: data health nudges
+[DONE ✓] ITEM M6-1 — Smart Insights: data health nudges
 File: AITest/Views/DashboardView.swift
 Location: SmartInsightsCard private struct, inside the `insights` computed property
 
@@ -3754,9 +3754,10 @@ NOTE: reorderPercentage is the field name on InventoryItem (confirmed in codebas
 ---
 
 ITEM M6-2 — Purchase Invoice: global entry from Items tab + multi-storage support
+[DONE ✓ — STEP A and STEP F completed. STEPS B/C/D/E (targetStorage) moved to S7.]
 Files: AITest/Views/ItemListView.swift, AITest/Views/PurchaseInvoiceImportView.swift, AITest/Views/PurchaseReviewView.swift, AITest/Models/ParsedPurchaseRow.swift
 
-STEP A — Make defaultStorage optional in PurchaseInvoiceImportView:
+[DONE ✓] STEP A — Make defaultStorage optional in PurchaseInvoiceImportView:
 File: AITest/Views/PurchaseInvoiceImportView.swift
 Change:
   let defaultStorage: Storage
@@ -3793,7 +3794,7 @@ In the save/confirm action (wherever InventoryMovements are created), replace an
 
 Keep all existing save logic for lastPurchasePrice, InventoryMovement creation, and Firestore sync.
 
-STEP F — Add global entry point in ItemListView:
+[DONE ✓] STEP F — Add global entry point in ItemListView:
 File: AITest/Views/ItemListView.swift
 1. Add: @State private var showingPurchaseInvoice = false
 2. In existing .toolbar block, add a new ToolbarItem:
@@ -3815,7 +3816,7 @@ File: AITest/Views/ItemListView.swift
 
 ---
 
-ITEM M6-3 — Remove debug print logs from BarcodeEnrichmentService
+[DONE ✓] ITEM M6-3 — Remove debug print logs from BarcodeEnrichmentService
 File: AITest/Services/BarcodeEnrichmentService.swift
 Search for all print() calls that contain "[Enrichment]" or any other debug prefix strings.
 Delete every such print() call line entirely.
@@ -3823,7 +3824,7 @@ Do NOT remove any error handling, guard statements, or actual logic — only the
 
 ---
 
-ITEM M6-4 — Maestro flows for M6 features
+[DONE ✓] ITEM M6-4 — Maestro flows for M6 features
 Files: maestro/flows/91_smart_insights_data_health.yaml, maestro/flows/92_global_invoice_import_entry.yaml
 Update: maestro/run_all.yaml (append both)
 Bundle ID: com.vishuddhi.stoqly
@@ -5944,3 +5945,1428 @@ And before:\par
 \par
 (Replace the "currentUser = result.user" line with "currentUser = Auth.auth().currentUser"\par
 so it picks up the updated displayName after commitChanges.)\par
+\par
+\par
+=== BUILD 15 HOTFIX — ACTIVITY HISTORY "?" BUG FIX ===\par
+P0 bug: Activity History shows "?" for counts, sales, and movements created\par
+via Photo Inventory, Voice Inventory, Smart Sales Entry, and Movement Sheet.\par
+Root cause: events created without quantityBefore/quantityAfter, plus a logic\par
+bug in SaleMade display and missing quantity info in MovementLogged display.\par
+\par
+CRITICAL RULES (never violate):\par
+- Use modelContext.safeSave(context:) — never try? modelContext.save()\par
+- Use .smartFormatted for quantities — never String(format: "%.2f", qty)\par
+- Do NOT change the ActivityEvent SwiftData model schema\par
+- Do NOT add new event types — fix the existing ones only\par
+\par
+---\par
+\par
+ITEM 1 — Fix displayDescription in ActivityEvent.swift\par
+File: AITest/Models/ActivityEvent.swift\par
+\par
+Replace the entire displayDescription computed property with:\par
+\par
+    var displayDescription: String \{\par
+        switch eventType \{\par
+        case "ItemAdded":\par
+            return "Added to \\(storageName)"\par
+        case "ItemCounted":\par
+            // Only show "?" if BOTH values are missing. If one is nil, fall back gracefully.\par
+            if quantityBefore == nil && quantityAfter == nil \{\par
+                return "Count recorded in \\(storageName)"\par
+            \}\par
+            let before = quantityBefore.map \{ $0.smartFormatted \} ?? "?"\par
+            let after  = quantityAfter.map  \{ $0.smartFormatted \} ?? "?"\par
+            return "Count updated: \\(before) \\u8594? \\(after)"\par
+        case "ItemUpdated":\par
+            let before = quantityBefore.map \{ $0.smartFormatted \} ?? "?"\par
+            let after  = quantityAfter.map  \{ $0.smartFormatted \} ?? "?"\par
+            return before == after\par
+                ? "Item details updated"\par
+                : "Quantity: \\(before) -> \\(after)"\par
+        case "ItemDeleted":\par
+            return "Removed from \\(storageName)"\par
+        case "LowStockAlert":\par
+            return "Low stock alert triggered"\par
+        case "StorageCreated":\par
+            return "Storage area created"\par
+        case "SaleMade":\par
+            // quantityBefore = stock before sale, quantityAfter = stock after sale\par
+            // soldQty = before - after\par
+            if let before = quantityBefore, let after = quantityAfter \{\par
+                let soldQty = (before - after).smartFormatted\par
+                return "Sale recorded: \\(soldQty) sold from \\(storageName)"\par
+            \}\par
+            return "Sale recorded from \\(storageName)"\par
+        case "MovementLogged":\par
+            // quantityBefore = stock before, quantityAfter = stock after\par
+            if let before = quantityBefore, let after = quantityAfter \{\par
+                let change = after - before\par
+                let sign = change >= 0 ? "+" : ""\par
+                return "Movement: \\(sign)\\(change.smartFormatted) in \\(storageName)"\par
+            \}\par
+            return "Movement logged in \\(storageName)"\par
+        case "BulkCountImported":\par
+            return "Bulk count imported in \\(storageName)"\par
+        default:\par
+            return eventType\par
+        \}\par
+    \}\par
+\par
+Note: \\u8594? is the RTF escape for the unicode arrow character →\par
+In the actual Swift code write the literal → character, NOT the RTF escape.\par
+\par
+---\par
+\par
+ITEM 2 — Fix ImageInventoryView.swift: add quantities to ItemCounted events\par
+File: AITest/Views/ImageInventoryView.swift\par
+\par
+There are TWO places to fix:\par
+\par
+FIX A — single-item save (around line 543, inside "if let existing = matchedExistingItem" branch):\par
+\par
+FIND this event:\par
+    let event = ActivityEvent(\par
+        eventType: "ItemCounted",\par
+        itemName: existing.name,\par
+        storageName: storage.name,\par
+        notes: "Updated via photo inventory",\par
+        performedBy: "You"\par
+    )\par
+\par
+REPLACE WITH:\par
+    // Capture qty BEFORE currentQuantity is mutated (it already was above — qty is the new value)\par
+    let event = ActivityEvent(\par
+        eventType: "ItemCounted",\par
+        itemName: existing.name,\par
+        storageName: storage.name,\par
+        quantityBefore: count.previousQuantity,   // InventoryCount already has previousQuantity\par
+        quantityAfter: qty,\par
+        notes: "Updated via photo inventory",\par
+        performedBy: "You"\par
+    )\par
+\par
+FIX B — shelf scan bulk save (around line 605, inside "case .existing(let existing):" branch):\par
+\par
+FIND this event:\par
+    let event = ActivityEvent(\par
+        eventType: "ItemCounted",\par
+        itemName: existing.name,\par
+        storageName: storage.name,\par
+        notes: "Photo shelf scan",\par
+        performedBy: "You"\par
+    )\par
+\par
+REPLACE WITH:\par
+    let event = ActivityEvent(\par
+        eventType: "ItemCounted",\par
+        itemName: existing.name,\par
+        storageName: storage.name,\par
+        quantityBefore: count.previousQuantity,\par
+        quantityAfter: qty,\par
+        notes: "Photo shelf scan",\par
+        performedBy: "You"\par
+    )\par
+\par
+---\par
+\par
+ITEM 3 — Fix VoiceInventoryView.swift: add quantities to ItemCounted event\par
+File: AITest/Views/VoiceInventoryView.swift\par
+\par
+FIND this event (around line 627, inside "case .existing(let existing):" branch):\par
+    let event = ActivityEvent(\par
+        eventType: "ItemCounted",\par
+        itemName: existing.name,\par
+        storageName: storage.name,\par
+        notes: "Voice inventory",\par
+        performedBy: "You"\par
+    )\par
+\par
+REPLACE WITH:\par
+    let event = ActivityEvent(\par
+        eventType: "ItemCounted",\par
+        itemName: existing.name,\par
+        storageName: storage.name,\par
+        quantityBefore: count.previousQuantity,\par
+        quantityAfter: qty,\par
+        notes: "Voice inventory",\par
+        performedBy: "You"\par
+    )\par
+\par
+---\par
+\par
+ITEM 4 — Fix SaleEntryReviewView.swift: add quantities to SaleMade event\par
+File: AITest/Views/SaleEntryReviewView.swift\par
+\par
+FIND this event (around line 139, inside the for-loop that processes confirmableRows):\par
+    let event = ActivityEvent(\par
+        eventType: "SaleMade",\par
+        itemName: row.itemName,\par
+        storageName: storageName,\par
+        notes: "Smart Sales Entry batch"\par
+    )\par
+\par
+REPLACE WITH:\par
+    // Capture stock BEFORE the sale is applied.\par
+    // quantityBefore = current stock, quantityAfter = stock after selling row.quantitySold\par
+    let stockBefore = row.resolvedItem?.currentQuantity ?? 0\par
+    let event = ActivityEvent(\par
+        eventType: "SaleMade",\par
+        itemName: row.itemName,\par
+        storageName: storageName,\par
+        quantityBefore: stockBefore,\par
+        quantityAfter: stockBefore - row.quantitySold,\par
+        notes: "Smart Sales Entry batch"\par
+    )\par
+\par
+---\par
+\par
+BUILD VERIFICATION:\par
+1. Build the app — zero new warnings\par
+2. Test Photo Inventory: count an item → check Activity History → should show "Count updated: X → Y" with real numbers\par
+3. Test Voice Inventory: same test → same expectation\par
+4. Test Smart Sales Entry: record a sale for multiple items → Activity History should show "Sale recorded: N sold from [Storage]" with the actual sold qty\par
+5. Test Movement Sheet: log a movement → Activity History should show "Movement: +N in [Storage]" or "Movement: -N in [Storage]"\par
+6. Test Quick Sale Sheet (was already correct): should still show correct sold qty\par
+7. Test "Mark as Out of Stock": should still show "Count updated: X → 0"\par
+8. Update automation_results.rtf with results\par
+\par
+---\par
+\par
+===========================================\par
+S7 \emdash  AI DEPTH + USER EDUCATION (Cursor Spec)\par
+===========================================\par
+\par
+Sprint goal: Make Photo Inventory and Voice Inventory best-in-class for Indian SMB users,\par
+add a Help Centre + contextual onboarding tips, and finish the one remaining M6 piece\par
+(targetStorage on ParsedPurchaseRow). Also wire up conversion tracking so the live Google\par
+Ads campaign can complete its learning phase.\par
+\par
+CRITICAL RULES (never violate):\par
+\bullet  Use modelContext.safeSave(context:) \emdash  never try? modelContext.save()\par
+\bullet  Insert ActivityEvent BEFORE modelContext.delete(item)\par
+\bullet  Never set isPro = true in any code\par
+\bullet  Never add NavigationStack inside sheet/modal views that already have one\par
+\bullet  Use item.currentQuantity.smartFormatted \emdash  never String(format: "%.2f", ...)\par
+\bullet  Barcode scanner must use .fullScreenCover, never .sheet\par
+\par
+---\par
+\par
+ITEM S7-0 \emdash  M6-2 Remainder: targetStorage on ParsedPurchaseRow\par
+Files: AITest/Models/ParsedPurchaseRow.swift, AITest/Views/PurchaseInvoiceImportView.swift, AITest/Views/PurchaseReviewView.swift\par
+\par
+STEP B \emdash  Add targetStorage to ParsedPurchaseRow:\par
+File: AITest/Models/ParsedPurchaseRow.swift\par
+Add after existing fields:\par
+    var targetStorage: Storage? = nil\par
+\par
+STEP C \emdash  Auto-fill targetStorage during auto-resolve:\par
+In PurchaseInvoiceImportView\'92s autoResolveRows() function (wherever resolvedItem is set on each row), also set:\par
+    rows[i].targetStorage = matchedItem.storage\par
+\par
+STEP D \emdash  Update PurchaseReviewView row display to show storage:\par
+File: AITest/Views/PurchaseReviewView.swift\par
+For each row in the review list:\par
+\bullet  If row.resolvedItem != nil: show storage pill using row.targetStorage?.name ?? row.resolvedItem?.storage?.name ?? "Unknown Storage"\par
+\bullet  If row.resolvedItem == nil AND defaultStorage != nil: show greyed pill "->\par
+(defaultStorage!.name)" (auto-assigned)\par
+\bullet  If row.resolvedItem == nil AND defaultStorage == nil: show a "Pick storage ->" button that opens a storage picker sheet; tapping it sets row.targetStorage. Unmatched rows with no targetStorage block the Confirm button (show inline warning "Assign a storage to continue").\par
+\par
+Storage picker sheet: simple List of @Query(sort: \\Storage.name) private var allStorages: [Storage]. Tap to select, dismiss sheet.\par
+\par
+STEP E \emdash  Update save logic to use row\'92s effective storage:\par
+In the save/confirm action, replace any hard reference to defaultStorage with:\par
+    let movStorage = row.targetStorage ?? row.resolvedItem?.storage ?? defaultStorage\par
+    guard let movStorage else \{ continue \} // skip unresolvable rows\par
+\par
+Keep all existing save logic for lastPurchasePrice, InventoryMovement creation, and Firestore sync.\par
+\par
+---\par
+\par
+ITEM S7-1 \emdash  Help Centre + Contextual Tips\par
+Files: AITest/Views/HelpCentreView.swift (NEW), AITest/Views/SettingsView.swift, AITest/Views/DashboardView.swift, AITest/Views/SmartCountView.swift (or whichever view hosts the SmartCount mode selection)\par
+\par
+PART A \emdash  HelpCentreView (new file):\par
+Create AITest/Views/HelpCentreView.swift.\par
+A NavigationStack with a searchable List of FAQ items grouped by section.\par
+Use a local struct:\par
+    struct FAQItem: Identifiable \{\par
+        let id = UUID()\par
+        let section: String\par
+        let question: String\par
+        let answer: String\par
+    \}\par
+\par
+Sections and content:\par
+Getting Started:\par
+\bullet  Q: "How do I add my first product?" A: "Go to any Storage, tap the + button, and fill in the item details. You can scan a barcode to auto-fill the name and details."\par
+\bullet  Q: "What is a Storage?" A: "A Storage is a location in your business \emdash  a shelf, room, freezer, or section. Add storages to organise your inventory by location."\par
+\bullet  Q: "Is Stoqly free?" A: "Yes \emdash  Stoqly is free to use with up to 5 storages and 50 items per storage. Upgrade to Pro for unlimited storages, items, and advanced analytics."\par
+\par
+SmartCount:\par
+\bullet  Q: "How does Photo Inventory work?" A: "Open SmartCount \emdash  Photo. Point your camera at a shelf or product. Stoqly uses AI to identify items and their quantities automatically."\par
+\bullet  Q: "How does Voice Inventory work?" A: "Open SmartCount \emdash  Voice. Tap the microphone and say your items aloud, e.g. \'91Rice 5kg, cooking oil 2 bottles\'92. The AI extracts and adds them."\par
+\bullet  Q: "Can it detect how much liquid is left in a bottle?" A: "Yes \emdash  in Photo mode, toggle \'91Measuring fluid level\'92 before scanning. Stoqly will estimate the fill level and remaining volume."\par
+\par
+Reorder Alerts:\par
+\bullet  Q: "How do I set a low-stock alert?" A: "Edit any item and set a Minimum Quantity. You\'92ll get a push notification when stock drops below that level."\par
+\bullet  Q: "What is a reorder percentage?" A: "Instead of a fixed quantity, you can set a percentage \emdash  e.g. 20% means you\'92re alerted when stock falls below 20% of your maximum."\par
+\par
+Reports:\par
+\bullet  Q: "Where do I see my profits?" A: "On the Dashboard, scroll down to the Smart Insights card. Set a selling price and cost price on your items to unlock profit tracking."\par
+\bullet  Q: "How do I export my inventory?" A: "Go to Settings \emdash  Export. You can export as CSV or PDF."\par
+\par
+Pro:\par
+\bullet  Q: "What does Pro include?" A: "Unlimited storages and items, full analytics history, barcode scanner pro, bulk CSV import, and no ads."\par
+\bullet  Q: "How do I try Pro?" A: "Go to Settings \emdash  Upgrade to Pro. A 7-day free trial is available."\par
+\par
+Search: use .searchable(text: $searchText) on the List. Filter FAQItems where question or answer contains searchText (case-insensitive). When searchText is empty, show all grouped by section.\par
+\par
+Each FAQ row: question as primary text, expandable (toggle @State var expandedID: UUID?) to show the answer below in secondary colour. No chevron needed \emdash  tap the row to expand/collapse.\par
+\par
+PART B \emdash  Wire into Settings:\par
+File: AITest/Views/SettingsView.swift\par
+In the Support section (or add one after the existing last section), add:\par
+    NavigationLink(destination: HelpCentreView()) \{\par
+        Label("Help & FAQ", systemImage: "questionmark.circle")\par
+    \}\par
+    .accessibilityIdentifier("helpCentreRow")\par
+\par
+PART C \emdash  SmartCount first-use tip banner:\par
+File: Whichever view is SmartCountView or the mode-selection screen for SmartCount.\par
+Add at the top of the view body (above the mode cards):\par
+    @AppStorage("stoqly_hasSeenSmartCountTip") private var hasSeenTip = false\par
+\par
+    if !hasSeenTip \{\par
+        HStack(alignment: .top, spacing: 12) \{\par
+            Image(systemName: "lightbulb.fill").foregroundColor(.yellow)\par
+            VStack(alignment: .leading, spacing: 4) \{\par
+                Text("How SmartCount works").font(.subheadline).bold()\par
+                Text("Photo: point at a shelf to count automatically. Voice: speak your items aloud. Sheet: scan a printed list.")\par
+                    .font(.caption).foregroundColor(.secondary)\par
+            \}\par
+            Spacer()\par
+            Button \{ hasSeenTip = true \} label: \{\par
+                Image(systemName: "xmark").font(.caption).foregroundColor(.secondary)\par
+            \}\par
+        \}\par
+        .padding()\par
+        .background(Color(.systemGray6))\par
+        .cornerRadius(12)\par
+        .padding(.horizontal)\par
+    \}\par
+\par
+PART D \emdash  Dashboard tip cards for new users:\par
+File: AITest/Views/DashboardView.swift\par
+Add below the KPI cards section, only when items.count < 10:\par
+    @AppStorage("stoqly_dismissedTips") private var dismissedTipsRaw = ""\par
+    private var dismissedTips: Set<String> \{ Set(dismissedTipsRaw.split(separator: ",").map(String.init)) \}\par
+    private func dismissTip(_ id: String) \{ dismissedTipsRaw = (dismissedTips.union([id])).joined(separator: ",") \}\par
+\par
+    struct TipCard: Identifiable \{\par
+        let id: String; let icon: String; let text: String; let action: String\par
+    \}\par
+\par
+    let tips: [TipCard] = [\par
+        TipCard(id: "smartcount", icon: "camera.viewfinder", text: "Count inventory with your camera", action: "Try SmartCount"),\par
+        TipCard(id: "reorder", icon: "bell.badge", text: "Set alerts before you run out", action: "Set Reorder Level"),\par
+        TipCard(id: "barcode", icon: "barcode.viewfinder", text: "Scan a barcode to add items fast", action: "Scan Now"),\par
+        TipCard(id: "import", icon: "square.and.arrow.down", text: "Import your existing stock list", action: "Import CSV")\par
+    ]\par
+    let visibleTips = tips.filter \{ !dismissedTips.contains($0.id) \}\par
+\par
+    if items.count < 10 && !visibleTips.isEmpty \{\par
+        ScrollView(.horizontal, showsIndicators: false) \{\par
+            HStack(spacing: 12) \{\par
+                ForEach(visibleTips) \{ tip in\par
+                    VStack(alignment: .leading, spacing: 8) \{\par
+                        HStack \{\par
+                            Image(systemName: tip.icon).foregroundColor(.stoqlyPrimary)\par
+                            Spacer()\par
+                            Button \{ dismissTip(tip.id) \} label: \{\par
+                                Image(systemName: "xmark").font(.caption2).foregroundColor(.secondary)\par
+                            \}\par
+                        \}\par
+                        Text(tip.text).font(.caption).bold()\par
+                        Text(tip.action).font(.caption2).foregroundColor(.stoqlyPrimary)\par
+                    \}\par
+                    .padding(12)\par
+                    .frame(width: 160)\par
+                    .background(Color(.systemGray6))\par
+                    .cornerRadius(12)\par
+                \}\par
+            \}\par
+            .padding(.horizontal)\par
+        \}\par
+    \}\par
+\par
+NOTE: Tip card tap actions (deep-link to tabs) require passing a tab selection binding or environment value. For v1, just show the text and action label \emdash  no deep-link navigation. Wiring can be added in S8.\par
+\par
+---\par
+\par
+ITEM S7-2 \emdash  Photo Inventory: Smart Quantity + Fluid Detection\par
+File: AITest/Views/ImageInventoryView.swift\par
+\par
+PART A \emdash  Better shelf counting (prompt improvement):\par
+Locate the Claude vision prompt string inside analyseImage(_ image:) or wherever the API call is constructed.\par
+Replace or augment the existing prompt with:\par
+\par
+    "You are an inventory counting assistant. Analyse the image and identify ALL distinct products visible.\par
+     For each product:\par
+     - Count the number of physically separate units visible (e.g. 6 cans = quantity 6, not 1).\par
+     - If units are partially hidden or stacked, estimate the total visible count.\par
+     - If the product is a liquid/fluid in a container AND the fill level is visible, estimate the fill percentage (e.g. 65%) and, if the label shows total volume (e.g. 500ml), calculate the remaining volume (e.g. ~325ml).\par
+     - If this is a single liquid container and fluid mode is active, prioritise fill-level estimation over unit count.\par
+     Return JSON array: [\{name, quantity, unit, fillPercent (if liquid), remainingVolume (if calculable), category\}]"\par
+\par
+PART B \emdash  Fluid mode toggle on capture screen:\par
+In the capture step (captureView), add a toggle above the photo picker buttons:\par
+    @State private var fluidMode = false\par
+\par
+    Toggle(isOn: $fluidMode) \{\par
+        Label("Measuring fluid level", systemImage: "drop.fill")\par
+            .font(.subheadline)\par
+    \}\par
+    .tint(.stoqlyPrimary)\par
+    .padding(.horizontal)\par
+\par
+When fluidMode is true, append to the Claude prompt:\par
+    "FLUID MODE: The captured image contains a liquid container. Prioritise estimating fill percentage and remaining volume over counting units."\par
+\par
+PART C \emdash  Fluid result display in review screen:\par
+In the review screen (reviewView), for each parsed item, check if the response includes fillPercent or remainingVolume.\par
+If present, display below the quantity field:\par
+    if let fill = item.fillPercent \{\par
+        Text("~\\(Int(fill))% full\\(item.remainingVolume.map \{ " \'b7 \\($0)" \} ?? "")")\par
+            .font(.caption)\par
+            .foregroundColor(.secondary)\par
+    \}\par
+\par
+Add fillPercent: Double? and remainingVolume: String? to the EditableItem struct (or ParsedInventoryItem \emdash  whichever is used for review items).\par
+If remainingVolume is present, auto-set the unit field to "ml" or "L" accordingly.\par
+\par
+PART D \emdash  Fallback for undetectable fill level:\par
+If Claude returns a liquid item but fillPercent is nil, show:\par
+    Text("Fill level not visible \emdash  enter quantity manually")\par
+        .font(.caption).foregroundColor(.orange)\par
+\par
+---\par
+\par
+ITEM S7-3 \emdash  Voice Inventory: Best-in-Class Speech Recognition\par
+File: AITest/Views/VoiceInventoryView.swift\par
+\par
+PART A \emdash  Default to en-IN locale for Indian users:\par
+In VoiceRecordingController (or wherever SFSpeechRecognizer is initialised):\par
+Replace:\par
+    let recognizer = SFSpeechRecognizer(locale: .current)\par
+With:\par
+    private static func preferredRecognitionLocale() -> Locale \{\par
+        let region = Locale.current.region?.identifier ?? ""\par
+        return region == "IN" ? Locale(identifier: "en-IN") : .current\par
+    \}\par
+    let recognizer = SFSpeechRecognizer(locale: VoiceRecordingController.preferredRecognitionLocale())\par
+\par
+Also set on the request before starting:\par
+    request.requiresOnDeviceRecognition = false  // use Apple\'92s server-side model for better accuracy\par
+\par
+PART B \emdash  Locale selector pill row:\par
+At the top of VoiceInventoryView body, add a horizontal scroll of locale pills:\par
+    @State private var selectedLocale: String = Locale.current.region?.identifier == "IN" ? "en-IN" : "en-US"\par
+    let availableLocales = [("en-IN", "English (India)"), ("en-US", "English (US)"), ("en-GB", "English (UK)")]\par
+\par
+    ScrollView(.horizontal, showsIndicators: false) \{\par
+        HStack(spacing: 8) \{\par
+            ForEach(availableLocales, id: \\.0) \{ id, label in\par
+                Button(label) \{ selectedLocale = id \}\par
+                    .font(.caption)\par
+                    .padding(.horizontal, 12).padding(.vertical, 6)\par
+                    .background(selectedLocale == id ? Color.stoqlyPrimary : Color(.systemGray5))\par
+                    .foregroundColor(selectedLocale == id ? .white : .primary)\par
+                    .cornerRadius(20)\par
+            \}\par
+        \}.padding(.horizontal)\par
+    \}\par
+\par
+When selectedLocale changes, recreate VoiceRecordingController.recognizer with Locale(identifier: selectedLocale).\par
+Use a @State var recognizerLocale: Locale and pass it into VoiceRecordingController, or use .id(selectedLocale) on the controller to force re-init.\par
+\par
+PART C \emdash  Live transcription display:\par
+Verify that request.shouldReportPartialResults = true is set. If not, add it.\par
+Show the partial transcription live in an editable TextEditor or TextField below the waveform/microphone button so the user can see and fix what\'92s being heard in real time before analysis.\par
+\par
+PART D \emdash  Low confidence warning:\par
+In the SFSpeechRecognitionResult handler, check:\par
+    let bestTranscription = result.bestTranscription\par
+    let confidence = bestTranscription.segments.map(\\.confidence).min() ?? 1.0\par
+    if confidence < 0.6 \{\par
+        DispatchQueue.main.async \{ self.showLowConfidenceWarning = true \}\par
+    \}\par
+\par
+Add @Published var showLowConfidenceWarning = false to VoiceRecordingController.\par
+In the view, show:\par
+    if controller.showLowConfidenceWarning \{\par
+        HStack \{\par
+            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.yellow)\par
+            Text("Low confidence \emdash  please check and edit the text below before analysing.")\par
+                .font(.caption)\par
+        \}\par
+        .padding(.horizontal)\par
+    \}\par
+\par
+PART E \emdash  Context-aware Claude prompt (use existing item names as hints):\par
+In the function that sends the transcription text to Claude for item extraction, prefix the prompt with:\par
+    let inventoryHint = existingItems.prefix(50).map(\\.name).joined(separator: ", ")\par
+    let contextPrefix = inventoryHint.isEmpty ? "" : "The user\'92s inventory includes: \\(inventoryHint). Use these as spelling hints when matching spoken product names.\\n\\n"\par
+    let fullPrompt = contextPrefix + existingPrompt\par
+\par
+Pass existingItems (the @Query result from VoiceInventoryView) into the function or ViewModel.\par
+\par
+PART F \emdash  Indian quantity expressions in Claude prompt:\par
+Append to the Claude text-extraction prompt:\par
+    "Understand Indian English quantity expressions: \'91two and a half kilo\'92 = 2.5 kg, \'91one dozen\'92 = 12 units, \'91half litre\'92 = 0.5 L, \'91quarter kg\'92 = 0.25 kg. Extract item name, quantity as a number, and unit separately."\par
+\par
+---\par
+\par
+ITEM S7-4 \emdash  Conversion Tracking Setup (chore)\par
+Files: AITest/AITestApp.swift, AITest/Info.plist\par
+\par
+STEP 1 \emdash  Confirm GADMobileAds initialisation:\par
+In AITestApp.swift, verify GADMobileAds.sharedInstance().start(completionHandler: nil) is called in the App init or in the main scene. If not present, add it.\par
+\par
+STEP 2 \emdash  SKAdNetwork keys in Info.plist:\par
+Add the following SKAdNetworkIdentifier entries to Info.plist under SKAdNetworkItems array.\par
+Key entries required for Google Ads iOS attribution:\par
+    <key>SKAdNetworkItems</key>\par
+    <array>\par
+      <dict><key>SKAdNetworkIdentifier</key><string>cstr6suwn9.skadnetwork</string></dict>\par
+      <dict><key>SKAdNetworkIdentifier</key><string>4fzdc2evr5.skadnetwork</string></dict>\par
+      <dict><key>SKAdNetworkIdentifier</key><string>4pfyvq9l8r.skadnetwork</string></dict>\par
+      <dict><key>SKAdNetworkIdentifier</key><string>ggvn48r87g.skadnetwork</string></dict>\par
+      <dict><key>SKAdNetworkIdentifier</key><string>klf5c3l5u5.skadnetwork</string></dict>\par
+      <dict><key>SKAdNetworkIdentifier</key><string>v9wttpbfk9.skadnetwork</string></dict>\par
+      <dict><key>SKAdNetworkIdentifier</key><string>n38lu8286q.skadnetwork</string></dict>\par
+      <dict><key>SKAdNetworkIdentifier</key><string>47vhws6wlr.skadnetwork</string></dict>\par
+    </array>\par
+Note: The full Google-recommended SKAdNetwork list has 80+ entries. These 8 are the core Google ones; the full list can be added via Google-UMP SDK later.\par
+\par
+STEP 3 \emdash  Log first_open event:\par
+In AITestApp.swift, in the App init or in ContentView.onAppear, add:\par
+    @AppStorage("stoqly_hasLoggedFirstOpen") private var hasLoggedFirstOpen = false\par
+    if !hasLoggedFirstOpen \{\par
+        Analytics.logEvent(AnalyticsEventAppOpen, parameters: nil)\par
+        hasLoggedFirstOpen = true\par
+    \}\par
+Import: import FirebaseAnalytics\par
+\par
+---\par
+\par
+BUILD VERIFICATION (S7):\par
+After all S7 items:\par
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination \'91platform=iOS Simulator,name=iPhone 17 Pro\'92 build\par
+Must exit 0, BUILD SUCCEEDED.\par
+\par
+Manual test checklist:\par
+1. Settings -> Help & FAQ opens HelpCentreView. Search "barcode" filters to relevant items. Tap a question to expand/collapse.\par
+2. SmartCount -> first open shows tip banner. Tap X -> banner gone. Reopen -> no banner.\par
+3. Dashboard with <10 items shows tip cards. Tap X on one card -> that card disappears. Dismiss all -> row gone.\par
+4. Photo Inventory -> "Measuring fluid level" toggle visible on capture screen. Toggle ON -> scan oil bottle -> review shows fill % and/or remaining volume.\par
+5. Voice Inventory -> locale pills visible. Switch to en-IN -> speak product names -> transcription visible in real time -> editable before analysis.\par
+6. Voice Inventory -> speak something unclear -> low confidence banner appears.\par
+7. Purchase Invoice -> scan from Items tab -> review rows show storage pill for matched items -> unmatched rows show "Pick storage" button -> unresolved rows block Confirm with inline warning.\par
+\par
+Update automation_results.rtf with:\par
+    S7 \emdash  AI Depth + User Education\par
+    [COMPLETED or FAILED]\par
+    - S7-0: targetStorage on ParsedPurchaseRow (M6-2 remainder)\par
+    - S7-1: HelpCentreView + SmartCount tip banner + Dashboard tip cards\par
+    - S7-2: Photo Inventory fluid detection + improved shelf counting prompt\par
+    - S7-3: Voice Inventory en-IN locale + live transcription + confidence warning + context hints\par
+    - S7-4: SKAdNetwork keys + first_open analytics event\par
+\par
+---\par
+\par
+===========================================\par
+S8 \emdash  AI HELP CENTRE (Cursor Spec)\par
+===========================================\par
+\par
+Sprint goal: Upgrade HelpCentreView from a static FAQ to a hybrid experience \emdash  static FAQ\par
+stays for instant offline answers, with an AI chat fallback powered by the existing Claude\par
+API integration. Free users get 5 AI questions/month; Pro users get unlimited.\par
+\par
+CRITICAL RULES (never violate):\par
+\bullet  Use modelContext.safeSave(context:) \emdash  never try? modelContext.save()\par
+\bullet  Never set isPro = true in any code\par
+\bullet  Never add NavigationStack inside sheet/modal views that already have one\par
+\bullet  Stoqly has NO free trial \emdash  do not mention or introduce any trial language anywhere\par
+\par
+---\par
+\par
+ITEM S8-1 \emdash  Add .helpChat case to AIUsageManager\par
+File: AITest/Models/AIUsageManager.swift\par
+\par
+Add a new case to the FeatureType enum:\par
+    case helpChat = "stoqly_ai_helpchat"\par
+\par
+Add a displayName for it:\par
+    case .helpChat: return "AI Help"\par
+\par
+Add a separate free limit constant for help chat (higher than other AI features since\par
+questions are cheap text-only calls):\par
+    static let helpChatFreeLimit = 5\par
+\par
+Update canUse and remaining to handle helpChat separately:\par
+    func canUse(_ type: FeatureType, isPro: Bool) -> Bool \{\par
+        if type == .helpChat \{\par
+            return isPro || usageThisMonth(type) < AIUsageManager.helpChatFreeLimit\par
+        \}\par
+        return isPro || usageThisMonth(type) < AIUsageManager.freeLimit\par
+    \}\par
+    func remaining(_ type: FeatureType, isPro: Bool) -> Int \{\par
+        if isPro \{ return Int.max \}\par
+        if type == .helpChat \{ return max(0, AIUsageManager.helpChatFreeLimit - usageThisMonth(type)) \}\par
+        return max(0, AIUsageManager.freeLimit - usageThisMonth(type))\par
+    \}\par
+\par
+---\par
+\par
+ITEM S8-2 \emdash  Add askHelpQuestion to AIInventoryService\par
+File: AITest/Services/AIInventoryService.swift\par
+\par
+Add a new public method after the existing parseInventorySheet method:\par
+\par
+    /// Answers a user question about Stoqly using the Claude API.\par
+    /// Returns a plain-text answer string. Throws AIInventoryError on failure.\par
+    func askHelpQuestion(_ question: String) async throws -> String \{\par
+        let systemPrompt = """\par
+        You are the in-app support assistant for Stoqly, an AI-powered inventory management\par
+        app for small businesses (shops, restaurants, cafes, warehouses).\par
+\par
+        You know everything about Stoqly. Here is the complete feature set:\par
+\par
+        CORE FEATURES:\par
+        - Storages: locations in the business (shelf, room, freezer, section). Users create\par
+          storages to organise inventory by location. Free plan: up to 5 storages.\par
+        - Items: products tracked within a storage. Each item has name, quantity, unit,\par
+          category, barcode, cost price, selling price, min quantity / reorder percentage.\par
+          Free plan: up to 50 items per storage.\par
+        - Quick Count: fast quantity update \emdash  set to exact value or adjust by +/-.\par
+        - Activity Feed: full history of every count, sale, movement, and import event.\par
+        - Barcode Scanner: scan any barcode to add or find an item.\par
+        - Dashboard: KPI cards (total items, storages, low stock, total value), Smart Insights\par
+          (profit margin, cost trends, data-health nudges), sales and movement charts.\par
+        - Reorder List: shows all items below their minimum level, grouped by supplier\par
+          with a one-tap email to supplier.\par
+        - Export: CSV and PDF export of full inventory.\par
+        - Push Notifications: low-stock alerts and daily summary.\par
+        - Offline Support: all changes queue and sync when back online.\par
+\par
+        SMARTCOUNT (AI inventory input modes):\par
+        - Photo Inventory: point camera at shelf \emdash  AI counts items and detects quantities.\par
+          Fluid mode available for liquid containers (estimates fill % and remaining volume).\par
+        - Voice Inventory: speak items aloud \emdash  AI extracts item names and quantities.\par
+          Supports Indian English expressions (two and a half kilo, one dozen, etc.).\par
+        - Sheet Inventory: photograph a handwritten or printed list \emdash  AI reads every row.\par
+        - CSV/Excel Import: upload a spreadsheet, map columns, import in bulk.\par
+        Free users: 3 AI uses/month per SmartCount mode. Pro: unlimited.\par
+\par
+        PURCHASE INVOICE:\par
+        - Scan a purchase invoice (photo or CSV) \emdash  AI extracts items and auto-matches to\par
+          existing inventory. Updates stock levels and records last purchase price.\par
+        - Accessible from the Items tab (global entry) or from any Storage.\par
+\par
+        SMART SALES:\par
+        - Record sales by voice, photo, CSV, or manual entry.\par
+        - Updates stock and records revenue.\par
+\par
+        TEAM:\par
+        - Invite team members to a shared workspace.\par
+        - Roles: Owner (full access), Editor (add/edit items), Viewer (read only).\par
+        - Pro feature.\par
+\par
+        TEMPLATES:\par
+        - Save any item as a template to reuse across storages.\par
+        - Pro feature.\par
+\par
+        PRO PLAN:\par
+        - Unlimited storages, unlimited items per storage.\par
+        - Unlimited AI uses for all SmartCount modes.\par
+        - Unlimited team members.\par
+        - Full analytics history (free plan: last 30 days only).\par
+        - Barcode scanner pro (enriched product data).\par
+        - Item photos.\par
+        - Remove Ads (also available as a separate one-time purchase).\par
+        - Stoqly has NO free trial. Users upgrade directly to Pro from Settings.\par
+        - Subscription products: com.vishuddhi.stoqly.pro.monthly (monthly),\par
+          com.vishuddhi.stoqly.pro.annual (annual), com.vishuddhi.stoqly.removeads (one-time).\par
+\par
+        HELP CENTRE:\par
+        - Accessible from Settings \emdash  Support \emdash  Help & FAQ.\par
+        - Contains searchable FAQ grouped by section.\par
+\par
+        RULES FOR YOUR ANSWERS:\par
+        - Answer only questions about Stoqly. If asked about anything unrelated, politely\par
+          say "I can only help with Stoqly questions."\par
+        - Be concise and practical \emdash  users are busy SMB owners, not tech people.\par
+        - Use simple language. No jargon.\par
+        - If you don\'92t know the answer, say "I\'92m not sure about that \emdash  please contact\par
+          support at support@stoqly.app."\par
+        - Never mention competitors.\par
+        - Never say Stoqly has a free trial \emdash  it does not.\par
+        - Keep answers to 3\endash 5 sentences max unless a step-by-step is genuinely needed.\par
+        """\par
+\par
+        return try await callClaudeRaw(\par
+            systemPrompt: systemPrompt,\par
+            userPrompt: question,\par
+            imageDataList: [],\par
+            maxTokens: 512\par
+        )\par
+    \}\par
+\par
+---\par
+\par
+ITEM S8-3 \emdash  Upgrade HelpCentreView with AI chat section\par
+File: AITest/Views/HelpCentreView.swift\par
+\par
+PART A \emdash  Add state properties at the top of HelpCentreView:\par
+    @State private var aiQuestion = ""\par
+    @State private var aiAnswer: String? = nil\par
+    @State private var isAsking = false\par
+    @State private var aiError: String? = nil\par
+    @State private var showPaywall = false\par
+    @Environment(SubscriptionManager.self) private var sub\par
+\par
+PART B \emdash  Add suggested question chips:\par
+Define a constant array of suggested questions:\par
+    private let suggestedQuestions = [\par
+        "How do I add a new item?",\par
+        "What is the difference between Free and Pro?",\par
+        "How do Photo Inventory counts work?",\par
+        "How do I set a low stock alert?",\par
+        "How do I add my team members?"\par
+    ]\par
+\par
+PART C \emdash  Add AI chat section at the bottom of the List, after the last FAQ section:\par
+\par
+    Section(header: Text("Ask AI")) \{\par
+        VStack(alignment: .leading, spacing: 12) \{\par
+\par
+            // Usage indicator for free users\par
+            let remaining = AIUsageManager.shared.remaining(.helpChat, isPro: sub.isPro)\par
+            if !sub.isPro \{\par
+                Text("\\(remaining) free question\\(remaining == 1 ? "" : "s") remaining this month")\par
+                    .font(.caption)\par
+                    .foregroundColor(remaining == 0 ? .red : .secondary)\par
+            \}\par
+\par
+            // Suggested question chips\par
+            if aiAnswer == nil && aiQuestion.isEmpty \{\par
+                ScrollView(.horizontal, showsIndicators: false) \{\par
+                    HStack(spacing: 8) \{\par
+                        ForEach(suggestedQuestions, id: \\.self) \{ q in\par
+                            Button(q) \{ aiQuestion = q \}\par
+                                .font(.caption)\par
+                                .padding(.horizontal, 10).padding(.vertical, 6)\par
+                                .background(Color(.systemGray5))\par
+                                .foregroundColor(.primary)\par
+                                .cornerRadius(16)\par
+                        \}\par
+                    \}\par
+                \}\par
+            \}\par
+\par
+            // Text input + send button\par
+            HStack(spacing: 8) \{\par
+                TextField("Ask anything about Stoqly…", text: $aiQuestion, axis: .vertical)\par
+                    .textFieldStyle(.roundedBorder)\par
+                    .lineLimit(1...4)\par
+                    .disabled(isAsking)\par
+\par
+                Button \{\par
+                    Task \{ await askAI() \}\par
+                \} label: \{\par
+                    if isAsking \{\par
+                        ProgressView().frame(width: 24, height: 24)\par
+                    \} else \{\par
+                        Image(systemName: "arrow.up.circle.fill")\par
+                            .font(.title2)\par
+                            .foregroundColor(aiQuestion.trimmingCharacters(in: .whitespaces).isEmpty ? .secondary : .stoqlyPrimary)\par
+                    \}\par
+                \}\par
+                .disabled(aiQuestion.trimmingCharacters(in: .whitespaces).isEmpty || isAsking)\par
+            \}\par
+\par
+            // Answer display\par
+            if let answer = aiAnswer \{\par
+                VStack(alignment: .leading, spacing: 8) \{\par
+                    Text(answer)\par
+                        .font(.subheadline)\par
+                        .foregroundColor(.primary)\par
+                        .textSelection(.enabled)\par
+\par
+                    Button("Ask another question") \{\par
+                        aiQuestion = ""\par
+                        aiAnswer = nil\par
+                        aiError = nil\par
+                    \}\par
+                    .font(.caption)\par
+                    .foregroundColor(.stoqlyPrimary)\par
+                \}\par
+                .padding()\par
+                .background(Color(.systemGray6))\par
+                .cornerRadius(12)\par
+            \}\par
+\par
+            // Error display\par
+            if let error = aiError \{\par
+                Text(error)\par
+                    .font(.caption)\par
+                    .foregroundColor(.red)\par
+            \}\par
+\par
+        \}\par
+        .padding(.vertical, 4)\par
+    \}\par
+    .sheet(isPresented: $showPaywall) \{\par
+        PaywallView()\par
+    \}\par
+\par
+PART D \emdash  Add the askAI() helper function inside HelpCentreView:\par
+\par
+    @MainActor\par
+    private func askAI() async \{\par
+        let trimmed = aiQuestion.trimmingCharacters(in: .whitespaces)\par
+        guard !trimmed.isEmpty else \{ return \}\par
+\par
+        // Usage gate\par
+        guard AIUsageManager.shared.canUse(.helpChat, isPro: sub.isPro) else \{\par
+            if sub.isPro \{\par
+                aiError = "Something went wrong with usage tracking. Please try again."\par
+            \} else \{\par
+                showPaywall = true\par
+            \}\par
+            return\par
+        \}\par
+\par
+        isAsking = true\par
+        aiAnswer = nil\par
+        aiError = nil\par
+\par
+        do \{\par
+            let answer = try await AIInventoryService.shared.askHelpQuestion(trimmed)\par
+            AIUsageManager.shared.recordUse(.helpChat)\par
+            aiAnswer = answer\par
+        \} catch \{\par
+            aiError = error.localizedDescription\par
+        \}\par
+\par
+        isAsking = false\par
+    \}\par
+\par
+---\par
+\par
+BUILD VERIFICATION (S8):\par
+After all S8 items:\par
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination \'91platform=iOS Simulator,name=iPhone 17 Pro\'92 build\par
+Must exit 0, BUILD SUCCEEDED.\par
+\par
+Manual test checklist:\par
+1. Settings \emdash  Help & FAQ \emdash  scroll to bottom \emdash  "Ask AI" section visible.\par
+2. Tap a suggested question chip \emdash  populates the text field.\par
+3. Tap send \emdash  loading spinner shows, answer appears in grey card below.\par
+4. "Ask another question" button clears the answer and resets.\par
+5. Free user: after 5 questions, paywall sheet appears instead of answering.\par
+6. Pro user: no usage counter shown, unlimited questions.\par
+7. Ask "does Stoqly have a free trial?" \emdash  answer must say no, not mention any trial.\par
+8. Ask an off-topic question (e.g. "what is the capital of India?") \emdash  bot politely declines.\par
+9. Disconnect internet, ask a question \emdash  error message shown gracefully (no crash).\par
+\par
+Update automation_results.rtf with:\par
+    S8 \emdash  AI Help Centre\par
+    [COMPLETED or FAILED]\par
+    - S8-1: .helpChat case in AIUsageManager (5/month free, unlimited Pro)\par
+    - S8-2: askHelpQuestion() in AIInventoryService with full Stoqly system prompt\par
+    - S8-3: HelpCentreView AI chat section (suggested chips, input, answer card, paywall gate)\par
+\par
+---\par
+\par
+===========================================\par
+S9 \emdash  FIRESTORE PRO STATUS SYNC (Cursor Spec)\par
+===========================================\par
+\par
+Sprint goal: Mirror the user\'92s Pro status into Firestore so it can be used for team\par
+feature checks and manual Pro grants from the Firebase console. StoreKit remains the\par
+authoritative source for feature gating \emdash  Firestore is a mirror + manual override only.\par
+\par
+CRITICAL RULES (never violate):\par
+\bullet  StoreKit always wins for feature gating in the app. Never gate features on Firestore isPro alone.\par
+\bullet  Never set isPro = true anywhere in code (revert before App Store build).\par
+\bullet  Use modelContext.safeSave(context:) \emdash  never try? modelContext.save()\par
+\par
+---\par
+\par
+FIRESTORE DOCUMENT STRUCTURE:\par
+Collection: "users"\par
+Document ID: Firebase Auth uid\par
+\par
+Fields to add (merge, never overwrite full document):\par
+    isPro: Bool              \emdash  mirrors current StoreKit entitlement status\par
+    manualProUntil: Timestamp?  \emdash  if present and in the future, grants Pro regardless of StoreKit\par
+\par
+No other subscription fields needed. Keep it minimal.\par
+\par
+---\par
+\par
+ITEM S9-1 \emdash  Add Firestore Pro sync methods to FirestoreManager\par
+File: AITest/Models/FirestoreManager.swift\par
+\par
+Add two new methods:\par
+\par
+// Writes the current isPro status to the user\'92s Firestore document.\par
+// Called every time SubscriptionManager resolves StoreKit entitlements.\par
+func writeProStatus(_ isPro: Bool) \{\par
+    guard let uid = Auth.auth().currentUser?.uid else \{ return \}\par
+    let db = Firestore.firestore()\par
+    db.collection("users").document(uid).setData(\par
+        ["isPro": isPro],\par
+        merge: true\par
+    ) \{ error in\par
+        if let error = error \{\par
+            print("[Firestore] Failed to write isPro: \\(error.localizedDescription)")\par
+        \}\par
+    \}\par
+\}\par
+\par
+// Fetches manualProUntil from Firestore. Returns true if a valid future date exists.\par
+// Called once on app launch and after sign-in.\par
+func fetchManualProGrant() async -> Bool \{\par
+    guard let uid = Auth.auth().currentUser?.uid else \{ return false \}\par
+    let db = Firestore.firestore()\par
+    do \{\par
+        let doc = try await db.collection("users").document(uid).getDocument()\par
+        if let timestamp = doc.data()?["manualProUntil"] as? Timestamp \{\par
+            return timestamp.dateValue() > Date()\par
+        \}\par
+    \} catch \{\par
+        print("[Firestore] Failed to fetch manualProUntil: \\(error.localizedDescription)")\par
+    \}\par
+    return false\par
+\}\par
+\par
+---\par
+\par
+ITEM S9-2 \emdash  Call writeProStatus after StoreKit resolves\par
+File: AITest/Models/SubscriptionManager.swift\par
+\par
+In the updateSubscriptionStatus() function, after the line:\par
+    isPro = hasPro\par
+\par
+Add:\par
+    FirestoreManager.shared.writeProStatus(hasPro)\par
+\par
+This ensures Firestore is updated every time StoreKit status is re-checked (on launch,\par
+foreground, and after a transaction update).\par
+\par
+---\par
+\par
+ITEM S9-3 \emdash  Check manualProUntil on launch and after sign-in\par
+File: AITest/Models/SubscriptionManager.swift\par
+\par
+Add a new async method:\par
+    func applyManualProGrantIfNeeded() async \{\par
+        let hasManualGrant = await FirestoreManager.shared.fetchManualProGrant()\par
+        if hasManualGrant \{\par
+            await MainActor.run \{ self.isPro = true \}\par
+        \}\par
+    \}\par
+\par
+Call this method in two places:\par
+\par
+1. In the app startup sequence (AITestApp.swift or ContentView.onAppear), after\par
+   SubscriptionManager.shared loads entitlements:\par
+       Task \{ await SubscriptionManager.shared.applyManualProGrantIfNeeded() \}\par
+\par
+2. In AuthManager, after a successful sign-in (Google, Apple, Email), add:\par
+       Task \{ await SubscriptionManager.shared.applyManualProGrantIfNeeded() \}\par
+\par
+The result: if an admin sets manualProUntil in Firebase console to a future date,\par
+the user gets isPro = true on next app launch or sign-in automatically.\par
+\par
+---\par
+\par
+HOW TO MANUALLY GRANT PRO FROM FIREBASE CONSOLE:\par
+1. Open Firebase Console \emdash  Firestore \emdash  users collection\par
+2. Find the user\'92s document by their UID (visible in Firebase Auth)\par
+3. Add or update the field: manualProUntil (type: timestamp) \emdash  set to desired expiry date\par
+4. User gets Pro access on next app launch. No code deploy needed.\par
+To revoke: delete the manualProUntil field or set it to a past date.\par
+\par
+---\par
+\par
+BUILD VERIFICATION (S9):\par
+After all S9 items:\par
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination \'91platform=iOS Simulator,name=iPhone 17 Pro\'92 build\par
+Must exit 0, BUILD SUCCEEDED.\par
+\par
+Manual test checklist:\par
+1. Sign in to the app \emdash  check Firestore users collection \emdash  isPro field should appear (true if subscribed, false if not).\par
+2. In Firebase console, set manualProUntil to tomorrow\'92s date on your test account.\par
+3. Kill and relaunch the app \emdash  isPro should be true even without a StoreKit subscription.\par
+4. Set manualProUntil to a past date \emdash  relaunch \emdash  isPro should revert to false.\par
+5. Delete manualProUntil field entirely \emdash  relaunch \emdash  isPro correct from StoreKit only.\par
+\par
+Update automation_results.rtf with:\par
+    S9 \emdash  Firestore Pro Status Sync\par
+    [COMPLETED or FAILED]\par
+    - S9-1: writeProStatus() + fetchManualProGrant() in FirestoreManager\par
+    - S9-2: writeProStatus called after StoreKit resolves in SubscriptionManager\par
+    - S9-3: applyManualProGrantIfNeeded() called on launch and after sign-in\par
+\par
+---\par
+\par
+===========================================\par
+S10 \emdash  FLOATING AI HELP BUTTON + VOICE CONFIRM FIX (Cursor Spec)\par
+===========================================\par
+\par
+Sprint goal: Let users access AI Help from anywhere in the app via a floating button,\par
+and fix the Voice Inventory confirm infinite loading bug.\par
+\par
+CRITICAL RULES (never violate):\par
+\bullet  Never add NavigationStack inside sheet/modal views that already have one\par
+\bullet  Never set isPro = true in any code\par
+\bullet  Use modelContext.safeSave(context:) \emdash  never try? modelContext.save()\par
+\bullet  Stoqly has NO free trial \emdash  never mention one\par
+\par
+---\par
+\par
+ITEM S10-1 \emdash  Voice Inventory confirm infinite loading fix\par
+File: AITest/Views/VoiceInventoryView.swift\par
+\par
+In the saveItems() function, replace:\par
+    if let onComplete \{\par
+        onComplete(itemsToSave.count)\par
+    \} else \{\par
+        dismiss()\par
+    \}\par
+\par
+With:\par
+    onComplete?(itemsToSave.count)\par
+    dismiss()\par
+\par
+Reason: VoiceInventoryView is always presented with onComplete set, so dismiss()\par
+was never being called. The sheet stayed on .saving forever.\par
+NOTE: This fix has already been applied directly \emdash  Cursor should verify it is in place\par
+and not revert it.\par
+\par
+---\par
+\par
+ITEM S10-2 \emdash  Extract AI chat as standalone AIHelpChatView\par
+File: AITest/Views/AIHelpChatView.swift (NEW)\par
+\par
+Create a new standalone view AIHelpChatView that contains ONLY the AI chat\par
+interface (no FAQ list). This is used by the floating button so users get\par
+directly into the chat without scrolling through the FAQ.\par
+\par
+struct AIHelpChatView: View \{\par
+    @Environment(SubscriptionManager.self) private var sub\par
+    @State private var aiQuestion = ""\par
+    @State private var aiAnswer: String? = nil\par
+    @State private var isAsking = false\par
+    @State private var aiError: String? = nil\par
+    @State private var showPaywall = false\par
+    @Environment(\\.dismiss) private var dismiss\par
+\par
+    private let suggestedQuestions = [\par
+        "How do I add a new item?",\par
+        "How does Photo Inventory work?",\par
+        "How do I set a low stock alert?",\par
+        "What\'92s the difference between Free and Pro?",\par
+        "How do I add team members?"\par
+    ]\par
+\par
+    var body: some View \{\par
+        NavigationStack \{\par
+            ScrollView \{\par
+                VStack(alignment: .leading, spacing: 16) \{\par
+\par
+                    // Usage indicator\par
+                    let remaining = AIUsageManager.shared.remaining(.helpChat, isPro: sub.isPro)\par
+                    if !sub.isPro \{\par
+                        Text("\\(remaining) free question\\(remaining == 1 ? "" : "s") remaining this month")\par
+                            .font(.caption)\par
+                            .foregroundColor(remaining == 0 ? .red : .secondary)\par
+                            .padding(.horizontal)\par
+                    \}\par
+\par
+                    // Suggested chips\par
+                    if aiAnswer == nil && aiQuestion.isEmpty \{\par
+                        ScrollView(.horizontal, showsIndicators: false) \{\par
+                            HStack(spacing: 8) \{\par
+                                ForEach(suggestedQuestions, id: \\.self) \{ q in\par
+                                    Button(q) \{ aiQuestion = q \}\par
+                                        .font(.caption)\par
+                                        .padding(.horizontal, 10).padding(.vertical, 6)\par
+                                        .background(Color(.systemGray5))\par
+                                        .foregroundColor(.primary)\par
+                                        .cornerRadius(16)\par
+                                \}\par
+                            \}.padding(.horizontal)\par
+                        \}\par
+                    \}\par
+\par
+                    // Input row\par
+                    HStack(spacing: 8) \{\par
+                        TextField("Ask anything about Stoqly…", text: $aiQuestion, axis: .vertical)\par
+                            .textFieldStyle(.roundedBorder)\par
+                            .lineLimit(1...4)\par
+                            .disabled(isAsking)\par
+                        Button \{\par
+                            Task \{ await askAI() \}\par
+                        \} label: \{\par
+                            if isAsking \{\par
+                                ProgressView().frame(width: 24, height: 24)\par
+                            \} else \{\par
+                                Image(systemName: "arrow.up.circle.fill")\par
+                                    .font(.title2)\par
+                                    .foregroundColor(aiQuestion.trimmingCharacters(in: .whitespaces).isEmpty ? .secondary : .stoqlyPrimary)\par
+                            \}\par
+                        \}\par
+                        .disabled(aiQuestion.trimmingCharacters(in: .whitespaces).isEmpty || isAsking)\par
+                    \}.padding(.horizontal)\par
+\par
+                    // Answer card\par
+                    if let answer = aiAnswer \{\par
+                        VStack(alignment: .leading, spacing: 8) \{\par
+                            Text(answer)\par
+                                .font(.subheadline)\par
+                                .textSelection(.enabled)\par
+                            Button("Ask another question") \{\par
+                                aiQuestion = ""\par
+                                aiAnswer = nil\par
+                                aiError = nil\par
+                            \}\par
+                            .font(.caption).foregroundColor(.stoqlyPrimary)\par
+                        \}\par
+                        .padding()\par
+                        .background(Color(.systemGray6))\par
+                        .cornerRadius(12)\par
+                        .padding(.horizontal)\par
+                    \}\par
+\par
+                    // Error\par
+                    if let error = aiError \{\par
+                        Text(error).font(.caption).foregroundColor(.red).padding(.horizontal)\par
+                    \}\par
+\par
+                \}.padding(.top, 12)\par
+            \}\par
+            .navigationTitle("Ask AI")\par
+            .navigationBarTitleDisplayMode(.inline)\par
+            .toolbar \{\par
+                ToolbarItem(placement: .confirmationAction) \{\par
+                    Button("Done") \{ dismiss() \}\par
+                \}\par
+            \}\par
+            .sheet(isPresented: $showPaywall) \{ PaywallView() \}\par
+        \}\par
+    \}\par
+\par
+    @MainActor\par
+    private func askAI() async \{\par
+        let trimmed = aiQuestion.trimmingCharacters(in: .whitespaces)\par
+        guard !trimmed.isEmpty else \{ return \}\par
+        guard AIUsageManager.shared.canUse(.helpChat, isPro: sub.isPro) else \{\par
+            showPaywall = true\par
+            return\par
+        \}\par
+        isAsking = true\par
+        aiAnswer = nil\par
+        aiError = nil\par
+        do \{\par
+            let answer = try await AIInventoryService.shared.askHelpQuestion(trimmed)\par
+            AIUsageManager.shared.recordUse(.helpChat)\par
+            aiAnswer = answer\par
+        \} catch \{\par
+            aiError = error.localizedDescription\par
+        \}\par
+        isAsking = false\par
+    \}\par
+\}\par
+\par
+---\par
+\par
+ITEM S10-3 \emdash  Add floating AI Help button to InventoryAppView\par
+File: AITest/Views/InventoryAppView.swift\par
+\par
+STEP A \emdash  Add state:\par
+In the main InventoryAppView struct (the one with @State private var selectedTab),\par
+add:\par
+    @State private var showingAIHelp = false\par
+\par
+STEP B \emdash  Add floating button overlay to the ZStack:\par
+The file already has a ZStack(alignment: .top) containing the TabView.\par
+Add the floating button as an overlay on the TabView (not inside it).\par
+After the TabView closing brace but still inside the ZStack, add:\par
+\par
+    // Floating AI Help button\par
+    VStack \{\par
+        Spacer()\par
+        HStack \{\par
+            Spacer()\par
+            Button \{\par
+                showingAIHelp = true\par
+            \} label: \{\par
+                Image(systemName: "bubble.left.and.sparkles.fill")\par
+                    .font(.system(size: 22, weight: .semibold))\par
+                    .foregroundColor(.white)\par
+                    .frame(width: 52, height: 52)\par
+                    .background(Color.stoqlyPrimary)\par
+                    .clipShape(Circle())\par
+                    .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)\par
+            \}\par
+            .accessibilityLabel("Ask AI")\par
+            .padding(.trailing, 20)\par
+            .padding(.bottom, 80) // sits above the tab bar\par
+        \}\par
+    \}\par
+\par
+STEP C \emdash  Add sheet presentation:\par
+Add to the ZStack or the outermost view in InventoryAppView:\par
+    .sheet(isPresented: $showingAIHelp) \{\par
+        AIHelpChatView()\par
+    \}\par
+\par
+---\par
+\par
+BUILD VERIFICATION (S10):\par
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination \'91platform=iOS Simulator,name=iPhone 17 Pro\'92 build\par
+Must exit 0, BUILD SUCCEEDED.\par
+\par
+Manual test checklist:\par
+1. Voice Inventory: speak 2 items \emdash  review \emdash  tap Confirm \emdash  sheet must dismiss immediately. No infinite spinner.\par
+2. Dashboard tab: floating bubble icon visible bottom-right above tab bar.\par
+3. Tap bubble \emdash  AIHelpChatView sheet opens with suggested question chips.\par
+4. Ask a question \emdash  answer appears. Ask another \emdash  resets. Tap Done \emdash  sheet closes.\par
+5. Floating button visible from ALL tabs (Storages, Items, Sales, Audit).\par
+6. Floating button does NOT overlap tab bar.\par
+\par
+Update automation_results.rtf with:\par
+    S10 \emdash  Floating AI Help + Voice Confirm Fix\par
+    [COMPLETED or FAILED]\par
+    - S10-1: Voice Inventory confirm dismiss fix (onComplete + dismiss both called)\par
+    - S10-2: AIHelpChatView standalone chat view\par
+    - S10-3: Floating AI Help button in InventoryAppView ZStack\par
+\par
+
+
+
+\par
+===========================================\par
+S11 \emdash  LOCALIZATION FOUNDATION (Cursor Spec)\par
+===========================================\par
+Sprint goal: Stand up iOS localization infrastructure so Stoqly can support 15 languages. English base + pipeline PROOF ONLY. NO mass translation this sprint. English users must see ZERO change. Ship-safe.\par
+\par
+Full plan: Stoqly_Multilingual_Spec.md (repo root). This sprint = Phase 1 only.\par
+\par
+CRITICAL RULES (never violate):\par
+- Use modelContext.safeSave(context:) \emdash  never try? modelContext.save()\par
+- Insert ActivityEvent BEFORE modelContext.delete(item)\par
+- Never set isPro = true in any code\par
+- Never add NavigationStack inside a sheet/modal that already has one\par
+- Never introduce free-trial language anywhere (Stoqly has NO free trial)\par
+- Do NOT change the Claude API model, endpoint, or Firestore schema\par
+- Do NOT translate user-generated content (item names, notes)\par
+- Keep accessibilityIdentifier values English/stable (they are Maestro test hooks)\par
+\par
+Target locales to register (15):\par
+en (base), hi, ta, te, kn, ml, ar, es, pt-BR, fr, zh-Hans, id, de, ru, ja\par
+\par
+\emdash \par
+\par
+ITEM S11-1 \emdash  Add String Catalog + enable localization\par
+- Add a String Catalog named Localizable.xcstrings to the AITest target (File > New > String Catalog). Ensure target membership = AITest.\par
+- Project > Info > Localizations: add ALL 15 locales listed above (updates knownRegions, currently only en + Base).\par
+- On the AITest target set build setting SWIFT_EMIT_LOC_STRINGS = YES (Localization > "Use Compiler to Extract Swift Strings" = Yes).\par
+- Build once so the compiler auto-populates the catalog from existing Text("...") literals.\par
+\par
+ITEM S11-2 \emdash  Externalize non-auto-extractable strings\par
+Auto-extraction catches static literals in Text(), Label(), Button(), .navigationTitle(), and literal alert titles. It does NOT catch:\par
+  - strings built via interpolation or + concatenation\par
+  - strings assigned to a var/let, then displayed\par
+  - accessibility labels built from variables\par
+  - user-facing messages returned from ViewModels / Managers\par
+Sweep AITest/Views, AITest/ViewModels, AITest/Models for user-facing strings not auto-extracted and wrap each with String(localized:) using a stable descriptive key, e.g.:\par
+    let msg = String(localized: "count.saved.toast", defaultValue: "Count saved")\par
+Do NOT externalize: log/print debug strings, analytics event names, Firestore field keys, accessibilityIdentifier values.\par
+\par
+ITEM S11-3 \emdash  Device-locale auto-detection (NO manual picker this sprint)\par
+- App must follow the device language automatically (default iOS behavior once locales are registered). Do NOT add an in-app language picker in S11 (deferred per spec).\par
+- Verify no user-facing formatting hardcodes Locale(identifier: "en..."). Number/date/currency must use Locale.current.\par
+- Leave the VoiceInventoryView en-IN voice locale as-is \emdash  voice is a later phase.\par
+\par
+ITEM S11-4 \emdash  Pilot translation: Hindi + Arabic (prove rendering + RTL)\par
+Translate ONLY the ~26 core strings in AITest/Localization/S11_pilot_translations.json into Hindi (hi) and Arabic (ar) in the catalog. Leave every other string untranslated (English fallback is expected and correct for S11).\par
+- The JSON keys are the ENGLISH SOURCE STRINGS (default catalog key). If a real code literal differs slightly, map to the actual catalog key.\par
+- For Arabic (ar): verify the UI mirrors RIGHT-TO-LEFT \emdash  leading/trailing alignment, tab order, back-button direction, custom nav headers.\par
+- Do NOT try to fix every RTL issue this sprint. Instead LIST any view that does not mirror correctly in automation_results.rtf for a dedicated RTL follow-up sprint.\par
+\par
+ITEM S11-5 \emdash  Pseudo-localization smoke test (recommended)\par
+Run once with the scheme App Language = "Accented Pseudolanguage" or "Double-Length Pseudolanguage" to surface truncated/clipped labels. Catalogue the top offenders in automation_results.rtf. Do NOT fix layout this sprint \emdash  just record them.\par
+\par
+\emdash \par
+\par
+BUILD VERIFICATION (S11):\par
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build\par
+Must exit 0, BUILD SUCCEEDED.\par
+\par
+Manual test checklist:\par
+1. Device language English \emdash  app is IDENTICAL to before (zero visible change).\par
+2. Simulator language Hindi \emdash  tab bar + core buttons + KPI labels show Hindi; untranslated strings fall back to English (expected).\par
+3. Simulator language Arabic \emdash  core strings in Arabic AND layout mirrors RTL (tab order, alignment, back button).\par
+4. Switch back to English \emdash  everything reverts cleanly, no crash.\par
+5. SwiftData + Firestore unaffected by language switch.\par
+\par
+Update automation_results.rtf with:\par
+    S11 \emdash  Localization Foundation\par
+    [COMPLETED or FAILED]\par
+    - S11-1: Localizable.xcstrings added, 15 locales registered, auto-extraction enabled\par
+    - S11-2: Non-auto-extractable strings externalized via String(localized:)\par
+    - S11-3: Device-locale auto-detection verified, no hardcoded en locales\par
+    - S11-4: Hindi + Arabic pilot (~26 strings); RTL behavior noted\par
+    - S11-5: Pseudo-localization offenders catalogued\par
+    - LIST any views that did NOT mirror correctly for RTL (Arabic) follow-up\par
+
+
+
+===========================================
+S12 — Draggable Floating AI Help Bubble (Cursor Spec)
+===========================================
+
+Sprint goal: Make the floating AI Help bubble draggable anywhere on screen. User can tap to open, or hold and drag to reposition. Position persists across app launches.
+
+CRITICAL RULES (never violate):
+- Never use try? modelContext.save() — use modelContext.safeSave(context:)
+- Never set isPro = true in code
+- Never add NavigationStack inside a sheet that already has one
+- Keep onComplete?(count); dismiss() both called in VoiceInventoryView
+
+===========================================
+ITEM S12-1 — Replace static bubble with draggable version
+===========================================
+
+File: AITest/Views/InventoryAppView.swift
+Struct: MainAppContent
+
+STEP 1 — Add state properties to MainAppContent (after the existing @State private var showingAIHelp = false line):
+
+    @AppStorage("aiHelpBubbleX") private var savedBubbleX: Double = 0
+    @AppStorage("aiHelpBubbleY") private var savedBubbleY: Double = 0
+    @State private var bubblePos: CGPoint = CGPoint(
+        x: UIScreen.main.bounds.width - 46,
+        y: UIScreen.main.bounds.height - 120
+    )
+    @State private var isDraggingBubble = false
+
+STEP 2 — Replace the entire "// Floating AI Help button" block (the VStack with Spacer/HStack/Spacer/Button that starts after the TabView .tint line) with the following GeometryReader-based draggable version. The replacement must be inside the same ZStack as the TabView, as a sibling to it.
+
+Replace this block:
+    // Floating AI Help button
+    VStack {
+        Spacer()
+        HStack {
+            Spacer()
+            Button {
+                showingAIHelp = true
+            } label: {
+                Image(systemName: "bubble.left.and.sparkles.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 52, height: 52)
+                    .background(Color.stoqlyPrimary)
+                    .clipShape(Circle())
+                    .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
+            }
+            .accessibilityLabel("Ask AI")
+            .padding(.trailing, 20)
+            .padding(.bottom, 80)
+        }
+    }
+
+With this block:
+    // Floating AI Help button — draggable
+    GeometryReader { geo in
+        ZStack {
+            Circle()
+                .fill(Color.stoqlyPrimary)
+                .frame(width: 56, height: 56)
+                .overlay(
+                    Image(systemName: "bubble.left.and.sparkles.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundColor(.white)
+                )
+                .shadow(color: .black.opacity(0.28), radius: 10, x: 0, y: 4)
+                .scaleEffect(isDraggingBubble ? 1.08 : 1.0)
+                .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isDraggingBubble)
+        }
+        .position(bubblePos)
+        .gesture(
+            DragGesture(minimumDistance: 6, coordinateSpace: .local)
+                .onChanged { value in
+                    isDraggingBubble = true
+                    bubblePos = value.location
+                }
+                .onEnded { value in
+                    isDraggingBubble = false
+                    let halfBubble: CGFloat = 28
+                    let safeTop: CGFloat = 80
+                    let safeBottom: CGFloat = geo.size.height - 90
+                    let x = max(halfBubble, min(geo.size.width - halfBubble, value.location.x))
+                    let y = max(safeTop, min(safeBottom, value.location.y))
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.72)) {
+                        bubblePos = CGPoint(x: x, y: y)
+                    }
+                    savedBubbleX = Double(x)
+                    savedBubbleY = Double(y)
+                }
+        )
+        .onTapGesture {
+            guard !isDraggingBubble else { return }
+            showingAIHelp = true
+        }
+        .accessibilityLabel("Ask AI")
+        .accessibilityAddTraits(.isButton)
+        .onAppear {
+            if savedBubbleX > 0 && savedBubbleY > 0 {
+                bubblePos = CGPoint(x: CGFloat(savedBubbleX), y: CGFloat(savedBubbleY))
+            } else {
+                bubblePos = CGPoint(x: geo.size.width - 46, y: geo.size.height - 120)
+            }
+        }
+    }
+    .allowsHitTesting(true)
+    .ignoresSafeArea()
+
+NOTE: The .sheet(isPresented: $showingAIHelp) modifier stays exactly where it is — do not move it.
+
+---
+
+BUILD VERIFICATION (S12):
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+Must exit 0, BUILD SUCCEEDED.
+
+Manual test checklist:
+1. Launch app — bubble appears at bottom-right corner.
+2. Tap bubble — AIHelpChatView sheet opens. Tap Done — sheet dismisses. Bubble remains in place.
+3. Hold and drag bubble to top-left — bubble follows finger smoothly. Release — bubble springs into clamped position. Bubble stays above 80pt from top and above tab bar.
+4. Drag to edge of screen — bubble clamps to within 28pt of edge (never goes off screen).
+5. Kill and relaunch app — bubble reappears at the dragged position (AppStorage persisted).
+6. Drag to bottom right corner — confirm bubble doesn't go behind tab bar.
+
+Update automation_results.rtf with:
+    S12 — Draggable Floating AI Help Bubble
+    [COMPLETED or FAILED]
+    - S12-1: GeometryReader + DragGesture + position() replacing VStack/HStack static positioning
+    - Tap still opens AIHelpChatView
+    - AppStorage persistence verified across launches
+    - Clamping: bubble never goes off-screen or behind tab bar
+    - BUILD SUCCEEDED

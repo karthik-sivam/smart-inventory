@@ -22,26 +22,35 @@ final class AIUsageManager: ObservableObject {
         case voice  = "stoqly_ai_voice"
         case image  = "stoqly_ai_image"
         case paper  = "stoqly_ai_paper"
+        case helpChat = "stoqly_ai_helpchat"
 
         var displayName: String {
             switch self {
             case .voice: return "Voice Inventory"
             case .image: return "Photo Inventory"
             case .paper: return "Sheet Inventory"
+            case .helpChat: return "AI Help"
             }
         }
     }
 
     static let freeLimit = 3
+    static let helpChatFreeLimit = 5
 
     // MARK: - Public API
 
     func canUse(_ type: FeatureType, isPro: Bool) -> Bool {
-        isPro || usageThisMonth(type) < AIUsageManager.freeLimit
+        if type == .helpChat {
+            return isPro || usageThisMonth(type) < AIUsageManager.helpChatFreeLimit
+        }
+        return isPro || usageThisMonth(type) < AIUsageManager.freeLimit
     }
 
     func remaining(_ type: FeatureType, isPro: Bool) -> Int {
         if isPro { return Int.max }
+        if type == .helpChat {
+            return max(0, AIUsageManager.helpChatFreeLimit - usageThisMonth(type))
+        }
         return max(0, AIUsageManager.freeLimit - usageThisMonth(type))
     }
 

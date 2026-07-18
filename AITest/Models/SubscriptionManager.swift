@@ -59,6 +59,8 @@ class SubscriptionManager: ObservableObject {
 
     @Published var isPro = false
     @Published var hasRemovedAds = false
+    /// True when Firestore manualProUntil grants Pro independent of StoreKit.
+    @Published private(set) var manualProGrantActive = false
     @Published var products: [Product] = []
     @Published var purchaseState: PurchaseState = .idle
     @Published var isLoading = false
@@ -210,6 +212,10 @@ class SubscriptionManager: ObservableObject {
     }
 
     func refreshPurchaseStatus() async {
+        // Re-fetch manualProUntil so an expired/removed Firestore grant cannot keep
+        // isPro / hasRemovedAds sticky across StoreKit-only refreshes.
+        manualProGrantActive = await FirestoreManager.shared.fetchManualProGrant()
+
         var hasPro = false
         var hasNoAds = false
         var trialExpiry: Date?
@@ -240,15 +246,24 @@ class SubscriptionManager: ObservableObject {
             }
         }
 
-        isPro = hasPro
+        isPro = hasPro || manualProGrantActive
         proSubscriptionExpirationDate = trialExpiry
         isOnProTrial = onTrial
         // Pro includes ad removal
-        hasRemovedAds = hasNoAds || hasPro
+        hasRemovedAds = hasNoAds || hasPro || manualProGrantActive
+
+        // Mirror the resolved entitlement (StoreKit and/or manual grant), not StoreKit alone.
+        FirestoreManager.shared.writeProStatus(isPro)
 
         if hasRemovedAds {
             AdManager.shared.disableAds()
         }
+    }
+
+    /// Applies a manual Pro grant from Firestore (manualProUntil field in Firebase console).
+    /// Recomputes StoreKit + grant entitlements so revoked/expired grants clear Pro access.
+    func applyManualProGrantIfNeeded() async {
+        await refreshPurchaseStatus()
     }
 
     // MARK: - Transaction Listener
@@ -278,11 +293,31 @@ class SubscriptionManager: ObservableObject {
     }
 
     private func updateEntitlements(for transaction: StoreKit.Transaction) async {
+        // Match refreshPurchaseStatus(): never grant from revoked or expired transactions.
+        // Transaction.updates can redeliver stale events; writing isPro=true here would
+        // overwrite a correct local/Firestore clear from a prior refresh.
+        guard transaction.revocationDate == nil else {
+            await refreshPurchaseStatus()
+            return
+        }
+        if let expiry = transaction.expirationDate, expiry <= Date() {
+            await refreshPurchaseStatus()
+            return
+        }
+
         switch transaction.productID {
         case ProductID.proMonthly.rawValue, ProductID.proAnnual.rawValue:
             isPro = true
             hasRemovedAds = true
+            if let expiry = transaction.expirationDate {
+                proSubscriptionExpirationDate = expiry
+            }
+            if transaction.offer?.type == .introductory {
+                isOnProTrial = true
+            }
             AdManager.shared.disableAds()
+            // Mirror immediately — do not wait for a later refreshPurchaseStatus().
+            FirestoreManager.shared.writeProStatus(isPro)
         case ProductID.removeAds.rawValue:
             hasRemovedAds = true
             AdManager.shared.disableAds()

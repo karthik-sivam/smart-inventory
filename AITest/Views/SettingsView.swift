@@ -304,6 +304,13 @@ struct SettingsView: View {
                 }
 
                 // MARK: - About
+                Section(header: Text("Support")) {
+                    NavigationLink(destination: HelpCentreView()) {
+                        Label("Help & FAQ", systemImage: "questionmark.circle")
+                    }
+                    .accessibilityIdentifier("helpCentreRow")
+                }
+
                 Section(header: Text("About")) {
                     HStack {
                         Label("Version", systemImage: "info.circle")

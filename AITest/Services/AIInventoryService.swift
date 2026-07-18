@@ -14,6 +14,8 @@ struct ParsedInventoryItem: Identifiable {
     var category: String?          // one of InventoryItem.predefinedCategories
     var notes: String?
     var confidence: Double         // 0.0–1.0 from AI
+    var fillPercent: Double?       // liquid fill level 0–100
+    var remainingVolume: String?   // e.g. "~325ml"
 }
 
 // MARK: - AIInventoryError
@@ -61,9 +63,14 @@ final class AIInventoryService {
     /// Takes the raw text from SFSpeechRecognizer and returns a list of items
     /// the user mentioned. Handles natural speech like "5 kg of flour, 2 boxes
     /// of sugar, and we're out of salt".
-    func parseVoiceTranscript(_ transcript: String) async throws -> [ParsedInventoryItem] {
+    func parseVoiceTranscript(_ transcript: String, inventoryHints: [String] = []) async throws -> [ParsedInventoryItem] {
+        let inventoryHint = inventoryHints.prefix(50).joined(separator: ", ")
+        let contextPrefix = inventoryHint.isEmpty
+            ? ""
+            : "The user's inventory includes: \(inventoryHint). Use these as spelling hints when matching spoken product names.\n\n"
+
         let prompt = """
-        You are an inventory assistant. The user has dictated an inventory count verbally.
+        \(contextPrefix)You are an inventory assistant. The user has dictated an inventory count verbally.
 
         Transcript: "\(transcript)"
 
@@ -88,6 +95,7 @@ final class AIInventoryService {
         - "confidence" 0.0-1.0 how confident you are this is a real inventory item
         - Skip filler words and conversation
         - Return [] if nothing recognisable was said
+        - Understand Indian English quantity expressions: 'two and a half kilo' = 2.5 kg, 'one dozen' = 12 units, 'half litre' = 0.5 L, 'quarter kg' = 0.25 kg. Extract item name, quantity as a number, and unit separately.
         """
 
         return try await callClaude(textPrompt: prompt, imageData: nil)
@@ -97,13 +105,15 @@ final class AIInventoryService {
 
     /// Takes a photo of a product or shelf and returns the identified product
     /// WITH a counted quantity based on what is visible in the frame.
-    func identifyProduct(imageData: Data) async throws -> [ParsedInventoryItem] {
-        let prompt = """
-        You are an inventory counting assistant. Carefully examine this photo.
-
-        Your two jobs:
-        1. Identify what product(s) are shown.
-        2. COUNT how many units are visible.
+    func identifyProduct(imageData: Data, fluidMode: Bool = false) async throws -> [ParsedInventoryItem] {
+        var prompt = """
+        You are an inventory counting assistant. Analyse the image and identify ALL distinct products visible.
+        For each product:
+        - Count the number of physically separate units visible (e.g. 6 cans = quantity 6, not 1).
+        - If units are partially hidden or stacked, estimate the total visible count.
+        - If the product is a liquid/fluid in a container AND the fill level is visible, estimate the fill percentage (e.g. 65%) and, if the label shows total volume (e.g. 500ml), calculate the remaining volume (e.g. ~325ml).
+        - If this is a single liquid container and fluid mode is active, prioritise fill-level estimation over unit count.
+        Return JSON array: [{"name", "quantity", "unit", "fillPercent" (if liquid), "remainingVolume" (if calculable), "category", "confidence"}]
 
         Counting rules:
         - Count every individual unit you can see (bottles, boxes, cans, bags, etc.)
@@ -114,23 +124,12 @@ final class AIInventoryService {
         - If it is clearly a single item, quantity = 1.
         - Never leave quantity null — always give your best estimate.
 
-        Return a JSON array with one entry per distinct product type. No explanation.
-
-        Format:
-        [
-          {
-            "name": "product name",
-            "quantity": 12.0,
-            "unit": "pcs",
-            "category": "Food & Beverage",
-            "confidence": 0.85
-          }
-        ]
-
         Rules:
         - "name": brand + type where visible (e.g. "Heinz Tomato Ketchup 500ml")
         - "quantity": counted or estimated number of units — never null
-        - "unit": infer from product type (bottles/cans/boxes → "pcs", loose flour → "kg", liquids → "L")
+        - "unit": infer from product type (bottles/cans/boxes → "pcs", loose flour → "kg", liquids → "L" or "mL")
+        - "fillPercent": 0–100 for liquids when fill level is visible, null otherwise
+        - "remainingVolume": estimated remaining volume string (e.g. "~325ml") when calculable
         - "category": one of: Food & Beverage, Cleaning & Hygiene, Packaging & Supplies,
           Electronics & Equipment, Clothing & Apparel, Health & Beauty, Pharmaceutical,
           Raw Materials, Spare Parts, Stationery & Office, Uncategorised
@@ -138,7 +137,102 @@ final class AIInventoryService {
         - Return [] only if the image is completely unidentifiable
         """
 
+        if fluidMode {
+            prompt += "\n\nFLUID MODE: The captured image contains a liquid container. Prioritise estimating fill percentage and remaining volume over counting units."
+        }
+
         return try await callClaude(textPrompt: prompt, imageData: imageData)
+    }
+
+    // MARK: - Help Centre AI chat
+
+    /// Answers a user question about Stoqly using the Claude API.
+    /// Returns a plain-text answer string. Throws AIInventoryError on failure.
+    func askHelpQuestion(_ question: String) async throws -> String {
+        let systemPrompt = """
+        You are the in-app support assistant for Stoqly, an AI-powered inventory management \
+        app for small businesses (shops, restaurants, cafes, warehouses).
+
+        You know everything about Stoqly. Here is the complete feature set:
+
+        CORE FEATURES:
+        - Storages: locations in the business (shelf, room, freezer, section). Users create \
+          storages to organise inventory by location. Free plan: up to 5 storages.
+        - Items: products tracked within a storage. Each item has name, quantity, unit, \
+          category, barcode, cost price, selling price, min quantity / reorder percentage. \
+          Free plan: up to 50 items per storage.
+        - Quick Count: fast quantity update — set to exact value or adjust by +/-.
+        - Activity Feed: full history of every count, sale, movement, and import event.
+        - Barcode Scanner: scan any barcode to add or find an item.
+        - Dashboard: KPI cards (total items, storages, low stock, total value), Smart Insights \
+          (profit margin, cost trends, data-health nudges), sales and movement charts.
+        - Reorder List: shows all items below their minimum level, grouped by supplier \
+          with a one-tap email to supplier.
+        - Export: CSV and PDF export of full inventory.
+        - Push Notifications: low-stock alerts and daily summary.
+        - Offline Support: all changes queue and sync when back online.
+
+        SMARTCOUNT (AI inventory input modes):
+        - Photo Inventory: point camera at shelf — AI counts items and detects quantities. \
+          Fluid mode available for liquid containers (estimates fill % and remaining volume).
+        - Voice Inventory: speak items aloud — AI extracts item names and quantities. \
+          Supports Indian English expressions (two and a half kilo, one dozen, etc.).
+        - Sheet Inventory: photograph a handwritten or printed list — AI reads every row.
+        - CSV/Excel Import: upload a spreadsheet, map columns, import in bulk.
+        Free users: 3 AI uses/month per SmartCount mode. Pro: unlimited.
+
+        PURCHASE INVOICE:
+        - Scan a purchase invoice (photo or CSV) — AI extracts items and auto-matches to \
+          existing inventory. Updates stock levels and records last purchase price.
+        - Accessible from the Items tab (global entry) or from any Storage.
+
+        SMART SALES:
+        - Record sales by voice, photo, CSV, or manual entry.
+        - Updates stock and records revenue.
+
+        TEAM:
+        - Invite team members to a shared workspace.
+        - Roles: Owner (full access), Editor (add/edit items), Viewer (read only).
+        - Pro feature.
+
+        TEMPLATES:
+        - Save any item as a template to reuse across storages.
+        - Pro feature.
+
+        PRO PLAN:
+        - Unlimited storages, unlimited items per storage.
+        - Unlimited AI uses for all SmartCount modes.
+        - Unlimited team members.
+        - Full analytics history (free plan: last 30 days only).
+        - Barcode scanner pro (enriched product data).
+        - Item photos.
+        - Remove Ads (also available as a separate one-time purchase).
+        - Stoqly has NO free trial. Users upgrade directly to Pro from Settings.
+        - Subscription products: com.vishuddhi.stoqly.pro.monthly (monthly), \
+          com.vishuddhi.stoqly.pro.annual (annual), com.vishuddhi.stoqly.removeads (one-time).
+
+        HELP CENTRE:
+        - Accessible from Settings — Support — Help & FAQ.
+        - Contains searchable FAQ grouped by section.
+
+        RULES FOR YOUR ANSWERS:
+        - Answer only questions about Stoqly. If asked about anything unrelated, politely \
+          say "I can only help with Stoqly questions."
+        - Be concise and practical — users are busy SMB owners, not tech people.
+        - Use simple language. No jargon.
+        - If you don't know the answer, say "I'm not sure about that — please contact \
+          support at support@stoqly.app."
+        - Never mention competitors.
+        - Never say Stoqly has a free trial — it does not.
+        - Keep answers to 3–5 sentences max unless a step-by-step is genuinely needed.
+        """
+
+        return try await callClaudeRaw(
+            systemPrompt: systemPrompt,
+            userPrompt: question,
+            imageDataList: [],
+            maxTokens: 512
+        )
     }
 
     // MARK: - Inventory sheet photo → items
@@ -278,13 +372,21 @@ final class AIInventoryService {
 
             let confidence = (dict["confidence"] as? Double) ?? 0.8
 
+            var fillPercent: Double?
+            if let f = dict["fillPercent"] as? Double { fillPercent = f }
+            else if let f = dict["fillPercent"] as? Int { fillPercent = Double(f) }
+
+            let remainingVolume = dict["remainingVolume"] as? String
+
             return ParsedInventoryItem(
                 name: name.trimmingCharacters(in: .whitespaces),
                 quantity: qty,
                 unitSymbol: dict["unit"] as? String,
                 category: dict["category"] as? String,
                 notes: dict["notes"] as? String,
-                confidence: confidence
+                confidence: confidence,
+                fillPercent: fillPercent,
+                remainingVolume: remainingVolume
             )
         }
     }

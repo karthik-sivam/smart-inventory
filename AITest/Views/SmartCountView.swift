@@ -32,6 +32,7 @@ struct SmartCountView: View {
     @State private var showingPaper  = false
     @State private var showingCSV   = false
     @State private var showingPaywall = false
+    @AppStorage("stoqly_hasSeenSmartCountTip") private var hasSeenTip = false
 
     private var isStorageSelected: Bool {
         selectedStorage != nil && !storages.isEmpty
@@ -61,6 +62,25 @@ struct SmartCountView: View {
                     }
                     .padding(.top, 8)
                     .padding(.horizontal)
+
+                    if !hasSeenTip {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "lightbulb.fill").foregroundColor(.yellow)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("How SmartCount works").font(.subheadline).bold()
+                                Text("Photo: point at a shelf to count automatically. Voice: speak your items aloud. Sheet: scan a printed list.")
+                                    .font(.caption).foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Button { hasSeenTip = true } label: {
+                                Image(systemName: "xmark").font(.caption).foregroundColor(.secondary)
+                            }
+                        }
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                        .padding(.horizontal)
+                    }
 
                     // Storage picker — required before choosing a mode
                     VStack(alignment: .leading, spacing: 8) {
