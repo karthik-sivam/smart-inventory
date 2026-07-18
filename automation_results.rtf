@@ -218,4 +218,12 @@
 \bullet PurchaseReviewView: capture stock before, set after = before + quantityReceived, pass both into ActivityEvent (matches MovementSheet)\par
 \bullet Files: AITest/Views/PurchaseReviewView.swift\par
 \bullet Build: xcodebuild not available in this Linux cloud environment; logic mirrors MovementSheet IN path\par
+\par
+{\b Verify \emdash SaleEntryReviewView batch SaleMade before/after (Bugbot)}\par
+[COMPLETED — NO CODE CHANGE]\par
+\bullet Behavior confirmed: saveAllSales decrements currentQuantity per row, so later rows for the same item read the post-prior-sale stock\par
+\bullet Not a bug: SaleMade semantics are stock-before/after EACH sale; progressive values match ActivityEvent comments, QuickSaleSheet, and ITEM 4 ("capture stock BEFORE the sale is applied")\par
+\bullet Example: stock 10, sell 3 then 2 → events 10→7 and 7→5; feed shows "3 sold" / "2 sold"; final qty 5\par
+\bullet Rejected alternate (snapshot opening stock for every row): would make quantityAfter wrong for later rows (e.g. 10→8 while stock is 5)\par
+\bullet Files reviewed: AITest/Views/SaleEntryReviewView.swift, AITest/Models/ActivityEvent.swift, AITest/Views/QuickSaleSheet.swift\par
 }
