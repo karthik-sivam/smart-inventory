@@ -210,4 +210,12 @@
 \bullet SubscriptionManager.updateEntitlements(for:): call FirestoreManager.shared.writeProStatus(isPro) after Pro monthly/annual entitlement is applied\par
 \bullet Files: AITest/Models/SubscriptionManager.swift\par
 \bullet Build: xcodebuild not available in this Linux cloud environment; change is a one-line Firestore mirror call matching existing refresh path\par
+\par
+{\b Fix \emdash Purchase invoice MovementLogged missing before/after qty}\par
+[COMPLETED]\par
+\bullet Verified bug: PurchaseReviewView.saveAllPurchases created MovementLogged without quantityBefore/quantityAfter\par
+\bullet ActivityEvent.displayDescription fell back to generic "Movement logged in …" instead of "+N" delta\par
+\bullet PurchaseReviewView: capture stock before, set after = before + quantityReceived, pass both into ActivityEvent (matches MovementSheet)\par
+\bullet Files: AITest/Views/PurchaseReviewView.swift\par
+\bullet Build: xcodebuild not available in this Linux cloud environment; logic mirrors MovementSheet IN path\par
 }
