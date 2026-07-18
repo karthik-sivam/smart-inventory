@@ -293,10 +293,28 @@ class SubscriptionManager: ObservableObject {
     }
 
     private func updateEntitlements(for transaction: StoreKit.Transaction) async {
+        // Match refreshPurchaseStatus(): never grant from revoked or expired transactions.
+        // Transaction.updates can redeliver stale events; writing isPro=true here would
+        // overwrite a correct local/Firestore clear from a prior refresh.
+        guard transaction.revocationDate == nil else {
+            await refreshPurchaseStatus()
+            return
+        }
+        if let expiry = transaction.expirationDate, expiry <= Date() {
+            await refreshPurchaseStatus()
+            return
+        }
+
         switch transaction.productID {
         case ProductID.proMonthly.rawValue, ProductID.proAnnual.rawValue:
             isPro = true
             hasRemovedAds = true
+            if let expiry = transaction.expirationDate {
+                proSubscriptionExpirationDate = expiry
+            }
+            if transaction.offer?.type == .introductory {
+                isOnProTrial = true
+            }
             AdManager.shared.disableAds()
             // Mirror immediately — do not wait for a later refreshPurchaseStatus().
             FirestoreManager.shared.writeProStatus(isPro)
