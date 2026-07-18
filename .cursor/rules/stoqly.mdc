@@ -1,0 +1,164 @@
+---
+description: Stoqly-specific rules that override general SwiftUI conventions. These are non-negotiable — violating them causes silent data loss, crashes, or broken UI. Apply to ALL files in this project.
+globs:
+alwaysApply: true
+---
+
+# Stoqly Project Rules
+
+These rules take precedence over swiftui.mdc and inventory.mdc for this project.
+
+## 1. SwiftData Save — ALWAYS use safeSave
+
+```swift
+// ✅ ALWAYS
+modelContext.safeSave(context: "DescriptiveContextLabel")
+
+// ❌ NEVER — swallows errors silently
+try? modelContext.save()
+try! modelContext.save()
+```
+
+`safeSave` is in `Utilities/ModelContextExtension.swift`. The `context:` string appears in logs. No exceptions.
+
+## 2. ActivityEvent BEFORE Delete
+
+When deleting any item, capture the activity event BEFORE calling delete — the `storage` relationship is nil after delete.
+
+```swift
+// ✅ CORRECT
+let event = ActivityEvent(eventType: "ItemDeleted", itemName: item.name, storageName: item.storage?.name ?? "Unknown")
+modelContext.insert(event)
+modelContext.delete(item)
+modelContext.safeSave(context: "DeleteItem")
+
+// ❌ WRONG — storageName will be empty/nil
+modelContext.delete(item)
+let event = ActivityEvent(...)
+```
+
+## 3. Barcode Scanner — fullScreenCover ONLY
+
+```swift
+// ✅ CORRECT
+.fullScreenCover(isPresented: $showScanner) { BarcodeScannerView(...) }
+
+// ❌ WRONG — AVFoundation XPC pipeline breaks in sheets (err=-17281)
+.sheet(isPresented: $showScanner) { BarcodeScannerView(...) }
+```
+
+## 4. Quantity vs Currency Display
+
+```swift
+// ✅ Quantities — use smartFormatted
+Text(item.currentQuantity.smartFormatted)   // "5", "2.5", "0"
+
+// ✅ Monetary values — use currencyManager.formatPrice()
+Text(currencyManager.formatPrice(item.unitCost))  // "₹400.00"
+
+// ❌ NEVER hardcode a currency symbol
+Text("$\(item.unitCost)")
+Text(String(format: "%.2f", item.unitCost))  // missing symbol
+```
+
+`smartFormatted` is a `Double` extension in `ModelContextExtension.swift`.
+
+## 5. Currency — Never Hardcode the Symbol
+
+All monetary values must go through `currencyManager.formatPrice(amount)`.
+Never write `"$"`, `"₹"`, `"€"` as string literals in Views.
+`CurrencyManager` is provided as `.environmentObject()` from the root — use `@EnvironmentObject var currencyManager: CurrencyManager` in any view that shows prices.
+Never create a new `@StateObject private var currencyManager = CurrencyManager()` inside a child view — there is ONE instance at the root.
+
+## 6. NavigationStack — Never Nest in Modal Views
+
+`ItemDetailView` must NOT contain a `NavigationStack` in its body. Sheet callers provide one:
+
+```swift
+// ✅ Sheet caller wraps it
+.sheet(isPresented: $show) {
+    NavigationStack { ItemDetailView(item: item) }
+}
+
+// ❌ ItemDetailView must NOT have NavigationStack inside it
+```
+
+`AddStorageView` already has its own `NavigationStack` — never wrap it in another one.
+
+## 7. Sheets — Always Use sheetStyle()
+
+```swift
+.sheet(isPresented: $show) {
+    SomeView().sheetStyle()
+}
+```
+
+`sheetStyle()` is in `Views/Components/SheetStyle.swift`.
+
+## 8. isPro — NEVER Hardcode true
+
+`SubscriptionManager.isPro` is currently `true` for testing. NEVER set it to `true` in any new code or spec. Never reference `isPro = true` in comments or code. Use the proper gate:
+
+```swift
+guard SubscriptionManager.shared.canAddItem(currentItemCount: storage.items.count) else {
+    showingItemLimitPaywall = true
+    return
+}
+```
+
+## 9. ViewModel Pattern
+
+```swift
+@MainActor
+final class SomeViewModel: ObservableObject {
+    @Published private(set) var filteredItems: [InventoryItem] = []
+    private var items: [InventoryItem] = []
+
+    func bind(items: [InventoryItem]) {
+        self.items = items
+        applyFilters()
+    }
+}
+```
+
+- ViewModels are `@MainActor final class` conforming to `ObservableObject`
+- Never inject `modelContext` into a ViewModel — Views handle all SwiftData operations
+- Pass data/IDs to ViewModels, not model objects with active contexts
+
+## 10. Navigation — No Coordinators
+
+This project uses SwiftUI native navigation (NavigationLink, .sheet, .fullScreenCover). Do NOT introduce Coordinator classes or patterns — they are explicitly not used here.
+
+## 11. SwiftData New Fields — Use Default Values
+
+When adding a new field to an existing `@Model` class, always provide a default value so SwiftData handles migration automatically without a VersionedSchema:
+
+```swift
+// ✅ Safe lightweight migration
+var sellingPrice: Double = 0
+var reorderPercentage: Double = 0
+
+// ❌ Requires explicit migration
+var sellingPrice: Double  // no default
+```
+
+## 12. Alerts — Standard .alert is Fine
+
+The `swiftui.mdc` rule banning `alert()` does NOT apply here. Standard `.alert` and `.confirmationDialog` are used throughout this codebase for delete confirmations and warnings. Do not replace them with custom views.
+
+## 13. Custom Navigation Headers
+
+Most views use a custom nav header instead of `.navigationTitle`. Do not replace custom headers with standard NavigationView titles — it changes the visual design.
+
+## 14. Bundle ID and App Name
+
+- Bundle ID: `com.vishuddhi.stoqly`
+- App name in all Maestro flows and assertions: `"Stoqly"` (not "Smart Inventory")
+
+## 15. New ActivityEvent Types for Phase 7A
+
+When creating sale or movement events, use these exact eventType strings:
+- `"SaleMade"` — when a SaleEvent is recorded
+- `"MovementLogged"` — when an InventoryMovement (non-sale) is recorded
+
+Insert the ActivityEvent BEFORE any modelContext.delete() call (rule 2 above).

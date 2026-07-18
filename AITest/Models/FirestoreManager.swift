@@ -301,6 +301,7 @@ class FirestoreManager: ObservableObject {
             "minQuantity": item.minQuantity,
             "maxQuantity": item.maxQuantity,
             "unitCost": item.unitCost,
+            "sellingPrice": item.sellingPrice,
             "reorderPercentage": item.reorderPercentage,
             "lastPurchasePrice": item.lastPurchasePrice,
             "isOutOfStock": item.currentQuantity <= 0,
@@ -420,6 +421,50 @@ class FirestoreManager: ObservableObject {
                 print("syncActivity failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    // MARK: - Sales & Movements (Phase 7A — push-only)
+
+    func pushSaleEvent(_ event: SaleEvent) async {
+        guard TeamManager.shared.effectiveUID != nil else { return }
+        guard let ref = try? userRef() else { return }
+        let docRef = ref.collection("saleEvents").document(event.id.uuidString)
+        let data: [String: Any] = [
+            "id": event.id.uuidString,
+            "itemName": event.itemName,
+            "itemSKU": event.itemSKU,
+            "storageName": event.storageName,
+            "category": event.category,
+            "quantitySold": event.quantitySold,
+            "pricePerUnit": event.pricePerUnit,
+            "costPerUnit": event.costPerUnit,
+            "notes": event.notes,
+            "occurredAt": Timestamp(date: event.occurredAt),
+            "createdAt": Timestamp(date: event.createdAt)
+        ]
+        try? await docRef.setData(data)
+    }
+
+    func pushInventoryMovement(_ movement: InventoryMovement) async {
+        guard TeamManager.shared.effectiveUID != nil else { return }
+        guard let ref = try? userRef() else { return }
+        let docRef = ref.collection("inventoryMovements").document(movement.id.uuidString)
+        let data: [String: Any] = [
+            "id": movement.id.uuidString,
+            "itemName": movement.itemName,
+            "itemSKU": movement.itemSKU,
+            "storageName": movement.storageName,
+            "category": movement.category,
+            "direction": movement.direction,
+            "movementType": movement.movementType,
+            "quantity": movement.quantity,
+            "pricePerUnit": movement.pricePerUnit,
+            "notes": movement.notes,
+            "occurredAt": Timestamp(date: movement.occurredAt),
+            "createdAt": Timestamp(date: movement.createdAt),
+            "linkedSaleEventId": movement.linkedSaleEventId?.uuidString ?? ""
+        ]
+        try? await docRef.setData(data)
     }
 
     // MARK: - Full Sync (Pull from Cloud → Local SwiftData)
@@ -569,6 +614,91 @@ class FirestoreManager: ObservableObject {
             }
             modelContext.safeSave(context: "pullFromCloud activity events")
 
+            // Pull ALL sale events so sales data fully survives reinstall.
+            // No limit — SMBs won't accumulate millions of records, and this
+            // fetch only happens once per install (not on every launch).
+            let saleEventsSnap = try await db
+                .collection("users").document(uid)
+                .collection("saleEvents")
+                .order(by: "occurredAt", descending: true)
+                .getDocuments()
+
+            for doc in saleEventsSnap.documents {
+                let d = doc.data()
+                guard let idString = d["id"] as? String,
+                      let id = UUID(uuidString: idString),
+                      let occurredTs = d["occurredAt"] as? Timestamp else { continue }
+
+                let existing = (try? modelContext.fetch(
+                    FetchDescriptor<SaleEvent>(
+                        predicate: #Predicate { $0.id == id }
+                    )
+                )) ?? []
+                guard existing.isEmpty else { continue }
+
+                let saleEvent = SaleEvent(
+                    item: nil,
+                    itemName: d["itemName"] as? String ?? "",
+                    itemSKU: d["itemSKU"] as? String ?? "",
+                    storageName: d["storageName"] as? String ?? "",
+                    category: d["category"] as? String ?? "",
+                    quantitySold: d["quantitySold"] as? Double ?? 0,
+                    pricePerUnit: d["pricePerUnit"] as? Double ?? 0,
+                    costPerUnit: d["costPerUnit"] as? Double ?? 0,
+                    notes: d["notes"] as? String ?? "",
+                    occurredAt: occurredTs.dateValue()
+                )
+                saleEvent.id = id
+                if let createdTs = d["createdAt"] as? Timestamp {
+                    saleEvent.createdAt = createdTs.dateValue()
+                }
+                modelContext.insert(saleEvent)
+            }
+            modelContext.safeSave(context: "pullFromCloud saleEvents")
+
+            // Pull all inventory movements so the Movements tab survives reinstall.
+            let movementsSnap = try await db
+                .collection("users").document(uid)
+                .collection("inventoryMovements")
+                .order(by: "occurredAt", descending: true)
+                .getDocuments()
+
+            for doc in movementsSnap.documents {
+                let d = doc.data()
+                guard let idString = d["id"] as? String,
+                      let id = UUID(uuidString: idString),
+                      let occurredTs = d["occurredAt"] as? Timestamp else { continue }
+
+                let existing = (try? modelContext.fetch(
+                    FetchDescriptor<InventoryMovement>(
+                        predicate: #Predicate { $0.id == id }
+                    )
+                )) ?? []
+                guard existing.isEmpty else { continue }
+
+                let linkedIdString = d["linkedSaleEventId"] as? String ?? ""
+                let movement = InventoryMovement(
+                    item: nil,
+                    itemName: d["itemName"] as? String ?? "",
+                    itemSKU: d["itemSKU"] as? String ?? "",
+                    storageName: d["storageName"] as? String ?? "",
+                    category: d["category"] as? String ?? "",
+                    direction: d["direction"] as? String ?? "IN",
+                    movementType: d["movementType"] as? String ?? "",
+                    quantity: d["quantity"] as? Double ?? 0,
+                    pricePerUnit: d["pricePerUnit"] as? Double ?? 0,
+                    notes: d["notes"] as? String ?? "",
+                    occurredAt: occurredTs.dateValue(),
+                    linkedSaleEventId: linkedIdString.isEmpty ? nil : UUID(uuidString: linkedIdString)
+                )
+                movement.id = id
+                if let createdTs = d["createdAt"] as? Timestamp {
+                    movement.createdAt = createdTs.dateValue()
+                }
+                modelContext.insert(movement)
+            }
+            modelContext.safeSave(context: "pullFromCloud inventoryMovements")
+
             modelContext.safeSave(context: "pullFromCloud")
             syncState = .success
             lastSyncDate = Date()
@@ -705,6 +835,7 @@ class FirestoreManager: ObservableObject {
             "minQuantity": item.minQuantity,
             "maxQuantity": item.maxQuantity,
             "unitCost": item.unitCost,
+            "sellingPrice": item.sellingPrice,
             "reorderPercentage": item.reorderPercentage,
             "lastPurchasePrice": item.lastPurchasePrice,
             "isOutOfStock": item.currentQuantity <= 0,
@@ -769,6 +900,7 @@ class FirestoreManager: ObservableObject {
                 found.minQuantity = data["minQuantity"] as? Double ?? 0
                 found.maxQuantity = data["maxQuantity"] as? Double ?? 0
                 found.unitCost = data["unitCost"] as? Double ?? 0
+                found.sellingPrice = data["sellingPrice"] as? Double ?? 0
                 found.reorderPercentage = data["reorderPercentage"] as? Double ?? 0
                 found.lastPurchasePrice = data["lastPurchasePrice"] as? Double ?? 0
                 if let ts = data["lastPurchasedAt"] as? Timestamp {
@@ -821,6 +953,7 @@ class FirestoreManager: ObservableObject {
             }
             newItem.photoURL = data["photoURL"] as? String
             newItem.reorderPercentage = data["reorderPercentage"] as? Double ?? 0
+            newItem.sellingPrice = data["sellingPrice"] as? Double ?? 0
             newItem.lastPurchasePrice = data["lastPurchasePrice"] as? Double ?? 0
             if let ts = data["lastPurchasedAt"] as? Timestamp {
                 newItem.lastPurchasedAt = ts.dateValue()

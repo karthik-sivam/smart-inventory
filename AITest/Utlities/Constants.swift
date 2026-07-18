@@ -6,5 +6,5 @@
 //
 
 struct HelpAndSupport {
-    static let supportEmail = "karthik@vishuddhi.in"
+    static let supportEmail = "support@vishuddhi.in"
 }

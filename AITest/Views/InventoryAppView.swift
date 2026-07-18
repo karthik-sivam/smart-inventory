@@ -121,6 +121,11 @@ struct InventoryAppView: View {
             spotlightIndexedOnce = true
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            // Guard: do not run any sync if the user is not authenticated.
+            // The foreground notification fires at unpredictable times — including
+            // during the sign-out → sign-in transition — and must never attempt a
+            // Firestore pull when the auth state is ambiguous.
+            guard authManager.isAuthenticated else { return }
             NotificationManager.shared.checkAndNotifyLowStock(items: items)
             Task {
                 await subscriptionManager.refreshPurchaseStatus()
@@ -133,6 +138,9 @@ struct InventoryAppView: View {
         }
         .onReceive(NotificationCenter.default.publisher(
             for: UIApplication.didEnterBackgroundNotification)) { _ in
+            // Guard: skip background flush if not authenticated — we must not
+            // push the previous user's captured items to Firestore.
+            guard authManager.isAuthenticated else { return }
             let capturedItems = items
             let capturedStorages = storages
             Task {
@@ -159,6 +167,10 @@ struct InventoryAppView: View {
                 maybeShowPostLoginOnboarding()
                 Task { await checkPendingInvites() }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSNotification.Name("stoqly.showPaywall"))) { _ in
+            showPaywall = true
         }
         .saveErrorBanner()
     }
@@ -199,24 +211,39 @@ struct InventoryAppView: View {
     // MARK: - Startup Sync Logic
 
     private func clearLocalData() {
-        // Delete in dependency order: children before parents.
-        // ActivityEvent and InventoryCount have no children.
-        // InventoryItem depends on Storage and UOM.
-        // Storage and UOM are roots for user-owned inventory data.
-        do {
-            try modelContext.delete(model: ActivityEvent.self)
-            try modelContext.delete(model: InventoryCount.self)
-            try modelContext.delete(model: InventoryBatch.self)
-            try modelContext.delete(model: TeamMember.self)
-            try modelContext.delete(model: ItemTemplate.self)
-            try modelContext.delete(model: InventoryItem.self)
-            try modelContext.delete(model: Storage.self)
-            try modelContext.delete(model: UOM.self)
-            modelContext.safeSave(context: "clearLocalData on sign-out")
-            print("Local SwiftData cleared on sign-out.")
-        } catch {
-            print("clearLocalData failed: \(error.localizedDescription)")
+        // CRITICAL: Each model type is deleted in its own call so that a failure
+        // on one type never silently skips the remaining types. The old single
+        // do/catch block meant that if InventoryCount.delete() threw, Storage and
+        // InventoryItem were never deleted, leaving the previous user's records in
+        // SwiftData and causing data leakage to the next signed-in user.
+        //
+        // Cascade rules: Storage → InventoryItem → InventoryCount / InventoryBatch.
+        // We delete children explicitly first, then parents, as belt-and-suspenders.
+        func safeDelete<T: PersistentModel>(_ type: T.Type) {
+            do { try modelContext.delete(model: type) }
+            catch {
+                print("clearLocalData: could not delete \(T.self) — \(error.localizedDescription)")
+            }
         }
+
+        safeDelete(InventoryCount.self)
+        safeDelete(InventoryBatch.self)
+        safeDelete(SaleEvent.self)
+        safeDelete(InventoryMovement.self)
+        safeDelete(TeamMember.self)
+        safeDelete(ActivityEvent.self)
+        safeDelete(ItemTemplate.self)
+        safeDelete(InventoryItem.self)   // cascade also clears InventoryCount / InventoryBatch
+        safeDelete(Storage.self)         // cascade also clears InventoryItem
+        safeDelete(UOM.self)
+
+        modelContext.safeSave(context: "clearLocalData on sign-out")
+
+        // Clear the offline write queue so the previous user's pending Firestore
+        // writes cannot be replayed under the next user's session.
+        UserDefaults.standard.removeObject(forKey: "stoqly_pendingWrites")
+
+        print("✅ Local SwiftData cleared on sign-out.")
     }
 
     private func runStartupSync() {
@@ -233,9 +260,17 @@ struct InventoryAppView: View {
             // Step 2 — If cloud had nothing but local does, this is a first-time
             //           migration (user had data before cloud sync was introduced).
             //           Push local → cloud so nothing is lost.
-            if cloudCount == 0 && !storages.isEmpty {
-                print("Firestore: Cloud empty but local has \(storages.count) storages — migrating.")
-                await firestoreManager.pushAllToCloud(storages: storages, items: items)
+            //
+            // IMPORTANT: Do NOT use the @Query `storages` array here — it is a
+            // SwiftUI snapshot that can lag behind after clearLocalData() runs on
+            // sign-out. A signed-out + immediate sign-up would see the previous
+            // user's stale @Query and incorrectly push their data to the new
+            // user's Firestore account. Always fetch fresh from modelContext.
+            let freshStorages = (try? modelContext.fetch(FetchDescriptor<Storage>())) ?? []
+            if cloudCount == 0 && !freshStorages.isEmpty {
+                print("Firestore: Cloud empty but local has \(freshStorages.count) storages — migrating.")
+                let freshItems = (try? modelContext.fetch(FetchDescriptor<InventoryItem>())) ?? []
+                await firestoreManager.pushAllToCloud(storages: freshStorages, items: freshItems)
             }
         }
     }
@@ -271,18 +306,21 @@ struct MainAppContent: View {
                     .tabItem { Label("Items", systemImage: "cube.box.fill") }
                     .tag(2)
 
+                SalesView()
+                    .environmentObject(currencyManager)
+                    .environmentObject(subscriptionManager)
+                    .tabItem { Label("Sales", systemImage: "cart.fill") }
+                    .tag(3)
+
                 CountView()
                     .environmentObject(currencyManager)
                     .tabItem { Label("Audit", systemImage: "list.clipboard.fill") }
-                    .tag(3)
-
-                ProfileView()
-                    .environmentObject(firestoreManager)
-                    .environmentObject(subscriptionManager)
-                    .tabItem { Label("Profile", systemImage: "person.circle.fill") }
                     .tag(4)
             }
             .tint(.stoqlyAccent)   // teal — matches the brand palette
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("stoqly.switchToStoragesTab"))) { _ in
+            selectedTab = 1
         }
         .animation(.easeInOut(duration: 0.3), value: firestoreManager.syncState)
     }
@@ -299,6 +337,7 @@ struct CountView: View {
     @State private var showingFullCount: InventoryItem? = nil
     @State private var pendingFullCountItem: InventoryItem? = nil
     @State private var lastCountedItem: InventoryItem? = nil
+    @State private var lastCountWasSaved = false
     @State private var showingSmartCount = false
 
     var body: some View {
@@ -379,6 +418,7 @@ struct CountView: View {
                             ForEach(viewModel.filteredItems, id: \.id) { item in
                                 if TeamManager.shared.canEdit {
                                     Button {
+                                        lastCountWasSaved = false
                                         lastCountedItem = item
                                         showingQuickCount = item
                                     } label: {
@@ -423,19 +463,8 @@ struct CountView: View {
         .sheet(isPresented: $showingSmartCount) {
             SmartCountView().sheetStyle()
         }
-        .sheet(item: $showingQuickCount, onDismiss: {
-            if let item = lastCountedItem {
-                viewModel.markCounted(item.id)
-            }
-            if let pending = pendingFullCountItem {
-                pendingFullCountItem = nil
-                showingFullCount = pending
-            }
-        }) { item in
-            QuickCountView(item: item, onOpenFullCount: {
-                pendingFullCountItem = item
-            })
-            .sheetStyle()
+        .sheet(item: $showingQuickCount, onDismiss: handleQuickCountDismiss) { item in
+            quickCountSheet(for: item)
         }
         .sheet(item: $showingFullCount) { item in
             CountItemView(item: item)
@@ -443,6 +472,27 @@ struct CountView: View {
         }
         .onAppear { viewModel.bind(items: items) }
         .onChange(of: items) { _, newValue in viewModel.updateItems(newValue) }
+    }
+
+    private func handleQuickCountDismiss() {
+        if lastCountWasSaved, let item = lastCountedItem {
+            viewModel.markCounted(item.id)
+        }
+        lastCountWasSaved = false
+        if let pending = pendingFullCountItem {
+            pendingFullCountItem = nil
+            showingFullCount = pending
+        }
+    }
+
+    @ViewBuilder
+    private func quickCountSheet(for item: InventoryItem) -> some View {
+        QuickCountView(
+            item: item,
+            onOpenFullCount: { pendingFullCountItem = item },
+            onSaved: { lastCountWasSaved = true }
+        )
+        .sheetStyle()
     }
 }
 

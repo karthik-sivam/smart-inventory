@@ -160,6 +160,7 @@ class SubscriptionManager: ObservableObject {
                     AnalyticsManager.shared.track(.subscriptionStarted(plan: plan))
                     AnalyticsManager.shared.identify(
                         userId: AuthManager.shared.currentUser?.uid ?? "",
+                        email: AuthManager.shared.currentUser?.email,
                         isPro: true,
                         signupMethod: UserDefaults.standard.string(forKey: "signupMethod") ?? "unknown"
                     )
@@ -248,8 +249,6 @@ class SubscriptionManager: ObservableObject {
         if hasRemovedAds {
             AdManager.shared.disableAds()
         }
-
-        print("StoreKit: isPro=\(isPro), hasRemovedAds=\(hasRemovedAds)")
     }
 
     // MARK: - Transaction Listener
@@ -497,6 +496,17 @@ struct PaywallView: View {
                         }
                         .font(.subheadline).foregroundColor(.blue)
 
+                        // Required by App Store guideline 3.1.2(c)
+                        HStack(spacing: 16) {
+                            Link("Terms of Use",
+                                 destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+                            Text("·").foregroundColor(.secondary)
+                            Link("Privacy Policy",
+                                 destination: URL(string: "https://vishuddhi.in/privacy.html")!)
+                        }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+
                         if selectedTab == .pro {
                             Text("Pro subscriptions auto-renew. Cancel anytime in Settings → Apple ID → Subscriptions.")
                                 .font(.caption2).foregroundColor(.secondary)
@@ -541,9 +551,11 @@ private struct ProFeatureList: View {
                 PaywallFeatureRow(icon: "cube.box.fill",            color: .blue,   text: "Unlimited items per storage",         note: "Free: 50 max")
                 PaywallFeatureRow(icon: "chart.line.uptrend.xyaxis",color: .green,  text: "Advanced analytics & full history",   note: "Free: 30 days")
                 PaywallFeatureRow(icon: "barcode.viewfinder",       color: .orange, text: "Barcode scanner pro (bulk, history)")
-                PaywallFeatureRow(icon: "mic.fill",                 color: .teal,   text: "Unlimited AI Voice Inventory",        note: "Free: 3/month")
-                PaywallFeatureRow(icon: "camera.fill",              color: .teal,   text: "Unlimited AI Photo & Shelf Scan",     note: "Free: 3/month")
-                PaywallFeatureRow(icon: "doc.text.viewfinder",      color: .teal,   text: "Unlimited AI Sheet Inventory",        note: "Free: 3/month")
+                PaywallFeatureRow(icon: "sparkles",                          color: .stoqlyAccent, text: "Smart Sales Entry — Voice, Photo, Text, CSV & PDF")
+                PaywallFeatureRow(icon: "arrow.down.doc.fill",               color: .orange,       text: "AI Purchase Invoice Import")
+                PaywallFeatureRow(icon: "mic.fill",                          color: .teal,         text: "AI Voice Inventory Count",   note: "Free: 3/month")
+                PaywallFeatureRow(icon: "camera.fill",                       color: .teal,         text: "AI Photo Inventory Scan",    note: "Free: 3/month")
+                PaywallFeatureRow(icon: "doc.text.viewfinder",               color: .teal,         text: "AI Sheet Inventory Import",  note: "Free: 3/month")
                 PaywallFeatureRow(icon: "square.and.arrow.down.on.square", color: .indigo, text: "Bulk CSV / Excel import")
                 PaywallFeatureRow(icon: "person.2.fill",            color: .cyan,   text: "Multi-user collaboration",            note: "Coming soon")
                 PaywallFeatureRow(icon: "xmark.circle.fill",        color: .gray,   text: "No ads")

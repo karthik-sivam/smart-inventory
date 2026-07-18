@@ -229,7 +229,8 @@ struct FilteredItemListView: View {
 
 struct FilteredItemCard: View {
     let item: InventoryItem
-    
+    @EnvironmentObject private var currencyManager: CurrencyManager
+
     var body: some View {
         HStack(spacing: 12) {
             // Storage color indicator
@@ -283,7 +284,7 @@ struct FilteredItemCard: View {
                     .fontWeight(.medium)
                     .foregroundColor(item.isOutOfStock ? .red : (item.isLowStock ? .orange : .green))
                 
-                Text("$\(String(format: "%.2f", item.totalValue))")
+                Text(currencyManager.formatPrice(item.totalValue))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

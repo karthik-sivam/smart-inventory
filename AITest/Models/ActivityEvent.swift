@@ -57,6 +57,13 @@ final class ActivityEvent {
             return "Low stock alert triggered"
         case "StorageCreated":
             return "Storage area created"
+        case "SaleMade":
+            let qty = quantityAfter.map { $0.smartFormatted } ?? "?"
+            return "Sale recorded: \(qty) sold from \(storageName)"
+        case "MovementLogged":
+            return "Movement logged in \(storageName)"
+        case "BulkCountImported":
+            return "Bulk count imported in \(storageName)"
         default:
             return eventType
         }
@@ -70,6 +77,9 @@ final class ActivityEvent {
         case "ItemDeleted": return "trash.fill"
         case "LowStockAlert": return "exclamationmark.triangle.fill"
         case "StorageCreated": return "archivebox.fill"
+        case "SaleMade": return "cart.fill"
+        case "MovementLogged": return "arrow.up.arrow.down.circle.fill"
+        case "BulkCountImported": return "list.clipboard.fill"
         default: return "circle.fill"
         }
     }
@@ -82,6 +92,9 @@ final class ActivityEvent {
         case "ItemDeleted": return "red"
         case "LowStockAlert": return "orange"
         case "StorageCreated": return "purple"
+        case "SaleMade": return "green"
+        case "MovementLogged": return "blue"
+        case "BulkCountImported": return "blue"
         default: return "gray"
         }
     }

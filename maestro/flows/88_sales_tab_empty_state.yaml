@@ -1,0 +1,10 @@
+# Flow 88 — Sales tab empty state
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Sales"
+- assertVisible: "No sales yet"
+- assertVisible: "Record a Sale"
+- assertVisible: "Smart Sales Entry"
+- assertVisible:
+    id: "salesEmptyRecordButton"

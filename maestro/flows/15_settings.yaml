@@ -7,6 +7,8 @@ appId: com.vishuddhi.stoqly
 # Settings is accessed via the gear icon on the Dashboard
 - tapOn: "Dashboard"
 - tapOn:
+    id: "dashboardGearButton"
+- tapOn:
     id: "gear"
 - assertVisible: "Settings"
 

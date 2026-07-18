@@ -288,4 +288,244 @@ final class AIInventoryService {
             )
         }
     }
+
+    // MARK: - Smart Sales Entry
+
+    private static let salesSystemPrompt = """
+    You are a sales log parser for an inventory management app. Extract sale items from the input. \
+    Return ONLY a valid JSON array. Each object: {"itemName": string, "quantitySold": number, \
+    "pricePerUnit": number (0 if unknown), "notes": string}. No markdown, no explanation — just the JSON array.
+    """
+
+    private static let purchaseSystemPrompt = """
+    You are parsing a supplier purchase invoice. Extract each line item: item name, quantity received, \
+    and unit cost/price. Return ONLY a valid JSON array. Each object: {"itemName": string, \
+    "quantityReceived": number, "costPerUnit": number (0 if unknown), "notes": string}. \
+    No markdown, no explanation — just the JSON array.
+    """
+
+    func parseSalesTranscript(transcript: String, knownItemNames: [String] = []) async throws -> [ParsedSaleRow] {
+        let prompt = """
+        \(Self.inventoryContext(for: knownItemNames))You are parsing a spoken sales log. Extract each item sold: name, quantity sold, and price per unit if mentioned.
+        If price not mentioned, use 0.
+
+        Transcript: "\(transcript)"
+        """
+        return try await callClaudeForSales(textPrompt: prompt, imageDataList: [])
+    }
+
+    func parseSalesText(text: String, knownItemNames: [String] = []) async throws -> [ParsedSaleRow] {
+        let prompt = """
+        \(Self.inventoryContext(for: knownItemNames))Parse this sales list. Extract item name, quantity sold, and price per unit for each line.
+        If price not mentioned, use 0.
+
+        Input:
+        \(text)
+        """
+        return try await callClaudeForSales(textPrompt: prompt, imageDataList: [])
+    }
+
+    func parseSalesImage(imageData: Data, knownItemNames: [String] = []) async throws -> [ParsedSaleRow] {
+        let prompt = """
+        \(Self.inventoryContext(for: knownItemNames))Extract all sale items from this image. Look for item names, quantities sold, and prices.
+        This may be a receipt, handwritten chit, or sales sheet. If price not visible, use 0.
+        """
+        return try await callClaudeForSales(textPrompt: prompt, imageDataList: [imageData])
+    }
+
+    func parseSalesPDF(pages: [UIImage], knownItemNames: [String] = []) async throws -> [ParsedSaleRow] {
+        let imageDataList = pages.compactMap { $0.jpegData(compressionQuality: 0.85) }
+        guard !imageDataList.isEmpty else { throw AIInventoryError.noItemsFound }
+        let prompt = """
+        \(Self.inventoryContext(for: knownItemNames))Extract all sale items from these PDF page images. Look for item names, quantities sold, and prices.
+        If price not visible, use 0.
+        """
+        return try await callClaudeForSales(textPrompt: prompt, imageDataList: imageDataList)
+    }
+
+    private static func inventoryContext(for knownItemNames: [String]) -> String {
+        guard !knownItemNames.isEmpty else { return "" }
+        return """
+        Inventory items available: \(knownItemNames.joined(separator: ", ")).
+        Use the EXACT inventory name (case-sensitive) when the item mentioned matches one of these. Only fall back to the spoken/written name if no inventory item matches.
+
+        """
+    }
+
+    func parsePurchaseInvoiceImage(imageData: Data) async throws -> [ParsedPurchaseRow] {
+        let prompt = """
+        Extract all purchase line items from this supplier invoice image: item name, quantity received, unit cost.
+        If cost not visible, use 0.
+        """
+        return try await callClaudeForPurchase(textPrompt: prompt, imageDataList: [imageData])
+    }
+
+    func parsePurchaseInvoicePDF(pages: [UIImage]) async throws -> [ParsedPurchaseRow] {
+        let imageDataList = pages.compactMap { $0.jpegData(compressionQuality: 0.85) }
+        guard !imageDataList.isEmpty else { throw AIInventoryError.noItemsFound }
+        let prompt = "Extract all purchase line items from these invoice PDF pages."
+        return try await callClaudeForPurchase(textPrompt: prompt, imageDataList: imageDataList)
+    }
+
+    func parsePurchaseInvoiceCSV(text: String) async throws -> [ParsedPurchaseRow] {
+        let prompt = """
+        Parse this supplier delivery note / invoice spreadsheet text. Extract item name, quantity received, unit cost.
+        If cost not visible, use 0.
+
+        \(text)
+        """
+        return try await callClaudeForPurchase(textPrompt: prompt, imageDataList: [])
+    }
+
+    func suggestSalesColumnMapping(headers: [String], sampleRow: [String]) async throws -> [String: String] {
+        let headerList = headers.enumerated().map { "Column \($0.offset): \"\($0.element)\"" }.joined(separator: ", ")
+        let sampleList = sampleRow.enumerated().map { "Column \($0.offset): \"\($0.element)\"" }.joined(separator: ", ")
+        let prompt = """
+        You are mapping spreadsheet columns for a sales import. Available fields: "Item Name", "Quantity", "Price Per Unit", "Date", "Notes", "— Skip —".
+        Headers: \(headerList)
+        First data row: \(sampleList)
+        Reply with ONLY a JSON object mapping column index (as string) to field name. Example: {"0":"Item Name","1":"Quantity","2":"Price Per Unit","3":"— Skip —"}
+        Map every column index. Use "— Skip —" for unrecognised columns.
+        """
+        let text = try await callClaudeRaw(
+            systemPrompt: "You map spreadsheet columns to import fields. Reply with JSON only.",
+            userPrompt: prompt,
+            imageDataList: [],
+            maxTokens: 200
+        )
+        return try parseColumnMappingJSON(text)
+    }
+
+    func suggestPurchaseColumnMapping(headers: [String], sampleRow: [String]) async throws -> [String: String] {
+        let headerList = headers.enumerated().map { "Column \($0.offset): \"\($0.element)\"" }.joined(separator: ", ")
+        let sampleList = sampleRow.enumerated().map { "Column \($0.offset): \"\($0.element)\"" }.joined(separator: ", ")
+        let prompt = """
+        You are mapping spreadsheet columns for a purchase invoice import. Available fields: "Item Name", "Quantity", "Unit Cost", "Notes", "— Skip —".
+        Headers: \(headerList)
+        First data row: \(sampleList)
+        Reply with ONLY a JSON object mapping column index (as string) to field name. Example: {"0":"Item Name","1":"Quantity","2":"Unit Cost"}
+        Map every column index. Use "— Skip —" for unrecognised columns.
+        """
+        let text = try await callClaudeRaw(
+            systemPrompt: "You map spreadsheet columns to import fields. Reply with JSON only.",
+            userPrompt: prompt,
+            imageDataList: [],
+            maxTokens: 200
+        )
+        return try parseColumnMappingJSON(text)
+    }
+
+    func suggestCountColumnMapping(headers: [String], sampleRow: [String]) async throws -> [String: String] {
+        let headerList = headers.enumerated().map { "Column \($0.offset): \"\($0.element)\"" }.joined(separator: ", ")
+        let sampleList = sampleRow.enumerated().map { "Column \($0.offset): \"\($0.element)\"" }.joined(separator: ", ")
+        let prompt = """
+        You are mapping spreadsheet columns for an inventory count import. Available fields: "Item Name", "Quantity", "— Skip —".
+        Headers: \(headerList)
+        First data row: \(sampleList)
+        Reply with ONLY a JSON object mapping column index (as string) to field name. Example: {"0":"Item Name","1":"Quantity"}
+        Map every column index. Use "— Skip —" for unrecognised columns.
+        """
+        let text = try await callClaudeRaw(
+            systemPrompt: "You map spreadsheet columns to import fields. Reply with JSON only.",
+            userPrompt: prompt,
+            imageDataList: [],
+            maxTokens: 200
+        )
+        return try parseColumnMappingJSON(text)
+    }
+
+    private func parseColumnMappingJSON(_ text: String) throws -> [String: String] {
+        var clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.hasPrefix("```") {
+            clean = clean.components(separatedBy: "\n").dropFirst().joined(separator: "\n")
+            if clean.hasSuffix("```") { clean = String(clean.dropLast(3)) }
+            clean = clean.replacingOccurrences(of: "```json", with: "").replacingOccurrences(of: "```", with: "")
+        }
+        guard let data = clean.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: String] else {
+            throw AIInventoryError.invalidResponse
+        }
+        return json
+    }
+
+    private func callClaudeForSales(textPrompt: String, imageDataList: [Data]) async throws -> [ParsedSaleRow] {
+        let text = try await callClaudeRaw(systemPrompt: Self.salesSystemPrompt, userPrompt: textPrompt, imageDataList: imageDataList)
+        let dtos = try decodeJSON(text, as: [ParsedSaleRowDTO].self)
+        let rows = dtos.map { $0.toParsedSaleRow() }.filter { !$0.itemName.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard !rows.isEmpty else { throw AIInventoryError.noItemsFound }
+        return rows
+    }
+
+    private func callClaudeForPurchase(textPrompt: String, imageDataList: [Data]) async throws -> [ParsedPurchaseRow] {
+        let text = try await callClaudeRaw(systemPrompt: Self.purchaseSystemPrompt, userPrompt: textPrompt, imageDataList: imageDataList)
+        let dtos = try decodeJSON(text, as: [ParsedPurchaseRowDTO].self)
+        let rows = dtos.map { $0.toParsedPurchaseRow() }.filter { !$0.itemName.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard !rows.isEmpty else { throw AIInventoryError.noItemsFound }
+        return rows
+    }
+
+    private func callClaudeRaw(systemPrompt: String, userPrompt: String, imageDataList: [Data], maxTokens: Int = 4096) async throws -> String {
+        guard let apiKey = SecretsManager.effectiveAnthropicKey else {
+            throw AIInventoryError.missingAPIKey
+        }
+
+        var contentArray: [[String: Any]] = []
+        for imageData in imageDataList {
+            contentArray.append([
+                "type": "image",
+                "source": [
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": imageData.base64EncodedString()
+                ] as [String: Any]
+            ])
+        }
+        contentArray.append(["type": "text", "text": userPrompt])
+
+        let body: [String: Any] = [
+            "model": model,
+            "max_tokens": maxTokens,
+            "system": systemPrompt,
+            "messages": [["role": "user", "content": contentArray]]
+        ]
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 60
+
+        let data: Data
+        do {
+            let (responseData, _) = try await URLSession.shared.data(for: request)
+            data = responseData
+        } catch {
+            throw AIInventoryError.networkError(error)
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let content = json["content"] as? [[String: Any]],
+              let firstBlock = content.first,
+              let text = firstBlock["text"] as? String else {
+            throw AIInventoryError.invalidResponse
+        }
+        return text
+    }
+
+    private func decodeJSON<T: Decodable>(_ text: String, as type: T.Type) throws -> T {
+        var clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.hasPrefix("```") {
+            clean = clean.components(separatedBy: "\n").dropFirst().joined(separator: "\n")
+            if clean.hasSuffix("```") { clean = String(clean.dropLast(3)) }
+            clean = clean.replacingOccurrences(of: "```json", with: "").replacingOccurrences(of: "```", with: "")
+        }
+        guard let data = clean.data(using: .utf8) else { throw AIInventoryError.invalidResponse }
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            throw AIInventoryError.invalidResponse
+        }
+    }
 }

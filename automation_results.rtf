@@ -13,4 +13,145 @@
 \bullet ITEM 13: syncFailed on Firestore pushStorage/pushItem errors\par
 \bullet Fixed AnalyticsManager: AmplitudeEventBody to [String: Any], @unchecked Sendable\par
 \bullet Build: Swift compile OK; post-build Crashlytics upload-symbols sandbox error (env, not code)\par
+\par
+{\b Phase 7A — Sales, Profitability & Reports (todolist ITEMs 14-38)}\par
+[COMPLETED]\par
+\bullet ITEM 14-15: sellingPrice on InventoryItem + Firestore push/pull\par
+\bullet ITEM 16-17: SaleEvent.swift, InventoryMovement.swift (MovementTypeIn/Out enums)\par
+\bullet ITEM 18: SwiftData schema + clearLocalData on sign-out\par
+\bullet ITEM 19: pushSaleEvent / pushInventoryMovement (push-only, Phase 7B pull deferred)\par
+\bullet ITEM 20: ActivityEvent SaleMade + MovementLogged display strings/icons/colors\par
+\bullet ITEM 21: EditItemView selling price + live margin; ItemFormViewModel load/save\par
+\bullet ITEM 22: BulkImportView ImportField.sellingPrice + auto-detect + import mapping\par
+\bullet ITEM 23: QuickSaleSheet (sale + movement + ActivityEvent + analytics + Firestore)\par
+\bullet ITEM 24-25: ItemDetailView Record Sale / Add Movement; StorageDetailView swipe Sale\par
+\bullet ITEM 26: MovementSheet with onOpenQuickSale callback\par
+\bullet ITEM 27-28: ReportsView + MovementsListView (Charts revenue trend)\par
+\bullet ITEM 29: ItemDetailView Profitability section\par
+\bullet ITEM 30: Dashboard Sales Performance + Revenue/Gross Profit KPI cards\par
+\bullet ITEM 31: DashboardView @EnvironmentObject currencyManager (single source of truth)\par
+\bullet ITEM 32-33: CurrencyManager locale auto-detect + dashboard locale-change banner\par
+\bullet ITEM 34: SmartInsightsCard dead-stock (30d grace) + never-audited (7d grace)\par
+\bullet ITEM 35: ValueByCategoryView ContentUnavailableView empty state\par
+\bullet ITEM 36: StorageListView/StorageDetailView secondarySystemGroupedBackground rows\par
+\bullet ITEM 37-38: Settings Privacy & Ads #if DEBUG; AI Features hidden when Secrets.plist key set\par
+\bullet Analytics: saleRecorded, movementLogged, reportViewed StoqlyEvent cases\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b Bug Sprint 2 — Phase 7A Device Testing Fixes (S2-1 through S2-10)}\par
+[COMPLETED]\par
+\bullet S2-1: QuickSaleSheet "Record Sale" borderedProminent + stoqlyAccent, full-width bottom button\par
+\bullet S2-2: Sales Performance horizontal period pills (no clipping); label/value row alignment\par
+\bullet S2-3: ReportsView allDays zero-fill chart + weekday/day x-axis + stoqlyAccent bars\par
+\bullet S2-4: Removed hardcoded "$" in StorageDetailView, ItemListView, EditItemView, FilteredItemListView\par
+\bullet S2-5: Audit tab green tick only after QuickCountView onSaved (lastCountWasSaved flag)\par
+\bullet S2-6: Dead stock tap snapshots items; guard empty relatedItems; InsightDetailView empty state\par
+\bullet S2-7: markAsManuallySet() suppresses locale banner after Settings currency change; softer banner copy\par
+\bullet S2-8/S2-10: SmartCount onComplete bubbles voice/image/paper → StorageDetailView dismiss + toast\par
+\bullet S2-9: ItemListView blocks Add Item when no storages; alert + switchToStoragesTab notification\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b Phase 7B-A — Sales Tab, SalesView, DatePicker Cap, ReportsView CTA (7BA-1 through 7BA-6)}\par
+[COMPLETED]\par
+\bullet 7BA-1: Tab restructure — Sales tab (tag 3), Audit (tag 4); Profile removed from tab bar\par
+\bullet 7BA-1: Dashboard gear (dashboardGearButton) opens ProfileView sheet; Audit nav selectedTab 4\par
+\bullet 7BA-2: SalesView.swift — empty/list states, grouped sales, Reports/Smart Entry sheets, SaleEventRow\par
+\bullet 7BA-2: SmartSalesEntryView stub ("Coming soon") for Phase 7B-B\par
+\bullet 7BA-3: SaleItemPickerSheet.swift — searchable item list → QuickSaleSheet\par
+\bullet 7BA-4: DatePicker capped at today in QuickSaleSheet + MovementSheet (in: ...Date())\par
+\bullet 7BA-5: ReportsView empty-state "Record a Sale" CTA + stoqly.recordSaleFromReports notification\par
+\bullet 7BA-6: Maestro — Profile via dashboardGearButton; Settings via Profile gear row; cross-tab + signout updated\par
+\bullet ProfileView: Settings row (id gear), Done toolbar, environmentObject injection from Dashboard\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b Bug Sprint 3 — Phase 7B-A Device Testing Fixes (S3-0 through S3-5)}\par
+[COMPLETED]\par
+\bullet S3-0: SaleEventRow subtitle — quantity only, no timestamp\par
+\bullet S3-1: Record Sale button — bordered green secondary style + recordSaleButton id\par
+\bullet S3-2: QuickSaleSheet profitPreview — no misleading 100% margin when unitCost is 0\par
+\bullet S3-3: SaleItemPickerSheet storage dot — white stroke ring for visibility\par
+\bullet S3-4: SalesView toolbar — single leading title, trailing sparkles/chart/plus; empty Smart Entry plain style\par
+\bullet S3-5: Dashboard Sales Performance — Grid layout for Revenue/Profit/Margin alignment\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b Phase 7B-B — Smart Sales Entry + Purchase Invoice Import (7BB-0 through 7BB-10)}\par
+[COMPLETED]\par
+\bullet 7BB-0: XLSXParser.swift shared utility; BulkImportView uses XLSXParser.parse(url:)\par
+\bullet 7BB-1: SmartSalesEntryView.swift — 5 mode cards, Pro gate, smartSalesOpened analytics\par
+\bullet 7BB-2: ParsedSaleRow + SaleEntryReviewView — batch save, auto-resolve, Firestore sync\par
+\bullet 7BB-3–8: SmartSalesVoice/Photo/Text/CSV/PDF views + AIInventoryService sales/purchase parsers\par
+\bullet 7BB-6: Analytics smartSalesOpened/ModeSelected/Completed events\par
+\bullet 7BB-9: PurchaseInvoiceImportView + PurchaseReviewView; importInvoiceButton on StorageDetailView\par
+\bullet 7BB-10: Maestro flows 88–90 (sales empty, item picker, smart sales Pro gate) + run_all.yaml\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b Bug Sprint 4 — Phase 7B-B Device Testing Fixes (S4-0 through S4-7)}\par
+[COMPLETED]\par
+\bullet S4-0: SalesView large navigationTitle — removed truncated leading toolbar title\par
+\bullet S4-1: Paywall ProFeatureList — Smart Sales Entry + Purchase Invoice Import rows; renamed AI count features\par
+\bullet S4-2: ReportsView chart x-axis dynamic stride (every 5 days for 20+ day periods)\par
+\bullet S4-3: SaleEntryReviewView — removed inner NavigationStack (single Cancel in review)\par
+\bullet S4-4: Exact-match auto-resolve + knownItemNames passed to AI parse functions; PurchaseReview + SmartCount matching\par
+\bullet S4-5: Item picker sheet lifted to SaleEntryReviewView (fixes link-then-grey bug)\par
+\bullet S4-6: SmartSalesVoiceView — endAudio before stop, suppress codes 203/301, Parse Sales nudge\par
+\bullet S4-7: onCompleted dismisses full Smart Sales sheet stack; smartSalesConfirmed toast; SmartCount child sheets no manual dismiss\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b M6 — Pre-Ship Polish (M6-1 through M6-4)}\par
+[COMPLETED]\par
+\bullet M6-1: Smart Insights data-health nudges (missing cost / selling price / min qty) + per-insight 14-day dismiss\par
+\bullet M6-2: PurchaseInvoiceImportView defaultStorage optional; targetStorage on ParsedPurchaseRow; multi-storage review + global Items tab entry (globalInvoiceImportButton)\par
+\bullet M6-3: BarcodeEnrichmentService — no debug print() calls (already clean)\par
+\bullet M6-4: Maestro flows 91–92 + run_all.yaml append\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b BUG SPRINT 5 — Purchase Invoice + Smart Sales Polish (S5-1 through S5-8)}\par
+[COMPLETED]\par
+\bullet S5-1: PurchaseReviewView NavigationStack removed — one nav bar, one Cancel; CSV sheet wrapped in NavigationStack\par
+\bullet S5-2: Item picker lifted to PurchaseReviewView parent — no ForEach binding / Undo glitch; storage pill informational only\par
+\bullet S5-3: UOM symbol shown next to quantity in purchase review rows\par
+\bullet S5-4: PDF first-page thumbnail + filename preview in PurchaseInvoicePDFView\par
+\bullet S5-5: PurchaseInvoiceCSVView 3-step flow with PurchaseInvoiceCSVViewModel — column mapping + preview before review\par
+\bullet S5-6: SmartSalesCSVView Picker label shows current field selection\par
+\bullet S5-7: stoqly.purchaseInvoiceConfirmed toast on StorageDetailView + ItemListView (Smart Sales toast already in SalesView)\par
+\bullet S5-8: Confirm validation guards unmatched rows + empty save set — crash addressed via S5-1/S5-2 binding fix\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b BUG SPRINT 6 — Sync, Storage Labels, ForEach Binding, CSV Mapping UI (S6-1 through S6-4)}\par
+[COMPLETED]\par
+\bullet S6-1: InventoryMovements pulled from Firestore in pullFromCloud (after saleEvents block)\par
+\bullet S6-2: Storage name as plain grey label in SaleReviewRow + PurchaseReviewRow (defaultStorage fallback)\par
+\bullet S6-3: ForEach enumerated Binding in SaleEntryReviewView + PurchaseReviewView — fixes Undo glitch on item link\par
+\bullet S6-3 follow-up: Replaced whole-row @Binding with per-field id-keyed bindings — opening item picker no longer corrupts isSkipped\par
+\bullet S6-4: CSV Map Columns — Picker("", ...) + labelsHidden() in SmartSalesCSVView + PurchaseInvoiceCSVView (column header Text kept)\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b BUG SPRINT 7 — CSV Mapping Layout, UOM, Toast Timing (S7-1 through S7-4)}\par
+[COMPLETED]\par
+\bullet S7-1: CSV map columns HStack layout — column name left, picker right (SmartSalesCSVView, PurchaseInvoiceCSVView, BulkImportView)\par
+\bullet S7-2: UOM symbol in SaleReviewRow qty group when resolvedItem has uom\par
+\bullet S7-3: Toast timing — notification posted after onConfirm() with 0.5s delay; SmartSales toast on StorageDetailView\par
+\bullet S7-4: Photo import auto-resolve — onChange(of: allItems) re-runs autoResolveRows when @Query settles\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b DASHBOARD PERIOD FIX — DS-1 (Bug Sprint 8)}\par
+[COMPLETED]\par
+\bullet DS-1: Last 30 Days added to DashboardSalesPeriod; default .lastThirtyDays; dashboardPeriodRange + dashboardPeriodAsReportPeriod updated; Revenue deltaText uses rawValue\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b BUG SPRINT 9 — XLSX/AI Mapping, SmartCount CSV, Invoice Dismiss, Barcode Enrich (SC-1 through SC-4)}\par
+[COMPLETED]\par
+\bullet SC-1: XLSXParser case-insensitive sharedStrings lookup; AIInventoryService suggestSales/Purchase/CountColumnMapping; aiEnhanceMapping + loading banner in SmartSalesCSVView + PurchaseInvoiceCSVView\par
+\bullet SC-2: SmartCount CSV/Excel mode — fourth mode card, SmartCountCSVView + SmartCountCSVViewModel (file/map/preview/review); BulkCountImported ActivityEvent; Firestore sync on confirm\par
+\bullet SC-3: PurchaseInvoiceImportView onCompleted chain — child sheets dismiss parent so stoqly.purchaseInvoiceConfirmed toast visible on StorageDetailView\par
+\bullet SC-4: AddItemView barcode fullScreenCover onDismiss triggers BarcodeEnrichmentService.enrich when Pro + empty name; "Looking up product…" loading indicator\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b APP STORE REJECTION FIXES \emdash Build 14}\par
+[COMPLETED]\par
+\bullet ITEM 1: EULA + Privacy Policy links in PaywallView (Guideline 3.1.2c) — SubscriptionManager.swift\par
+\bullet ITEM 2: Sign in with Apple backend — prepareAppleSignIn, signInWithApple, nonce helpers in AuthManager.swift\par
+\bullet ITEM 3: Sign in with Apple button in AuthView — SignInWithAppleButton below Google sign-in\par
+\bullet ITEM 4: AITest.entitlements — com.apple.developer.applesignin Default + aps-environment production\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
 }

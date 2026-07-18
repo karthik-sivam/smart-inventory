@@ -40,13 +40,20 @@ class CurrencyManager: ObservableObject {
     
     private let userDefaults = UserDefaults.standard
     private let currencyKey = "selectedCurrency"
+    private let manuallySetCurrencyKey = "stoqly_hasManuallySetCurrency"
+    private let dismissedLocaleChangeKey = "stoqly_dismissedLocaleChangeFor"
     
     init() {
         if let data = userDefaults.data(forKey: currencyKey),
            let currency = try? JSONDecoder().decode(Currency.self, from: data) {
             selectedCurrency = currency
         } else {
-            selectedCurrency = Currency.currencies.first(where: { $0.code == "USD" }) ?? Currency.currencies[0]
+            let localeCode = Locale.current.currency?.identifier ?? ""
+            if let match = Currency.currencies.first(where: { $0.code == localeCode }) {
+                selectedCurrency = match
+            } else {
+                selectedCurrency = Currency.currencies.first(where: { $0.code == "USD" }) ?? Currency.currencies[0]
+            }
         }
     }
     
@@ -58,5 +65,28 @@ class CurrencyManager: ObservableObject {
     
     func formatPrice(_ amount: Double) -> String {
         return "\(selectedCurrency.symbol)\(String(format: "%.2f", amount))"
+    }
+
+    /// Returns suggested locale currency if a banner should be shown; nil otherwise.
+    func checkLocaleChange() -> Currency? {
+        guard !hasBeenManuallySet else { return nil }
+        guard let savedCurrency = try? JSONDecoder().decode(Currency.self, from: userDefaults.data(forKey: currencyKey) ?? Data()) else { return nil }
+        let localeCode = Locale.current.currency?.identifier ?? ""
+        guard !localeCode.isEmpty, localeCode != savedCurrency.code else { return nil }
+        let dismissedKey = dismissedLocaleChangeKey + localeCode
+        guard !userDefaults.bool(forKey: dismissedKey) else { return nil }
+        return Currency.currencies.first(where: { $0.code == localeCode })
+    }
+
+    func dismissLocaleChangeBanner(for currency: Currency) {
+        userDefaults.set(true, forKey: dismissedLocaleChangeKey + currency.code)
+    }
+
+    func markAsManuallySet() {
+        userDefaults.set(true, forKey: manuallySetCurrencyKey)
+    }
+
+    var hasBeenManuallySet: Bool {
+        userDefaults.bool(forKey: manuallySetCurrencyKey)
     }
 } 

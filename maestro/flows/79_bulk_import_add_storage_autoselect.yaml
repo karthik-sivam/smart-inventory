@@ -8,6 +8,8 @@ env:
 - runFlow: 00_signin_helper.yaml
 - tapOn: "Dashboard"
 - tapOn:
+    id: "dashboardGearButton"
+- tapOn:
     id: "gear"
 - scrollUntilVisible:
     element: "Import Items (CSV / Excel)"

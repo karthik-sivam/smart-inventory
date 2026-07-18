@@ -33,6 +33,8 @@ appId: com.vishuddhi.stoqly
 - assertVisible: "Template Created Item"
 - tapOn: "Dashboard"
 - tapOn:
+    id: "dashboardGearButton"
+- tapOn:
     id: "gear"
 - scrollUntilVisible:
     element: "Item Templates"

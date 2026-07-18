@@ -2,7 +2,6 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 import Foundation
-import zlib
 
 // MARK: - Field mapping enum
 
@@ -10,6 +9,7 @@ enum ImportField: String, CaseIterable, Identifiable {
     case name        = "Item Name"
     case quantity    = "Quantity"
     case unitCost    = "Unit Cost"
+    case sellingPrice = "Selling Price"
     case category    = "Category"
     case sku         = "SKU"
     case barcode     = "Barcode"
@@ -27,6 +27,7 @@ enum ImportField: String, CaseIterable, Identifiable {
         case .name:        return "tag"
         case .quantity:    return "number"
         case .unitCost:    return "dollarsign.circle"
+        case .sellingPrice: return "tag.circle"
         case .category:    return "folder"
         case .sku:         return "barcode.viewfinder"
         case .barcode:     return "barcode"
@@ -103,14 +104,15 @@ final class BulkImportViewModel: ObservableObject {
 
             // Unzip using Process (zip utility is always present on iOS simulator / device)
             // On device we use ZipFoundation-free approach: read the ZIP Central Directory ourselves.
-            let grid = try parseXLSXFile(at: local)
+            let grid = try XLSXParser.parse(url: local)
 
             guard grid.count >= 2 else {
                 parseError = "The spreadsheet appears empty. Make sure it has a header row and at least one data row."
                 return
             }
-            csvHeaders = grid[0].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            rows = Array(grid.dropFirst()).filter { $0.contains(where: { !$0.isEmpty }) }
+            let headerIdx = XLSXParser.findHeaderRow(in: grid)
+            csvHeaders = grid[headerIdx].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            rows = Array(grid[(headerIdx + 1)...]).filter { $0.contains(where: { !$0.isEmpty }) }
             autoDetect()
             step = 1
 
@@ -118,267 +120,6 @@ final class BulkImportViewModel: ObservableObject {
             parseError = "Could not read the .xlsx file: \(error.localizedDescription)"
             AnalyticsManager.shared.track(.bulkImportFailed(reason: error.localizedDescription))
         }
-    }
-
-    // Parses an XLSX file at `path` into a 2-D String array (rows × columns).
-    // Uses only Foundation — reads the ZIP entries manually.
-    private func parseXLSXFile(at url: URL) throws -> [[String]] {
-        let data = try Data(contentsOf: url)
-
-        // ---- locate ZIP entries ----
-        guard let entries = zipEntries(in: data) else {
-            throw NSError(domain: "XLSXParser", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "Not a valid ZIP/XLSX file"])
-        }
-
-        // Shared strings table (may not exist if all cells are numbers/dates)
-        var sharedStrings: [String] = []
-        if let ssData = entries["xl/sharedStrings.xml"] {
-            sharedStrings = parseSharedStrings(xml: ssData)
-        }
-
-        // First worksheet
-        let sheetKey = entries.keys.first(where: {
-            $0.hasPrefix("xl/worksheets/sheet") && $0.hasSuffix(".xml")
-        }) ?? "xl/worksheets/sheet1.xml"
-
-        guard let sheetData = entries[sheetKey] else {
-            throw NSError(domain: "XLSXParser", code: 2,
-                          userInfo: [NSLocalizedDescriptionKey: "Worksheet not found in file"])
-        }
-
-        return parseSheet(xml: sheetData, sharedStrings: sharedStrings)
-    }
-
-    // ---- ZIP reader (no dependencies) ----
-    private func zipEntries(in data: Data) -> [String: Data]? {
-        // Locate End of Central Directory record (signature 0x06054b50)
-        let eocdSig: [UInt8] = [0x50, 0x4B, 0x05, 0x06]
-        guard let eocdOffset = data.range(of: Data(eocdSig), options: .backwards)?.lowerBound else { return nil }
-        guard eocdOffset + 22 <= data.count else { return nil }
-
-        let centralDirOffset = Int(data.uint32LE(at: eocdOffset + 16))
-        let centralDirSize   = Int(data.uint32LE(at: eocdOffset + 12))
-        guard centralDirOffset + centralDirSize <= data.count else { return nil }
-
-        var result: [String: Data] = [:]
-        let cdsig: [UInt8] = [0x50, 0x4B, 0x01, 0x02]
-        var pos = centralDirOffset
-
-        while pos + 46 <= centralDirOffset + centralDirSize {
-            guard data[pos..<pos+4].elementsEqual(cdsig) else { break }
-            let fileNameLen   = Int(data.uint16LE(at: pos + 28))
-            let extraLen      = Int(data.uint16LE(at: pos + 30))
-            let commentLen    = Int(data.uint16LE(at: pos + 32))
-            let localOffset   = Int(data.uint32LE(at: pos + 42))
-            let nameBytes     = data[pos+46..<pos+46+fileNameLen]
-            let name          = String(bytes: nameBytes, encoding: .utf8) ?? ""
-
-            // Read local file header at localOffset to get actual data
-            let lhPos = localOffset
-            guard lhPos + 30 <= data.count else { pos += 46 + fileNameLen + extraLen + commentLen; continue }
-            let lhFileNameLen = Int(data.uint16LE(at: lhPos + 26))
-            let lhExtraLen    = Int(data.uint16LE(at: lhPos + 28))
-            let compMethod    = Int(data.uint16LE(at: lhPos + 8))
-            let compSize      = Int(data.uint32LE(at: lhPos + 18))
-            let uncompSize    = Int(data.uint32LE(at: lhPos + 22))
-            let dataStart     = lhPos + 30 + lhFileNameLen + lhExtraLen
-
-            guard dataStart + compSize <= data.count else { pos += 46 + fileNameLen + extraLen + commentLen; continue }
-
-            let compData = data[dataStart..<dataStart+compSize]
-            if compMethod == 0 {
-                // Stored (no compression)
-                result[name] = Data(compData)
-            } else if compMethod == 8 {
-                // Deflate — use zlib via NSData
-                if let inflated = inflateDeflate(Data(compData), expectedSize: uncompSize) {
-                    result[name] = inflated
-                }
-            }
-            pos += 46 + fileNameLen + extraLen + commentLen
-        }
-        return result
-    }
-
-    // Decompress raw DEFLATE data (as stored in ZIP/XLSX files) using
-    // the system zlib with windowBits = -15 (raw deflate, no header/trailer).
-    private func inflateDeflate(_ compressed: Data, expectedSize: Int) -> Data? {
-        return compressed.withUnsafeBytes { (srcBuf: UnsafeRawBufferPointer) -> Data? in
-            guard let srcBase = srcBuf.baseAddress else { return nil }
-
-            var strm = z_stream()
-            strm.next_in  = UnsafeMutablePointer<UInt8>(
-                mutating: srcBase.assumingMemoryBound(to: UInt8.self))
-            strm.avail_in = UInt32(compressed.count)
-
-            // -15 → raw DEFLATE (ZIP format, no zlib header/trailer)
-            let initStatus = inflateInit2_(
-                &strm, -15, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
-            guard initStatus == Z_OK else { return nil }
-            defer { inflateEnd(&strm) }
-
-            var output = Data()
-            let chunkSize = max(expectedSize > 0 ? expectedSize : 0, 65536)
-            var chunk = Data(count: chunkSize)
-            var status: Int32 = Z_OK
-
-            repeat {
-                let produced: Int = chunk.withUnsafeMutableBytes { dstBuf -> Int in
-                    guard let dst = dstBuf.baseAddress else { return 0 }
-                    strm.next_out  = dst.assumingMemoryBound(to: UInt8.self)
-                    strm.avail_out = UInt32(chunkSize)
-                    status = inflate(&strm, Z_FINISH)
-                    return chunkSize - Int(strm.avail_out)
-                }
-                if produced > 0 { output.append(chunk.prefix(produced)) }
-            } while status == Z_OK  // Z_OK = more output available; Z_STREAM_END = done
-
-            return status == Z_STREAM_END ? output : nil
-        }
-    }
-
-    // ---- Shared Strings XML parser ----
-    private func parseSharedStrings(xml: Data) -> [String] {
-        // Minimal SAX-style parse: extract all <t>...</t> values, grouped by <si>
-        guard let text = String(data: xml, encoding: .utf8) else { return [] }
-        var strings: [String] = []
-        var current = ""
-        var inT = false
-        var i = text.startIndex
-
-        while i < text.endIndex {
-            if text[i] == "<" {
-                let tagStart = i
-                while i < text.endIndex && text[i] != ">" { text.formIndex(after: &i) }
-                if i < text.endIndex { text.formIndex(after: &i) }
-                let tag = String(text[tagStart..<i])
-                let tagName = tag.dropFirst().prefix(while: { !$0.isWhitespace && $0 != "/" && $0 != ">" })
-
-                if tagName == "si" && !tag.hasPrefix("</") {
-                    current = ""
-                } else if tagName == "t" && !tag.hasPrefix("</") {
-                    inT = true
-                } else if tagName == "/t" || tag == "</t>" {
-                    inT = false
-                } else if tagName == "/si" || tag == "</si>" {
-                    strings.append(current)
-                }
-            } else if inT {
-                current.append(text[i])
-                text.formIndex(after: &i)
-            } else {
-                text.formIndex(after: &i)
-            }
-        }
-        return strings
-    }
-
-    // ---- Sheet XML parser ----
-    private func parseSheet(xml: Data, sharedStrings: [String]) -> [[String]] {
-        guard let text = String(data: xml, encoding: .utf8) else { return [] }
-
-        // Maps Excel column letters to 0-based index
-        func colIndex(_ ref: String) -> Int {
-            var idx = 0
-            for ch in ref.unicodeScalars {
-                if ch.value >= 65 && ch.value <= 90 { // A-Z
-                    idx = idx * 26 + Int(ch.value - 64)
-                } else { break }
-            }
-            return idx - 1
-        }
-
-        func rowIndex(_ ref: String) -> Int {
-            let digits = ref.drop(while: { !$0.isNumber })
-            return (Int(digits) ?? 1) - 1
-        }
-
-        // Collect all cells: (row, col, value)
-        var cells: [(row: Int, col: Int, value: String)] = []
-        var maxRow = 0, maxCol = 0
-
-        // Simple regex-free parse: find <c r="A1" t="s">...<v>...</v>
-        var i = text.startIndex
-        while i < text.endIndex {
-            // Find next <c
-            guard let cOpen = text.range(of: "<c ", range: i..<text.endIndex) else { break }
-            guard let tagClose = text.range(of: ">", range: cOpen.lowerBound..<text.endIndex) else { break }
-
-            let cTag = String(text[cOpen.lowerBound..<tagClose.upperBound])
-
-            // Extract r="..." attribute
-            var cellRef = ""
-            if let rRange = cTag.range(of: "r=\"") {
-                let afterR = cTag.index(rRange.upperBound, offsetBy: 0)
-                if let endQ = cTag.range(of: "\"", range: afterR..<cTag.endIndex) {
-                    cellRef = String(cTag[afterR..<endQ.lowerBound])
-                }
-            }
-
-            // Extract t="..." attribute (type: s=shared string, otherwise numeric/date)
-            var cellType = ""
-            if let tRange = cTag.range(of: " t=\"") {
-                let afterT = tRange.upperBound
-                if let endQ = cTag.range(of: "\"", range: afterT..<cTag.endIndex) {
-                    cellType = String(cTag[afterT..<endQ.lowerBound])
-                }
-            }
-
-            // Self-closing <c .../> — no value
-            if cTag.hasSuffix("/>") { i = tagClose.upperBound; continue }
-
-            // Find </c>
-            guard let cClose = text.range(of: "</c>", range: tagClose.upperBound..<text.endIndex) else {
-                i = tagClose.upperBound; continue
-            }
-
-            let cellContent = String(text[tagClose.upperBound..<cClose.lowerBound])
-
-            // Extract <v>...</v>
-            var rawValue = ""
-            if let vOpen = cellContent.range(of: "<v>"),
-               let vClose = cellContent.range(of: "</v>") {
-                rawValue = String(cellContent[vOpen.upperBound..<vClose.lowerBound])
-            } else if let isOpen = cellContent.range(of: "<is>"),
-                      let tOpen = cellContent.range(of: "<t>", range: isOpen.upperBound..<cellContent.endIndex),
-                      let tClose = cellContent.range(of: "</t>", range: tOpen.upperBound..<cellContent.endIndex) {
-                rawValue = String(cellContent[tOpen.upperBound..<tClose.lowerBound])
-            }
-
-            // Decode value
-            var value: String
-            if cellType == "s", let idx = Int(rawValue), idx < sharedStrings.count {
-                value = sharedStrings[idx]
-            } else {
-                value = rawValue
-            }
-            value = value
-                .replacingOccurrences(of: "&amp;", with: "&")
-                .replacingOccurrences(of: "&lt;",  with: "<")
-                .replacingOccurrences(of: "&gt;",  with: ">")
-                .replacingOccurrences(of: "&quot;", with: "\"")
-                .replacingOccurrences(of: "&#39;", with: "'")
-
-            if !cellRef.isEmpty {
-                let col = colIndex(cellRef.prefix(while: { $0.isLetter }).description)
-                let row = rowIndex(cellRef)
-                cells.append((row: row, col: col, value: value))
-                maxRow = max(maxRow, row)
-                maxCol = max(maxCol, col)
-            }
-
-            i = cClose.upperBound
-        }
-
-        guard !cells.isEmpty else { return [] }
-
-        // Build 2-D grid
-        var grid = Array(repeating: Array(repeating: "", count: maxCol + 1), count: maxRow + 1)
-        for cell in cells {
-            grid[cell.row][cell.col] = cell.value
-        }
-        return grid
     }
 
     // MARK: - Parse CSV
@@ -465,8 +206,9 @@ final class BulkImportViewModel: ObservableObject {
             (.name,     ["name", "item name", "product name", "item", "product", "title", "goods"]),
             (.quantity, ["qty", "quantity", "stock", "count", "amount", "units", "current qty",
                          "current stock", "on hand", "on-hand", "stock qty"]),
-            (.unitCost, ["price", "cost", "unit cost", "unit price", "unit rate",
-                         "rate", "selling price", "purchase price", "value"]),
+            (.unitCost, ["cost", "unit cost", "unit price", "unit rate",
+                         "rate", "purchase price", "purchase cost"]),
+            (.sellingPrice, ["selling price", "sale price", "mrp", "retail price", "price"]),
             (.category, ["category", "cat", "type", "group", "department", "class"]),
             (.sku,      ["sku", "code", "item code", "product code", "part number",
                          "part no", "part#", "ref", "reference", "article"]),
@@ -511,6 +253,7 @@ final class BulkImportViewModel: ObservableObject {
         let nameIdx        = columnMapping.first(where: { $0.value == .name })?.key
         let qtyIdx         = columnMapping.first(where: { $0.value == .quantity })?.key
         let costIdx        = columnMapping.first(where: { $0.value == .unitCost })?.key
+        let sellingPriceIdx = columnMapping.first(where: { $0.value == .sellingPrice })?.key
         let catIdx         = columnMapping.first(where: { $0.value == .category })?.key
         let skuIdx         = columnMapping.first(where: { $0.value == .sku })?.key
         let barcodeIdx     = columnMapping.first(where: { $0.value == .barcode })?.key
@@ -530,7 +273,7 @@ final class BulkImportViewModel: ObservableObject {
 
         var imported = 0
         var skipped = 0
-        var errors: [String] = []
+        let errors: [String] = []
         var newItems: [InventoryItem] = []
 
         for row in rows {
@@ -593,6 +336,10 @@ final class BulkImportViewModel: ObservableObject {
                 uom: nil
             )
 
+            if let rawSelling = val(sellingPriceIdx).flatMap({ Double($0.replacingOccurrences(of: ",", with: "")) }) {
+                item.sellingPrice = rawSelling
+            }
+
             if let rawUOM = val(uomIdx) {
                 let lowerRaw = rawUOM.lowercased()
                 if let found = allUOMs.first(where: {
@@ -635,6 +382,7 @@ final class BulkImportViewModel: ObservableObject {
         importResult = ImportResult(imported: imported, skipped: skipped, errors: errors)
         let fmt = (importFileExtension == "xlsx" || importFileExtension == "xlsm") ? "xlsx" : "csv"
         AnalyticsManager.shared.track(.bulkImportCompleted(itemCount: imported, format: fmt))
+        AdManager.shared.recordCompletion(event: .bulkImportCompleted)
         isImporting = false
         step = 3
     }
@@ -831,24 +579,24 @@ struct BulkImportView: View {
         List {
             Section(header: Text("\(vm.rows.count) rows found · Map each column to a field")) {
                 ForEach(vm.csvHeaders.indices, id: \.self) { i in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Image(systemName: vm.columnMapping[i]?.icon ?? "questionmark")
-                                .foregroundColor(.blue)
-                                .frame(width: 20)
-                            Text(vm.csvHeaders[i])
-                                .fontWeight(.medium)
-                            Spacer()
+                    HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Image(systemName: vm.columnMapping[i]?.icon ?? "questionmark")
+                                    .foregroundColor(.blue)
+                                    .frame(width: 20)
+                                Text(vm.csvHeaders[i])
+                                    .fontWeight(.medium)
+                                    .font(.subheadline)
+                            }
+                            if let sample = vm.rows.first, i < sample.count, !sample[i].isEmpty {
+                                Text("e.g. \(sample[i])")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
                         }
-
-                        // Sample value from first row
-                        if let sample = vm.rows.first, i < sample.count, !sample[i].isEmpty {
-                            Text("e.g. \(sample[i])")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                        }
-
+                        Spacer()
                         Picker("", selection: Binding(
                             get: { vm.columnMapping[i] ?? .skip },
                             set: { vm.columnMapping[i] = $0 }
@@ -859,6 +607,7 @@ struct BulkImportView: View {
                         }
                         .pickerStyle(.menu)
                         .labelsHidden()
+                        .fixedSize()
                     }
                     .padding(.vertical, 4)
                 }
@@ -1013,22 +762,5 @@ struct BulkImportView: View {
             }
             .padding()
         }
-    }
-}
-
-// MARK: - Data helpers for ZIP parsing
-
-private extension Data {
-    func uint16LE(at offset: Int) -> UInt16 {
-        guard offset + 2 <= count else { return 0 }
-        return UInt16(self[offset]) | (UInt16(self[offset + 1]) << 8)
-    }
-
-    func uint32LE(at offset: Int) -> UInt32 {
-        guard offset + 4 <= count else { return 0 }
-        return UInt32(self[offset])
-             | (UInt32(self[offset + 1]) << 8)
-             | (UInt32(self[offset + 2]) << 16)
-             | (UInt32(self[offset + 3]) << 24)
     }
 }

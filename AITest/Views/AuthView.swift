@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 struct AuthView: View {
     @StateObject private var authManager = AuthManager.shared
@@ -131,7 +132,37 @@ struct AuthView: View {
                                 .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
                             }
                             .disabled(authManager.isLoading)
-                            
+
+                            // "OR" divider before Apple button
+                            HStack {
+                                Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.3))
+                                Text("OR")
+                                    .font(.caption).foregroundColor(.white.opacity(0.7))
+                                    .padding(.horizontal, 16)
+                                Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.3))
+                            }
+
+                            // Sign in with Apple — required by App Store guideline 4.8
+                            SignInWithAppleButton(
+                                .continue,
+                                onRequest: { request in
+                                    request.requestedScopes = [.fullName, .email]
+                                    request.nonce = authManager.prepareAppleSignIn()
+                                },
+                                onCompletion: { result in
+                                    switch result {
+                                    case .success(let authorization):
+                                        Task { await authManager.signInWithApple(authorization: authorization) }
+                                    case .failure:
+                                        break // user cancelled — no error needed
+                                    }
+                                }
+                            )
+                            .signInWithAppleButtonStyle(.white)
+                            .frame(height: 50)
+                            .cornerRadius(12)
+                            .disabled(authManager.isLoading)
+
                             // Forgot Password (Sign In only)
                             if !isSignUp {
                                 Button("Forgot Password?") {

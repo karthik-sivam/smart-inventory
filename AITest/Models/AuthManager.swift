@@ -9,6 +9,8 @@ import Foundation
 @preconcurrency import FirebaseAuth
 import SwiftUI
 @preconcurrency import GoogleSignIn
+import CryptoKit
+import AuthenticationServices
 
 @MainActor
 class AuthManager: ObservableObject {
@@ -19,6 +21,8 @@ class AuthManager: ObservableObject {
     @Published var showError = false
     
     static let shared = AuthManager()
+
+    private var currentNonce: String?
 
     /// Display name for activity audit trail and team invites.
     var actorName: String {
@@ -37,6 +41,16 @@ class AuthManager: ObservableObject {
             Task { @MainActor [weak self] in
                 self?.currentUser = user
                 self?.isAuthenticated = user != nil
+                // Attribute this (possibly restored) session to the user in Amplitude.
+                // Firebase persists logins, so returning users never re-hit sign-in;
+                // this ensures every authenticated session carries user_id + email.
+                if let user = user {
+                    AnalyticsManager.shared.identify(
+                        userId: user.uid,
+                        email: user.email,
+                        isPro: SubscriptionManager.shared.isPro
+                    )
+                }
             }
         }
     }
@@ -52,10 +66,9 @@ class AuthManager: ObservableObject {
             isAuthenticated = true
 
             // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedUp)
             // Analytics
             AnalyticsManager.shared.track(.userSignedUp(method: "email"))
-            AnalyticsManager.shared.identify(userId: result.user.uid, isPro: false, signupMethod: "email")
+            AnalyticsManager.shared.identify(userId: result.user.uid, email: result.user.email, isPro: false, signupMethod: "email")
 
             print("User signed up successfully: \(result.user.email ?? "")")
         } catch {
@@ -75,11 +88,9 @@ class AuthManager: ObservableObject {
             currentUser = result.user
             isAuthenticated = true
 
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedIn)
             // Analytics
             AnalyticsManager.shared.track(.userSignedIn(method: "email"))
-            AnalyticsManager.shared.identify(userId: result.user.uid, isPro: false, signupMethod: "email")
+            AnalyticsManager.shared.identify(userId: result.user.uid, email: result.user.email, isPro: false, signupMethod: "email")
 
             print("User signed in successfully: \(result.user.email ?? "")")
         } catch {
@@ -111,11 +122,9 @@ class AuthManager: ObservableObject {
             currentUser = authResult.user
             isAuthenticated = true
 
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedIn)
             // Analytics
             AnalyticsManager.shared.track(.userSignedIn(method: "google"))
-            AnalyticsManager.shared.identify(userId: authResult.user.uid, isPro: false, signupMethod: "google")
+            AnalyticsManager.shared.identify(userId: authResult.user.uid, email: authResult.user.email, isPro: false, signupMethod: "google")
 
             print("User signed in with Google successfully: \(authResult.user.email ?? "")")
         } catch {
@@ -124,7 +133,86 @@ class AuthManager: ObservableObject {
         
         isLoading = false
     }
-    
+
+    // MARK: - Sign in with Apple
+
+    func prepareAppleSignIn() -> String {
+        let nonce = randomNonceString()
+        currentNonce = nonce
+        return sha256(nonce)
+    }
+
+    func signInWithApple(authorization: ASAuthorization) async {
+        guard
+            let appleCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
+            let nonce = currentNonce,
+            let appleIDToken = appleCredential.identityToken,
+            let idTokenString = String(data: appleIDToken, encoding: .utf8)
+        else {
+            errorMessage = "Unable to fetch identity token from Apple."
+            showError = true
+            return
+        }
+        let firebaseCredential = OAuthProvider.appleCredential(
+            withIDToken: idTokenString,
+            rawNonce: nonce,
+            fullName: appleCredential.fullName
+        )
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let result = try await Auth.auth().signIn(with: firebaseCredential)
+            // Save display name immediately — Apple only sends fullName on the FIRST sign-in ever.
+            // On all subsequent sign-ins it is nil, so this is the only chance to capture it.
+            if let fullName = appleCredential.fullName,
+               let givenName = fullName.givenName {
+                let displayName = [givenName, fullName.familyName]
+                    .compactMap { $0 }
+                    .joined(separator: " ")
+                if !displayName.isEmpty {
+                    let changeRequest = result.user.createProfileChangeRequest()
+                    changeRequest.displayName = displayName
+                    try? await changeRequest.commitChanges()
+                }
+            }
+            currentUser = Auth.auth().currentUser // refresh after potential profile update
+            isAuthenticated = true
+
+            // Analytics
+            AnalyticsManager.shared.track(.userSignedIn(method: "apple"))
+            AnalyticsManager.shared.identify(userId: result.user.uid, email: result.user.email, isPro: false, signupMethod: "apple")
+        } catch {
+            handleAuthError(error)
+        }
+    }
+
+    private func randomNonceString(length: Int = 32) -> String {
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        var result = ""
+        var remainingLength = length
+        while remainingLength > 0 {
+            let randoms: [UInt8] = (0 ..< 16).map { _ in
+                var random: UInt8 = 0
+                _ = SecRandomCopyBytes(kSecRandomDefault, 1, &random)
+                return random
+            }
+            randoms.forEach { random in
+                if remainingLength == 0 { return }
+                if random < charset.count {
+                    result.append(charset[Int(random)])
+                    remainingLength -= 1
+                }
+            }
+        }
+        return result
+    }
+
+    private func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashedData = SHA256.hash(data: inputData)
+        return hashedData.compactMap { String(format: "%02x", $0) }.joined()
+    }
+
     // MARK: - Sign Out
     func signOut() {
         do {
@@ -137,8 +225,6 @@ class AuthManager: ObservableObject {
             isAuthenticated = false
             TeamManager.shared.reset()
 
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.userSignedOut)
             // Analytics — reset before clearing userId so the event is attributed correctly
             AnalyticsManager.shared.track(.userSignedOut)
             AnalyticsManager.shared.reset()
@@ -158,9 +244,6 @@ class AuthManager: ObservableObject {
         
         do {
             try await user.sendEmailVerification()
-            
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.emailVerificationSent)
             
             print("Email verification sent to: \(user.email ?? "")")
         } catch {
@@ -190,9 +273,6 @@ class AuthManager: ObservableObject {
         do {
             try await Auth.auth().sendPasswordReset(withEmail: email)
             
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.passwordResetRequested)
-            
             print("Password reset email sent to: \(email)")
         } catch {
             handleAuthError(error)
@@ -212,9 +292,6 @@ class AuthManager: ObservableObject {
             try await user.delete()
             currentUser = nil
             isAuthenticated = false
-            
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.accountDeleted)
             
             print("Account deleted successfully")
         } catch {
@@ -241,9 +318,6 @@ class AuthManager: ObservableObject {
             }
             
             try await changeRequest.commitChanges()
-            
-            // Track completion for ad system
-            AdManager.shared.recordCompletion(event: AdManager.CompletionEvent.profileUpdated)
             
             print("Profile updated successfully")
         } catch {

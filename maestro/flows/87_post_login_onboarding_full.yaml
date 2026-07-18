@@ -1,0 +1,49 @@
+# Flow 87 — Post-login onboarding full walkthrough (optional paths)
+# May not appear if postLoginOnboardingShown is already set — assertions are optional.
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
+---
+- launchApp:
+    clearState: true
+    arguments:
+      UITestResetOnboarding: true
+- tapOn:
+    text: "Don't Allow"
+    optional: true
+- tapOn:
+    text: "Ask App Not to Track"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "onboarding.title.0"
+    timeout: 25000
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Create your account"
+    commands:
+      - tapOn: "Sign In"
+- runFlow: signin_credentials.yaml
+- assertVisible:
+    text: "Welcome to Stoqly"
+    optional: true
+- tapOn:
+    id: "postLoginGetStarted"
+    optional: true
+- tapOn:
+    text: "Next"
+    optional: true
+- tapOn:
+    text: "Get Started"
+    optional: true
+- extendedWaitUntil:
+    visible: "Total Storages"
+    timeout: 15000

@@ -73,6 +73,19 @@ maestro studio
 | 22_out_of_stock_detection.yaml | Count item to 0, verify Out of Stock card and filtered list |
 | 23_edit_item.yaml | Edit item quantity and min quantity, verify saved |
 | 24_low_stock_export.yaml | Export Low Stock List CSV with low stock item present |
+| 81_smart_count_open.yaml | Open Smart Count sheet from storage detail, verify modes, dismiss |
+| 82_smart_count_voice_mode.yaml | Navigate to Voice Inventory UI from Smart Count |
+| 83_smart_count_photo_mode.yaml | Navigate to Photo Inventory UI from Smart Count |
+| 84_smart_count_sheet_mode.yaml | Navigate to Sheet Inventory UI from Smart Count |
+| 85_smart_count_back_nav.yaml | Cancel from Voice mode returns to Smart Count picker |
+| 86_smart_count_pro_gate.yaml | Free-tier Upgrade CTA on Smart Count (optional assertions) |
+| 87_post_login_onboarding_full.yaml | Post-login onboarding walkthrough (optional — fresh state) |
+
+## Phase A fixes (2026-05)
+
+- Added `accessibilityIdentifier("smart-count-button")` on StorageDetailView sparkles toolbar button so flows 81–86 can tap Smart Count reliably.
+- Smart Count flows use **Done** (not Cancel) to dismiss SmartCountView; mode cards use full titles **Voice Inventory**, **Photo Inventory**, **Sheet Inventory**.
+- Voice mode back navigation uses **Cancel** (no Back button in VoiceInventoryView).
 
 ## Before First Run
 

@@ -26,7 +26,6 @@ import GoogleMobileAds
  9. Remove Ads                — Ad-free experience
  10. API Integration          — Webhooks, CSV import
 
- Reward Ads: Unlock 24-hour Pro trial for free users.
 */
 
 /// Wraps a non-Sendable ObjC ad object so it can safely cross actor boundaries.
@@ -42,52 +41,40 @@ class AdManager: NSObject, ObservableObject {
     @Published var isInitialized = false
 
     // MARK: - Live Ad Unit IDs (replace if you create new units in AdMob console)
-    let bannerAdUnitID      = "ca-app-pub-9489340523484530/3501995184"
+    let bannerAdUnitID       = "ca-app-pub-9489340523484530/3501995184"
     let interstitialAdUnitID = "ca-app-pub-9489340523484530/1789458261"
-    let rewardAdUnitID      = "ca-app-pub-9489340523484530/3557835507"
 
     // MARK: - Test Ad Unit IDs (safe for development — never triggers policy violations)
-    private let testBannerUnitID      = "ca-app-pub-3940256099942544/2934735716"
+    private let testBannerUnitID       = "ca-app-pub-3940256099942544/2934735716"
     private let testInterstitialUnitID = "ca-app-pub-3940256099942544/4411468910"
-    private let testRewardUnitID      = "ca-app-pub-3940256099942544/1712485313"
 
     #if targetEnvironment(simulator)
     private var interstitialAd: Any?
-    private var rewardAd: Any?
     #else
     private var interstitialAd: GADInterstitialAd?
-    private var rewardAd: GADRewardedAd?
     #endif
 
     private var completionCount = 0
     private var lastAdShown = Date.distantPast
     private let minTimeBetweenAds: TimeInterval = 300  // 5 minutes between ads
-    private let actionsBeforeAd = 3                    // Show ad every 3 user actions
+    private let actionsBeforeAd = 2                    // Show ad every 2 workflow actions
 
     // MARK: - Enums
 
     enum AdType {
         case interstitial
         case banner
-        case reward
     }
 
     enum CompletionEvent {
         case storageCreated
         case itemAdded
         case inventoryCountCompleted
-        case settingsChanged
         case itemUpdated
         case storageUpdated
-        case userSignedUp
-        case userSignedIn
-        case userSignedOut
-        case passwordResetRequested
-        case accountDeleted
-        case profileUpdated
-        case emailVerificationSent
         case exportCompleted
         case barcodeScanned
+        case bulkImportCompleted
     }
 
     // MARK: - Singleton
@@ -173,13 +160,10 @@ class AdManager: NSObject, ObservableObject {
 
     private func determineAdType(for event: CompletionEvent) -> AdType {
         switch event {
-        case .inventoryCountCompleted, .exportCompleted:
+        case .inventoryCountCompleted, .exportCompleted, .barcodeScanned,
+             .itemAdded, .storageCreated, .bulkImportCompleted:
             return .interstitial
-        case .storageCreated, .itemAdded, .userSignedUp, .barcodeScanned:
-            return .interstitial
-        case .settingsChanged, .itemUpdated, .storageUpdated,
-             .userSignedIn, .userSignedOut, .passwordResetRequested,
-             .accountDeleted, .profileUpdated, .emailVerificationSent:
+        case .storageUpdated, .itemUpdated:
             return .banner
         }
     }
@@ -188,8 +172,7 @@ class AdManager: NSObject, ObservableObject {
 
     private func loadAndShowAd() {
         switch currentAdType {
-        case .interstitial, .reward:
-            // Reward ads use interstitial as fallback until premium features land
+        case .interstitial:
             if interstitialAd != nil {
                 shouldShowAd = true
                 lastAdShown = Date()
@@ -253,88 +236,31 @@ class AdManager: NSObject, ObservableObject {
         #endif
     }
 
-    private func loadRewardAd() {
-        #if !targetEnvironment(simulator)
-        isAdLoading = true
-        adLoadError = nil
-
-        let unitID = isLiveBuild ? rewardAdUnitID : testRewardUnitID
-        let request = GADRequest()
-        GADRewardedAd.load(withAdUnitID: unitID, request: request) { [weak self] ad, error in
-            let wrapped = ad.map { SendableAd(value: $0) }
-            let errorMsg = error?.localizedDescription
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.isAdLoading = false
-                if let errorMsg {
-                    self.adLoadError = errorMsg
-                    print("AdMob: Reward ad load failed — \(errorMsg)")
-                    return
-                }
-                self.rewardAd = wrapped?.value
-                self.rewardAd?.fullScreenContentDelegate = self
-                self.shouldShowAd = true
-                self.lastAdShown = Date()
-                self.completionCount = 0
-            }
-        }
-        #endif
-    }
-
     // MARK: - Show Ads
 
     func showInterstitialAd() {
         #if !targetEnvironment(simulator)
         guard let ad = interstitialAd else {
-            adLoadError = "No ad available at the moment."
+            // No cached ad yet. Kick off a fresh load so there's a better
+            // chance next time. Auto-dismiss the cover immediately — don't
+            // make the user click through a "no ad" error screen.
             print("AdMob: Interstitial not ready — preloading for next opportunity.")
             preloadInterstitialAd()
+            // Dismiss the overlay without showing an error.
+            shouldShowAd = false
             return
         }
         guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
-            adLoadError = "Unable to present ad."
+            shouldShowAd = false
             return
         }
+        // Nil out immediately — GAD interstitials can only be presented once.
+        // Keeping a reference after presentation causes a stale-ad bug where
+        // the next cycle finds interstitialAd != nil, opens the cover, and then
+        // AdMob silently fails to present, showing the "Ad unavailable" error.
+        interstitialAd = nil
         ad.present(fromRootViewController: root)
-        #endif
-    }
-
-    func showRewardAd(completion: @escaping (Bool) -> Void) {
-        #if !targetEnvironment(simulator)
-        guard let ad = rewardAd else {
-            print("AdMob: Reward ad not ready.")
-            completion(false)
-            return
-        }
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
-            completion(false)
-            return
-        }
-        ad.present(fromRootViewController: root) {
-            completion(true)
-        }
-        #else
-        completion(false)
-        #endif
-    }
-
-    // MARK: - Reward Ad for Premium Preview
-
-    /// Show a reward ad that unlocks a premium feature for 24 hours.
-    func showRewardForPremiumPreview(feature: String, completion: @escaping (Bool) -> Void) {
-        #if !targetEnvironment(simulator)
-        if rewardAd != nil {
-            showRewardAd(completion: completion)
-        } else {
-            loadRewardAd()
-            // Notify caller it's loading
-            completion(false)
-        }
-        #else
-        // In simulator, simulate a successful reward
-        completion(true)
         #endif
     }
 
@@ -360,7 +286,7 @@ class AdManager: NSObject, ObservableObject {
     func showTestAd(type: AdType = .interstitial) {
         currentAdType = type
         switch type {
-        case .interstitial, .reward:
+        case .interstitial:
             loadInterstitialAd()
         case .banner:
             shouldShowAd = true
@@ -408,9 +334,14 @@ extension AdManager: @preconcurrency GADFullScreenContentDelegate {
     }
 
     func ad(_ ad: GADFullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
+        // Auto-dismiss the cover silently — don't leave adLoadError set because
+        // it persists across the dismiss and causes the NEXT ad cycle to immediately
+        // show "Ad unavailable" before even attempting to present.
         shouldShowAd = false
-        adLoadError = error.localizedDescription
+        adLoadError = nil
+        interstitialAd = nil
         print("AdMob: Ad failed to present — \(error.localizedDescription)")
+        preloadInterstitialAd()
     }
 
     func adWillPresentFullScreenContent(_ ad: GADFullScreenPresentingAd) {
@@ -467,8 +398,6 @@ struct InterstitialAdTrigger: View {
     @ObservedObject var adManager: AdManager
     let onDismiss: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
-
     var body: some View {
         ZStack {
             Color.black.opacity(0.85).ignoresSafeArea()
@@ -518,64 +447,25 @@ struct InterstitialAdTrigger: View {
             if adManager.shouldShowAd && adManager.currentAdType == .interstitial {
                 adManager.showInterstitialAd()
             }
+            // Safety net: if nothing has happened in 5 seconds (AdMob didn't
+            // present OR dismiss), auto-escape so the user is never stuck.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                if adManager.shouldShowAd {
+                    close()
+                }
+            }
         }
     }
 
     private func close() {
+        // Reset ad state first so syncInterstitialOverlay() finds shouldShowAd=false
+        // and treats the upcoming binding change as a no-op (avoids double-dismiss).
         adManager.dismissAd()
+        // Tell the parent to set showInterstitialOverlay = false.
+        // This is the single dismiss path — do NOT also call dismiss() here.
+        // Calling dismiss() while also changing the isPresented binding causes
+        // SwiftUI to conflict-cancel the animation and the cover stays on screen.
         onDismiss()
-        dismiss()
-    }
-}
-
-// MARK: - Reward Ad Trigger View
-
-struct RewardAdTrigger: View {
-    @ObservedObject var adManager: AdManager
-    let featureName: String
-    let onDismiss: () -> Void
-    let onRewardClaimed: () -> Void
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "gift.fill")
-                .font(.system(size: 48))
-                .foregroundColor(.yellow)
-
-            Text("Unlock \(featureName)")
-                .font(.title2)
-                .fontWeight(.bold)
-
-            Text("Watch a short ad to unlock this feature for 24 hours.")
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-
-            if adManager.isAdLoading {
-                ProgressView("Loading ad...")
-            } else {
-                Button {
-                    adManager.showRewardAd { success in
-                        if success { onRewardClaimed() }
-                        onDismiss()
-                    }
-                } label: {
-                    Label("Watch Ad", systemImage: "play.fill")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.green)
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal)
-            }
-
-            Button("No thanks", action: onDismiss)
-                .foregroundColor(.secondary)
-        }
-        .padding()
     }
 }
 
@@ -586,7 +476,11 @@ struct RewardAdTrigger: View {
 struct RealAdIntegrationView<Content: View>: View {
     @ObservedObject private var adManager = AdManager.shared
     @State private var showInterstitialOverlay = false
+    @State private var showUpgradeChip = false
     @ViewBuilder let content: Content
+
+    private let teal = Color(red: 0.051, green: 0.580, blue: 0.533)
+    private let navy = Color(red: 0.031, green: 0.098, blue: 0.173)
 
     var body: some View {
         ZStack {
@@ -603,6 +497,45 @@ struct RealAdIntegrationView<Content: View>: View {
                 .transition(.move(edge: .bottom))
                 .animation(.easeInOut, value: adManager.shouldShowAd)
             }
+
+            // Post-interstitial upsell chip — slides up for 3.5 s after ad dismissal
+            if showUpgradeChip && !SubscriptionManager.shared.isPro {
+                VStack {
+                    Spacer()
+                    HStack(spacing: 8) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text("Remove Ads — Go Pro")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text("Upgrade")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(teal)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.white)
+                            .clipShape(Capsule())
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(navy)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 96) // clear tab bar
+                    .onTapGesture {
+                        showUpgradeChip = false
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("stoqly.showPaywall"),
+                            object: nil
+                        )
+                    }
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeInOut(duration: 0.3), value: showUpgradeChip)
+                .zIndex(10)
+            }
         }
         .onChange(of: adManager.shouldShowAd) { _, _ in
             syncInterstitialOverlay()
@@ -613,7 +546,18 @@ struct RealAdIntegrationView<Content: View>: View {
         .onAppear {
             syncInterstitialOverlay()
         }
-        .fullScreenCover(isPresented: $showInterstitialOverlay) {
+        // onDismiss: fires on EVERY cover dismissal — whether the user tapped
+        // "Continue" on the fallback screen OR AdMob's native ad self-dismissed.
+        // This is the single place for post-interstitial logic (upsell chip).
+        .fullScreenCover(isPresented: $showInterstitialOverlay, onDismiss: {
+            guard !SubscriptionManager.shared.isPro else { return }
+            withAnimation { showUpgradeChip = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+                withAnimation { showUpgradeChip = false }
+            }
+        }) {
+            // onDismiss closure just sets the binding — the fullScreenCover's
+            // own onDismiss: (above) handles all post-dismiss side-effects.
             InterstitialAdTrigger(adManager: adManager) {
                 showInterstitialOverlay = false
             }

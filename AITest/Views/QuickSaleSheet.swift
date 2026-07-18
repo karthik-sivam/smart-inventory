@@ -1,0 +1,282 @@
+import SwiftUI
+import SwiftData
+
+struct QuickSaleSheet: View {
+    let item: InventoryItem
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var currencyManager: CurrencyManager
+
+    @State private var quantityText: String = "1"
+    @State private var sellingPriceText: String = ""
+    @State private var saleDate: Date = Date()
+    @State private var notes: String = ""
+    @State private var showDatePicker: Bool = false
+    @State private var showNotes: Bool = false
+    @State private var isSaving: Bool = false
+
+    private var qty: Double { Double(quantityText) ?? 0 }
+    private var price: Double { Double(sellingPriceText) ?? 0 }
+    private var revenue: Double { qty * price }
+    private var cost: Double { qty * item.unitCost }
+    private var profit: Double { revenue - cost }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    itemInfoSection
+                    quantitySection
+                    sellingPriceSection
+                    dateSection
+                    if price > 0 {
+                        profitPreview
+                    }
+                    notesSection
+
+                    Button("Record Sale") { saveSale() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.stoqlyAccent)
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity)
+                        .disabled(qty <= 0 || isSaving)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 24)
+            }
+            .navigationTitle("Record Sale")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                if isSaving {
+                    ToolbarItem(placement: .confirmationAction) {
+                        ProgressView()
+                    }
+                }
+            }
+        }
+        .onAppear {
+            sellingPriceText = item.sellingPrice > 0 ? String(format: "%.2f", item.sellingPrice) : ""
+        }
+    }
+
+    private var itemInfoSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(item.name)
+                .font(.title2)
+                .fontWeight(.bold)
+            Text(item.storage?.name ?? "Unknown")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Text("In Stock: \(item.currentQuantity.smartFormatted) \(item.uom?.symbol ?? "units")  ·  SKU: \(item.sku)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var quantitySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("QUANTITY")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+            HStack {
+                Button {
+                    let current = Double(quantityText) ?? 1
+                    quantityText = max(0, current - 1).smartFormatted
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.title2)
+                }
+                TextField("1", text: $quantityText)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                Button {
+                    let current = Double(quantityText) ?? 0
+                    quantityText = (current + 1).smartFormatted
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title2)
+                }
+            }
+            Text(item.uom?.symbol ?? "units")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            if qty > item.currentQuantity {
+                Text("Selling more than in stock (have: \(item.currentQuantity.smartFormatted)). Sale will record a negative stock.")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+        }
+    }
+
+    private var sellingPriceSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("SELLING PRICE")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+            HStack {
+                Text(currencyManager.selectedCurrency.symbol)
+                TextField("0.00", text: $sellingPriceText)
+                    .keyboardType(.decimalPad)
+            }
+            if item.sellingPrice > 0,
+               sellingPriceText.isEmpty || abs((Double(sellingPriceText) ?? 0) - item.sellingPrice) > 0.001 {
+                Button("Use default price (\(currencyManager.formatPrice(item.sellingPrice)))") {
+                    sellingPriceText = String(format: "%.2f", item.sellingPrice)
+                }
+                .font(.caption)
+            }
+            if sellingPriceText.isEmpty || price == 0 {
+                Text("No selling price — profit won't be tracked")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private var dateSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("DATE")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+            Button {
+                showDatePicker.toggle()
+            } label: {
+                Text(saleDate.formatted(date: .abbreviated, time: .omitted))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if showDatePicker {
+                DatePicker("", selection: $saleDate, in: ...Date(), displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+            }
+        }
+    }
+
+    private var profitPreview: some View {
+        let hasCost = item.unitCost > 0
+        let margin = (hasCost && revenue > 0) ? profit / revenue * 100 : 0
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("Revenue: \(currencyManager.formatPrice(revenue))")
+            if hasCost {
+                Text("Profit: \(currencyManager.formatPrice(profit))")
+                Text("Margin: \(String(format: "%.0f", margin))%")
+            } else {
+                HStack(spacing: 4) {
+                    Image(systemName: "info.circle")
+                        .font(.caption)
+                    Text("Set unit cost in item details to see profit margin")
+                        .font(.caption)
+                }
+                .foregroundColor(.secondary)
+            }
+        }
+        .font(.subheadline)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color.blue.opacity(0.12))
+        .cornerRadius(12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(hasCost
+            ? "Revenue \(currencyManager.formatPrice(revenue)), Profit \(currencyManager.formatPrice(profit)), Margin \(String(format: "%.0f", margin)) percent"
+            : "Revenue \(currencyManager.formatPrice(revenue)). No unit cost set."
+        )
+    }
+
+    private var notesSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                showNotes.toggle()
+            } label: {
+                Text("NOTES (optional)")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.secondary)
+            }
+            if showNotes {
+                TextField("Notes", text: $notes)
+            }
+        }
+    }
+
+    private func saveSale() {
+        guard !isSaving else { return }
+        isSaving = true
+
+        let soldQty = qty
+        let unitPrice = price > 0 ? price : item.sellingPrice
+        let unitCost = item.unitCost
+        let storageName = item.storage?.name ?? "Unknown"
+
+        let event = ActivityEvent(
+            eventType: "SaleMade",
+            itemName: item.name,
+            storageName: storageName,
+            quantityBefore: item.currentQuantity,
+            quantityAfter: item.currentQuantity - soldQty,
+            notes: "Sale: \(soldQty.smartFormatted) @ \(currencyManager.formatPrice(unitPrice))"
+        )
+        modelContext.insert(event)
+
+        let sale = SaleEvent(
+            item: item,
+            itemName: item.name,
+            itemSKU: item.sku,
+            storageName: storageName,
+            category: item.category,
+            quantitySold: soldQty,
+            pricePerUnit: unitPrice,
+            costPerUnit: unitCost,
+            notes: notes,
+            occurredAt: saleDate
+        )
+        modelContext.insert(sale)
+
+        let movement = InventoryMovement(
+            item: item,
+            itemName: item.name,
+            itemSKU: item.sku,
+            storageName: storageName,
+            category: item.category,
+            direction: "OUT",
+            movementType: MovementTypeOut.saleOut.rawValue,
+            quantity: soldQty,
+            pricePerUnit: unitPrice,
+            notes: "Quick Sale",
+            occurredAt: saleDate,
+            linkedSaleEventId: sale.id
+        )
+        modelContext.insert(movement)
+
+        item.currentQuantity -= soldQty
+        item.updatedAt = Date()
+
+        modelContext.safeSave(context: "QuickSaleSheet")
+
+        Task {
+            await FirestoreManager.shared.pushSaleEvent(sale)
+            await FirestoreManager.shared.pushInventoryMovement(movement)
+            FirestoreManager.shared.syncItem(item)
+        }
+
+        AnalyticsManager.shared.track(.saleRecorded(
+            itemId: item.id.uuidString,
+            qty: soldQty,
+            sellingPrice: unitPrice,
+            costPrice: unitCost,
+            profit: (unitPrice - unitCost) * soldQty,
+            storageId: item.storage?.id.uuidString ?? ""
+        ))
+
+        isSaving = false
+        dismiss()
+    }
+}
