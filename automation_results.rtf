@@ -233,4 +233,12 @@
 \bullet ModelContext.safeSave now returns Bool (@discardableResult) so callers can gate success paths\par
 \bullet VoiceInventoryView: on save failure stay on review, show error; only track/sync/complete/dismiss on success\par
 \bullet Files: AITest/Utilities/ModelContextExtension.swift, AITest/Views/VoiceInventoryView.swift\par
+\par
+{\b Fix \emdash updateEntitlements grants Pro without expiry/revocation checks}\par
+[COMPLETED]\par
+\bullet Verified bug: updateEntitlements(for:) set isPro=true + writeProStatus without revocationDate/expirationDate checks (unlike refreshPurchaseStatus)\par
+\bullet Stale Transaction.updates could re-mark Firestore isPro true after a refresh had cleared entitlements\par
+\bullet updateEntitlements: on revoked/expired transaction call refreshPurchaseStatus(); only grant + writeProStatus for still-valid Pro entitlements\par
+\bullet Also sync proSubscriptionExpirationDate / isOnProTrial on valid Pro grant\par
+\bullet Files: AITest/Models/SubscriptionManager.swift\par
 }
