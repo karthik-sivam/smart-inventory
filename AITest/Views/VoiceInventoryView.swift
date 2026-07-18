@@ -501,10 +501,18 @@ struct VoiceInventoryView: View {
 
                 VStack(spacing: 12) {
                     Divider()
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundColor(.stoqlyDanger)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
                     HStack(spacing: 12) {
                         Button("Re-record") {
                             transcript = ""
                             editableItems = []
+                            errorMessage = nil
                             step = .record
                         }
                         .font(.subheadline)
@@ -725,7 +733,11 @@ struct VoiceInventoryView: View {
             }
         }
 
-        modelContext.safeSave(context: "VoiceInventorySave")
+        guard modelContext.safeSave(context: "VoiceInventorySave") else {
+            errorMessage = "Couldn't save your inventory changes. Please try again."
+            step = .review
+            return
+        }
 
         AnalyticsManager.shared.track(.smartCountCompleted(
             mode: "voice",
