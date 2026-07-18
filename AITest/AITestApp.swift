@@ -86,13 +86,15 @@ struct SmartInventoryApp: App {
                     await trackingManager.requestPermissionIfNeeded()
                 }
                 .task {
-                    // Restore StoreKit purchases on launch (handles renewals / reinstalls)
-                    await subscriptionManager.refreshPurchaseStatus()
+                    // Restore StoreKit + re-check Firestore manualProUntil on launch.
+                    // applyManualProGrantIfNeeded() refreshes StoreKit entitlements after
+                    // syncing the grant flag so expired/removed grants do not stick.
                     await subscriptionManager.applyManualProGrantIfNeeded()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                    // Refresh subscription status when app returns to foreground
-                    Task { await subscriptionManager.refreshPurchaseStatus() }
+                    // Re-fetch manual grant + StoreKit when returning to foreground so
+                    // revoked/expired manualProUntil clears Pro without requiring relaunch.
+                    Task { await subscriptionManager.applyManualProGrantIfNeeded() }
                 }
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in
                     guard let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String else { return }

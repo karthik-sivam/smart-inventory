@@ -212,6 +212,10 @@ class SubscriptionManager: ObservableObject {
     }
 
     func refreshPurchaseStatus() async {
+        // Re-fetch manualProUntil so an expired/removed Firestore grant cannot keep
+        // isPro / hasRemovedAds sticky across StoreKit-only refreshes.
+        manualProGrantActive = await FirestoreManager.shared.fetchManualProGrant()
+
         var hasPro = false
         var hasNoAds = false
         var trialExpiry: Date?
@@ -248,7 +252,8 @@ class SubscriptionManager: ObservableObject {
         // Pro includes ad removal
         hasRemovedAds = hasNoAds || hasPro || manualProGrantActive
 
-        FirestoreManager.shared.writeProStatus(hasPro)
+        // Mirror the resolved entitlement (StoreKit and/or manual grant), not StoreKit alone.
+        FirestoreManager.shared.writeProStatus(isPro)
 
         if hasRemovedAds {
             AdManager.shared.disableAds()
@@ -256,15 +261,9 @@ class SubscriptionManager: ObservableObject {
     }
 
     /// Applies a manual Pro grant from Firestore (manualProUntil field in Firebase console).
-    /// Sets manualProGrantActive so refreshPurchaseStatus() cannot overwrite it.
+    /// Recomputes StoreKit + grant entitlements so revoked/expired grants clear Pro access.
     func applyManualProGrantIfNeeded() async {
-        let hasManualGrant = await FirestoreManager.shared.fetchManualProGrant()
-        manualProGrantActive = hasManualGrant
-        if hasManualGrant {
-            isPro = true
-            hasRemovedAds = true
-            AdManager.shared.disableAds()
-        }
+        await refreshPurchaseStatus()
     }
 
     // MARK: - Transaction Listener

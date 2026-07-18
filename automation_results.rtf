@@ -187,6 +187,15 @@
 \bullet S9-3: applyManualProGrantIfNeeded() on app launch + after email/Google/Apple sign-in\par
 \bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
 \par
+{\b Fix \emdash Manual Pro grant expiry / revoke retention}\par
+[COMPLETED]\par
+\bullet Verified bug: applyManualProGrantIfNeeded() only set isPro when grant was active; revoked/expired grants left isPro/hasRemovedAds sticky\par
+\bullet Verified bug: refreshPurchaseStatus() used cached manualProGrantActive and never re-fetched Firestore; foreground refresh skipped grant sync\par
+\bullet SubscriptionManager.refreshPurchaseStatus(): re-fetches manualProUntil, recomputes isPro/hasRemovedAds from StoreKit + grant, writeProStatus(isPro)\par
+\bullet SubscriptionManager.applyManualProGrantIfNeeded(): always recomputes via refreshPurchaseStatus()\par
+\bullet AITestApp: launch + didBecomeActive call applyManualProGrantIfNeeded() so expired/removed grants clear without requiring a cold relaunch only after stale in-memory flag\par
+\bullet Files: AITest/Models/SubscriptionManager.swift, AITest/AITestApp.swift\par
+\par
 {\b S10 \emdash Floating AI Help + Voice Confirm Fix}\par
 [COMPLETED]\par
 \bullet S10-1: Voice Inventory confirm dismiss fix — onComplete?(count) + dismiss() both called (verified in place)\par
