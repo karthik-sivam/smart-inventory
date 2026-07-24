@@ -213,7 +213,10 @@ struct StorageListView: View {
                 .sheetStyle()
         }
         .sheet(isPresented: $showingPaywall) {
-            PaywallView(featureContext: "Unlimited Storages", source: "storage_limit")
+            PaywallView(
+                featureContext: String(localized: "paywall.feature.unlimitedStorages", defaultValue: "Unlimited Storages"),
+                source: "storage_limit"
+            )
                 .sheetStyle()
         }
         .alert("Delete Storage", isPresented: Binding(
@@ -227,7 +230,10 @@ struct StorageListView: View {
                 if let storage = showingDeleteAlert {
                     let name = storage.name
                     viewModel.deleteStorage(storage)
-                    toastMessage = "\"\(name)\" deleted"
+                    toastMessage = String(
+                        format: String(localized: "toast.itemDeleted", defaultValue: "\"%@\" deleted"),
+                        name
+                    )
                 }
                 showingDeleteAlert = nil
             }
@@ -248,6 +254,7 @@ struct StorageListView: View {
 
 struct StorageCard: View {
     let storage: Storage
+    @EnvironmentObject private var currencyManager: CurrencyManager
     
     var body: some View {
         HStack(spacing: 12) {
@@ -287,10 +294,11 @@ struct StorageCard: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
-                if storage.totalQuantity > 0 {
-                    Text("\(storage.totalQuantity.smartFormatted) units")
+                if storage.totalValue > 0 {
+                    Text(currencyManager.formatPrice(storage.totalValue))
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .accessibilityIdentifier("storageCardTotalValue")
                 }
             }
         }
@@ -415,7 +423,7 @@ struct AddStorageView: View {
 
 private struct OnboardingHintRow: View {
     let icon: String
-    let text: String
+    let text: LocalizedStringKey
 
     var body: some View {
         HStack(spacing: 12) {
@@ -433,7 +441,7 @@ private struct OnboardingHintRow: View {
 
 struct SearchBar: View {
     @Binding var text: String
-    let placeholder: String
+    let placeholder: LocalizedStringKey
     
     var body: some View {
         HStack {

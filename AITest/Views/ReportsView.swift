@@ -10,12 +10,47 @@ struct ReportsView: View {
     @Query(sort: \SaleEvent.occurredAt, order: .reverse) private var allSales: [SaleEvent]
     @Query(sort: \InventoryMovement.occurredAt, order: .reverse) private var allMovements: [InventoryMovement]
 
-    enum ReportPeriod: String, CaseIterable {
-        case today = "Today"
-        case thisWeek = "This Week"
-        case thisMonth = "This Month"
-        case last30Days = "Last 30 Days"
-        case custom = "Custom"
+    enum ReportPeriod: CaseIterable, Hashable {
+        case today
+        case thisWeek
+        case thisMonth
+        case last30Days
+        case custom
+
+        var localizedTitle: LocalizedStringKey {
+            switch self {
+            case .today: "Today"
+            case .thisWeek: "This Week"
+            case .thisMonth: "This Month"
+            case .last30Days: "Last 30 Days"
+            case .custom: "Custom"
+            }
+        }
+
+        var localizedTitleString: String {
+            switch self {
+            case .today:
+                return String(localized: "Today", defaultValue: "Today")
+            case .thisWeek:
+                return String(localized: "This Week", defaultValue: "This Week")
+            case .thisMonth:
+                return String(localized: "This Month", defaultValue: "This Month")
+            case .last30Days:
+                return String(localized: "Last 30 Days", defaultValue: "Last 30 Days")
+            case .custom:
+                return String(localized: "Custom", defaultValue: "Custom")
+            }
+        }
+
+        var analyticsLabel: String {
+            switch self {
+            case .today: "Today"
+            case .thisWeek: "This Week"
+            case .thisMonth: "This Month"
+            case .last30Days: "Last 30 Days"
+            case .custom: "Custom"
+            }
+        }
     }
 
     @State var selectedPeriod: ReportPeriod = .thisMonth
@@ -130,6 +165,7 @@ struct ReportsView: View {
             }
             .navigationTitle("Reports")
             .navigationBarTitleDisplayMode(.inline)
+            .accessibilityIdentifier("reportsView")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
@@ -142,7 +178,7 @@ struct ReportsView: View {
                 .sheetStyle()
         }
         .onAppear {
-            AnalyticsManager.shared.track(.reportViewed(period: selectedPeriod.rawValue))
+            AnalyticsManager.shared.track(.reportViewed(period: selectedPeriod.analyticsLabel))
         }
     }
 
@@ -163,7 +199,7 @@ struct ReportsView: View {
                                     Image(systemName: "lock.fill")
                                         .font(.caption2)
                                 }
-                                Text(period.rawValue)
+                                Text(period.localizedTitleString)
                             }
                             .font(.caption)
                             .fontWeight(selectedPeriod == period ? .semibold : .regular)
@@ -177,7 +213,7 @@ struct ReportsView: View {
                         Button {
                             selectedPeriod = period
                         } label: {
-                            Text(period.rawValue)
+                            Text(period.localizedTitleString)
                                 .font(.caption)
                                 .fontWeight(selectedPeriod == period ? .semibold : .regular)
                                 .padding(.horizontal, 12)
@@ -217,7 +253,7 @@ struct ReportsView: View {
             } else {
                 HStack {
                     summaryColumn("Revenue", currencyManager.formatPrice(totalRevenue), .blue)
-                    summaryColumn("COGS", currencyManager.formatPrice(totalCOGS), .secondary)
+                    summaryColumn("Cost of Goods Sold", currencyManager.formatPrice(totalCOGS), .secondary)
                     summaryColumn("Profit", currencyManager.formatPrice(totalProfit), totalProfit >= 0 ? .green : .red)
                     if let margin = totalMarginPct {
                         summaryColumn("Margin", String(format: "%.0f%%", margin),
@@ -232,7 +268,7 @@ struct ReportsView: View {
         .cornerRadius(14)
     }
 
-    private func summaryColumn(_ title: String, _ value: String, _ color: Color) -> some View {
+    private func summaryColumn(_ title: LocalizedStringKey, _ value: String, _ color: Color) -> some View {
         VStack(spacing: 4) {
             Text(title)
                 .font(.caption2)
@@ -298,7 +334,13 @@ struct ReportsView: View {
                     Text(entry.name)
                         .font(.subheadline)
                     Spacer()
-                    Text("\(entry.qty.smartFormatted) sold · \(currencyManager.formatPrice(entry.revenue))")
+                    Text(
+                        String(
+                            format: String(localized: "reports.topItemSold", defaultValue: "%1$@ sold · %2$@"),
+                            entry.qty.smartFormatted,
+                            currencyManager.formatPrice(entry.revenue)
+                        )
+                    )
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -319,7 +361,18 @@ struct ReportsView: View {
                     ForEach(Array(Set(lowMargin.map(\.itemName))), id: \.self) { name in
                         let sales = lowMargin.filter { $0.itemName == name }
                         let avgMargin = sales.compactMap(\.grossMarginPct).reduce(0, +) / Double(max(sales.count, 1))
-                        Text(avgMargin < 0 ? "\(name): Selling below cost" : "\(name): \(String(format: "%.0f", avgMargin))% margin")
+                        Text(
+                            avgMargin < 0
+                                ? String(
+                                    format: String(localized: "reports.margin.belowCost", defaultValue: "%@: Selling below cost"),
+                                    name
+                                )
+                                : String(
+                                    format: String(localized: "reports.margin.percent", defaultValue: "%1$@: %2$@%% margin"),
+                                    name,
+                                    String(format: "%.0f", avgMargin)
+                                )
+                        )
                             .font(.caption)
                             .foregroundColor(avgMargin < 0 ? .red : .orange)
                     }
@@ -349,10 +402,22 @@ struct ReportsView: View {
                 let salesOut = filteredMovements.filter { $0.movementType == MovementTypeOut.saleOut.rawValue }.reduce(0) { $0 + $1.quantity }
                 let wasteOut = filteredMovements.filter { $0.movementType == MovementTypeOut.waste.rawValue }.reduce(0) { $0 + $1.quantity }
 
-                Text("IN: \(inQty.smartFormatted)  ·  OUT: \(outQty.smartFormatted)")
+                Text(
+                    String(
+                        format: String(localized: "reports.movements.inOut", defaultValue: "IN: %1$@  ·  OUT: %2$@"),
+                        inQty.smartFormatted,
+                        outQty.smartFormatted
+                    )
+                )
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Text("Sales: \(salesOut.smartFormatted)  ·  Waste: \(wasteOut.smartFormatted)")
+                Text(
+                    String(
+                        format: String(localized: "reports.movements.salesWaste", defaultValue: "Sales: %1$@  ·  Waste: %2$@"),
+                        salesOut.smartFormatted,
+                        wasteOut.smartFormatted
+                    )
+                )
                     .font(.caption)
                     .foregroundColor(.secondary)
 

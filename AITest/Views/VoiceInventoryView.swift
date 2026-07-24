@@ -189,12 +189,14 @@ struct VoiceInventoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
+    @EnvironmentObject private var localizationManager: LocalizationManager
     @Query private var storages: [Storage]
     @Query private var uoms: [UOM]
     @Query(sort: \InventoryItem.name) private var allItems: [InventoryItem]
 
     // Audio controller — @StateObject ensures single ownership, main-thread init.
     @StateObject private var audio = VoiceRecordingController()
+    @StateObject private var sarvamRecorder = SarvamSpeechTranscriber()
 
     // @ObservedObject, not @StateObject — AIUsageManager.shared is a pre-existing
     // @MainActor singleton; @StateObject would incorrectly take ownership of it.
@@ -217,8 +219,28 @@ struct VoiceInventoryView: View {
     @State private var recordingPermissionDenied = false
     @State private var didRequestRecordingPermissions = false
     @State private var selectedLocale: String = VoiceRecordingController.defaultLocaleID()
+    @State private var isCloudRecognizing = false
+    @State private var voiceEngine: VoiceSpeechEngine = .apple(localeID: VoiceRecordingController.defaultLocaleID())
 
-    private let availableLocales = [("en-IN", "English (India)"), ("en-US", "English (US)"), ("en-GB", "English (UK)")]
+    private var localePills: [(String, String)] {
+        let lang = localizationManager.currentCode
+        let normalized = lang?.split(separator: "-").first.map(String.init) ?? "en"
+        if normalized == "en" || lang == nil {
+            return SpeechEnginePicker.englishLocalePills()
+        }
+        let localeID = SpeechEnginePicker.voiceLocaleID(for: lang)
+        return [(localeID, SpeechEnginePicker.localeDisplayName(for: localeID))]
+    }
+
+    private var voiceUnavailable: Bool {
+        if case .unavailable = voiceEngine { return true }
+        return false
+    }
+
+    private var usesCloudEngine: Bool {
+        if case .sarvam = voiceEngine { return true }
+        return false
+    }
 
     private var isStorageSelected: Bool {
         selectedStorage != nil && !storages.isEmpty
@@ -252,14 +274,35 @@ struct VoiceInventoryView: View {
             if selectedStorage == nil, let preselectedStorage {
                 selectedStorage = preselectedStorage
             }
+            refreshVoiceEngine()
             guard !didRequestRecordingPermissions else { return }
             didRequestRecordingPermissions = true
             requestRecordingPermissions()
-            audio.setRecognizerLocale(Locale(identifier: selectedLocale))
+            if case .apple = voiceEngine {
+                audio.setRecognizerLocale(Locale(identifier: selectedLocale))
+            }
+        }
+        .onChange(of: localizationManager.refreshID) { _, _ in
+            refreshVoiceEngine()
         }
         .onChange(of: selectedLocale) { _, newLocale in
             if isRecording { stopRecording() }
-            audio.setRecognizerLocale(Locale(identifier: newLocale))
+            if case .apple = voiceEngine {
+                audio.setRecognizerLocale(Locale(identifier: newLocale))
+            }
+        }
+    }
+
+    private func refreshVoiceEngine() {
+        voiceEngine = SpeechEnginePicker.pickEngine(for: localizationManager.currentCode)
+        switch voiceEngine {
+        case .apple(let localeID):
+            selectedLocale = localeID
+            audio.setRecognizerLocale(Locale(identifier: localeID))
+        case .sarvam(let languageCode):
+            selectedLocale = languageCode
+        case .unavailable:
+            break
         }
     }
 
@@ -271,7 +314,7 @@ struct VoiceInventoryView: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(availableLocales, id: \.0) { id, label in
+                        ForEach(localePills, id: \.0) { id, label in
                             Button(label) { selectedLocale = id }
                                 .font(.caption)
                                 .padding(.horizontal, 12).padding(.vertical, 6)
@@ -283,13 +326,48 @@ struct VoiceInventoryView: View {
                     .padding(.horizontal)
                 }
 
+                if voiceUnavailable {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Voice not available in this language", systemImage: "mic.slash")
+                            .font(.subheadline).fontWeight(.semibold)
+                            .foregroundColor(.stoqlyWarning)
+                        Text("Voice counting isn't available in this language yet — try Photo or Sheet.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(12)
+                    .background(Color.stoqlyWarningTint)
+                    .cornerRadius(10)
+                }
+
+                if isCloudRecognizing {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Recognizing (cloud)…")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(12)
+                    .background(Color.stoqlyCard)
+                    .cornerRadius(10)
+                }
+
                 // Usage badge
                 if !subscriptionManager.isPro {
                     let remaining = usageManager.remaining(.voice, isPro: false)
                     HStack(spacing: 8) {
                         Image(systemName: "mic.badge.plus")
                             .foregroundColor(.stoqlyPrimary)
-                        Text("\(remaining) voice count\(remaining == 1 ? "" : "s") left this month")
+                        Text(
+                            String(
+                                format: String(
+                                    localized: "ai.voice.quotaRemaining",
+                                    defaultValue: "%1$d voice count%2$@ left this month"
+                                ),
+                                remaining,
+                                remaining == 1 ? "" : "s"
+                            )
+                        )
                             .font(.subheadline)
                         Spacer()
                         Button("Go Pro") { showingPaywall = true }
@@ -405,6 +483,7 @@ struct VoiceInventoryView: View {
                 }
 
                 // Record button
+                if !voiceUnavailable {
                 VStack(spacing: 12) {
                     Button(action: toggleRecording) {
                         ZStack {
@@ -423,11 +502,12 @@ struct VoiceInventoryView: View {
                                 .foregroundColor(.white)
                         }
                     }
-                    .disabled(recordingPermissionDenied || !isStorageSelected)
+                    .disabled(recordingPermissionDenied || !isStorageSelected || isCloudRecognizing)
 
                     Text(isRecording ? "Tap to stop" : "Tap to record")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                }
                 }
 
                 if !transcript.isEmpty && !isRecording {
@@ -569,7 +649,8 @@ struct VoiceInventoryView: View {
     }
 
     private func startRecording() {
-        guard !isRecording, !audio.isRunning else { return }
+        guard !isRecording, !audio.isRunning, !isCloudRecognizing else { return }
+        guard !voiceUnavailable else { return }
         guard usageManager.canUse(.voice, isPro: subscriptionManager.isPro) else {
             showingPaywall = true
             return
@@ -577,6 +658,18 @@ struct VoiceInventoryView: View {
 
         errorMessage = nil
         audio.showLowConfidenceWarning = false
+
+        switch voiceEngine {
+        case .apple:
+            startAppleRecording()
+        case .sarvam:
+            startSarvamRecording()
+        case .unavailable:
+            break
+        }
+    }
+
+    private func startAppleRecording() {
         audio.stop()
 
         let audioSession = AVAudioSession.sharedInstance()
@@ -584,7 +677,7 @@ struct VoiceInventoryView: View {
             try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
-            errorMessage = "Could not start audio session."
+            errorMessage = String(localized: "voice.audioSessionFailed", defaultValue: "Could not start audio session.")
             return
         }
 
@@ -594,7 +687,7 @@ struct VoiceInventoryView: View {
         audio.request = req
 
         guard let recognizer = audio.recognizer, recognizer.isAvailable else {
-            errorMessage = "Speech recognizer unavailable."
+            errorMessage = String(localized: "voice.recognizerUnavailable", defaultValue: "Speech recognizer unavailable.")
             audio.stop()
             return
         }
@@ -618,8 +711,21 @@ struct VoiceInventoryView: View {
             try audio.startEngine()
             isRecording = true
         } catch {
-            errorMessage = (error as? LocalizedError)?.errorDescription ?? "Recording failed to start."
+            errorMessage = (error as? LocalizedError)?.errorDescription
+                ?? String(localized: "voice.recordingFailed", defaultValue: "Recording failed to start.")
             stopRecording()
+        }
+    }
+
+    private func startSarvamRecording() {
+        audio.stop()
+        do {
+            try sarvamRecorder.startRecording()
+            isRecording = true
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription
+                ?? String(localized: "voice.recordingFailed", defaultValue: "Recording failed to start.")
+            sarvamRecorder.stopRecording(deleteFile: true)
         }
     }
 
@@ -655,8 +761,29 @@ struct VoiceInventoryView: View {
     }
 
     private func stopRecording() {
-        guard isRecording || audio.isRunning else { return }
+        guard isRecording || audio.isRunning || isCloudRecognizing else { return }
+
+        if usesCloudEngine, isRecording {
+            isRecording = false
+            isCloudRecognizing = true
+            errorMessage = nil
+            let languageCode = selectedLocale
+            Task {
+                do {
+                    let text = try await sarvamRecorder.transcribe(languageCode: languageCode)
+                    transcript = text
+                    isCloudRecognizing = false
+                } catch {
+                    isCloudRecognizing = false
+                    errorMessage = error.localizedDescription
+                    sarvamRecorder.stopRecording(deleteFile: true)
+                }
+            }
+            return
+        }
+
         audio.stop()
+        sarvamRecorder.stopRecording(deleteFile: true)
         isRecording = false
     }
 
@@ -672,7 +799,11 @@ struct VoiceInventoryView: View {
         step = .parsing
         do {
             let hints = allItems.prefix(50).map(\.name)
-            let items = try await AIInventoryService.shared.parseVoiceTranscript(transcript, inventoryHints: Array(hints))
+            let items = try await AIInventoryService.shared.parseVoiceTranscript(
+                transcript,
+                inventoryHints: Array(hints),
+                appLanguageCode: localizationManager.currentCode
+            )
             usageManager.recordUse(.voice)
             editableItems = items.map { EditableItem(from: $0) }
             editableItems.applyNameMatching(in: selectedStorage)
@@ -735,7 +866,7 @@ struct VoiceInventoryView: View {
         }
 
         guard modelContext.safeSave(context: "VoiceInventorySave") else {
-            errorMessage = "Couldn't save your inventory changes. Please try again."
+            errorMessage = String(localized: "voice.saveFailed", defaultValue: "Couldn't save your inventory changes. Please try again.")
             step = .review
             return
         }

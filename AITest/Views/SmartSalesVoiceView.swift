@@ -152,7 +152,7 @@ struct SmartSalesVoiceView: View {
             try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
-            errorMessage = "Could not start audio session."
+            errorMessage = String(localized: "voice.audioSessionFailed", defaultValue: "Could not start audio session.")
             return
         }
 
@@ -161,7 +161,7 @@ struct SmartSalesVoiceView: View {
         audio.request = req
 
         guard let recognizer = audio.recognizer, recognizer.isAvailable else {
-            errorMessage = "Speech recognizer unavailable."
+            errorMessage = String(localized: "voice.recognizerUnavailable", defaultValue: "Speech recognizer unavailable.")
             audio.stop()
             return
         }
@@ -188,7 +188,7 @@ struct SmartSalesVoiceView: View {
             try audio.startEngine()
             isRecording = true
         } catch {
-            errorMessage = "Recording failed to start."
+            errorMessage = String(localized: "voice.recordingFailed", defaultValue: "Recording failed to start.")
             stopRecording()
         }
     }

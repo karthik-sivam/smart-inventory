@@ -129,19 +129,27 @@ struct ItemsListView: View {
 
     private var emptyFilterTitle: String {
         switch filterType {
-        case .lowStock: return "No low stock items"
-        case .outOfStock: return "No out of stock items"
-        case .expiringSoon: return "No expiring items"
-        case .allItems: return "No items"
+        case .lowStock:
+            return String(localized: "filter.empty.lowStock.title", defaultValue: "No low stock items")
+        case .outOfStock:
+            return String(localized: "filter.empty.outOfStock.title", defaultValue: "No out of stock items")
+        case .expiringSoon:
+            return String(localized: "filter.empty.expiringSoon.title", defaultValue: "No expiring items")
+        case .allItems:
+            return String(localized: "filter.empty.allItems.title", defaultValue: "No items")
         }
     }
 
     private var emptyFilterSubtitle: String {
         switch filterType {
-        case .lowStock: return "All items are well stocked"
-        case .outOfStock: return "All items are in stock"
-        case .expiringSoon: return "No items expiring in the next 7 days"
-        case .allItems: return "Add items to get started"
+        case .lowStock:
+            return String(localized: "filter.empty.lowStock.subtitle", defaultValue: "All items are well stocked")
+        case .outOfStock:
+            return String(localized: "filter.empty.outOfStock.subtitle", defaultValue: "All items are in stock")
+        case .expiringSoon:
+            return String(localized: "filter.empty.expiringSoon.subtitle", defaultValue: "No items expiring in the next 7 days")
+        case .allItems:
+            return String(localized: "filter.empty.allItems.subtitle", defaultValue: "Add items to get started")
         }
     }
 
@@ -180,7 +188,7 @@ struct ItemsListView: View {
 }
 
 struct FilteredItemListView: View {
-    let title: String
+    let title: LocalizedStringKey
     let items: [InventoryItem]
     let filterType: FilterType
     
@@ -250,26 +258,38 @@ struct FilteredItemCard: View {
                     .foregroundColor(.primary)
                 
                 HStack {
-                    Text("SKU: \(item.sku)")
+                    Text(String(format: String(localized: "item.sku.label", defaultValue: "SKU: %@"), item.sku))
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
                     Spacer()
                     
-                    Text(item.storage?.name ?? "No Storage")
+                    Text(item.storage?.name ?? String(localized: "activity.noStorage", defaultValue: "No Storage"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
                 
                 HStack {
-                    Text("Current: \(item.currentQuantity.smartFormatted) \(item.uom?.symbol ?? "")")
+                    Text(
+                        String(
+                            format: String(localized: "item.currentQty.label", defaultValue: "Current: %1$@ %2$@"),
+                            item.currentQuantity.smartFormatted,
+                            item.uom?.symbol ?? ""
+                        )
+                    )
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
                     Spacer()
                     
                     if item.isLowStock {
-                        Text("Min: \(item.minQuantity.smartFormatted) \(item.uom?.symbol ?? "")")
+                        Text(
+                            String(
+                                format: String(localized: "item.minQty.label", defaultValue: "Min: %1$@ %2$@"),
+                                item.minQuantity.smartFormatted,
+                                item.uom?.symbol ?? ""
+                            )
+                        )
                             .font(.caption)
                             .foregroundColor(.orange)
                     }

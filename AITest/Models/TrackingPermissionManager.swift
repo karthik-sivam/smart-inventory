@@ -77,11 +77,16 @@ class TrackingPermissionManager: ObservableObject {
     /// Human-readable description for settings/profile screens.
     var statusDescription: String {
         switch authorizationStatus {
-        case .authorized:   return "Personalized ads enabled"
-        case .denied:       return "Non-personalized ads only"
-        case .restricted:   return "Restricted by device policy"
-        case .notDetermined: return "Not yet requested"
-        @unknown default:   return "Unknown"
+        case .authorized:
+            return String(localized: "tracking.status.authorized", defaultValue: "Personalized ads enabled")
+        case .denied:
+            return String(localized: "tracking.status.denied", defaultValue: "Non-personalized ads only")
+        case .restricted:
+            return String(localized: "tracking.status.restricted", defaultValue: "Restricted by device policy")
+        case .notDetermined:
+            return String(localized: "tracking.status.notDetermined", defaultValue: "Not yet requested")
+        @unknown default:
+            return String(localized: "tracking.status.unknown", defaultValue: "Unknown")
         }
     }
 }

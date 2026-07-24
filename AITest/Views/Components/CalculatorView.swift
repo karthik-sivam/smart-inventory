@@ -49,7 +49,7 @@ struct CalculatorView: View {
             case .clear:         return "C"
             case .toggleSign:    return "+/−"
             case .percent:       return "%"
-            case .use:           return "Use"
+            case .use:           return String(localized: "calculator.use", defaultValue: "Use")
             }
         }
 

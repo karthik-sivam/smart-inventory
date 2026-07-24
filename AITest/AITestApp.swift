@@ -11,6 +11,7 @@ import CoreSpotlight
 import Firebase
 import FirebaseAuth
 import FirebaseMessaging
+import FirebaseInAppMessaging
 import GoogleSignIn
 import UserNotifications
 import FirebaseFirestore
@@ -63,6 +64,7 @@ struct SmartInventoryApp: App {
     @StateObject private var trackingManager = TrackingPermissionManager.shared
     @StateObject private var notificationManager = NotificationManager.shared
     @StateObject private var teamManager = TeamManager.shared
+    @StateObject private var localizationManager = LocalizationManager.shared
 
     // MARK: - App Scene
 
@@ -76,6 +78,16 @@ struct SmartInventoryApp: App {
                 .environmentObject(trackingManager)
                 .environmentObject(notificationManager)
                 .environmentObject(teamManager)
+                .environmentObject(localizationManager)
+                .environment(\.locale, localizationManager.effectiveLocale())
+                .environment(\.layoutDirection, localizationManager.layoutDirection)
+                .id(localizationManager.refreshID)
+                .onAppear {
+                    AppWindowCoordinator.register(
+                        modelContainer: sharedModelContainer,
+                        currencyManager: currencyManager
+                    )
+                }
                 .onOpenURL { url in
                     // Handle Google Sign-In redirect URLs
                     GIDSignIn.sharedInstance.handle(url)
@@ -111,6 +123,7 @@ struct SmartInventoryApp: App {
 
 extension Notification.Name {
     static let spotlightItemSelected = Notification.Name("stoqly.spotlightItemSelected")
+    static let stoqlyAnnouncement = Notification.Name("stoqly.announcement")
 }
 
 // MARK: - AppDelegate
@@ -209,6 +222,32 @@ extension AppDelegate: MessagingDelegate {
         #if DEBUG
         print("📲 FCM token refreshed: \(fcmToken)")
         #endif
+        Task { @MainActor in
+            FCMTopicManager.syncRegistrationIfSignedIn(token: fcmToken)
+        }
+    }
+}
+
+private extension AppDelegate {
+    nonisolated func postAnnouncementIfNeeded(from userInfo: [AnyHashable: Any]) {
+        guard (userInfo["type"] as? String) == "announcement" else { return }
+        let title = userInfo["title"] as? String ?? userInfo["gcm.notification.title"] as? String ?? ""
+        let message = userInfo["message"] as? String ?? userInfo["gcm.notification.body"] as? String ?? ""
+        let urlString = userInfo["url"] as? String
+        guard !title.isEmpty || !message.isEmpty else { return }
+        Task { @MainActor in
+            var payload: [AnyHashable: Any] = [
+                "type": "announcement",
+                "title": title,
+                "message": message
+            ]
+            if let urlString { payload["url"] = urlString }
+            NotificationCenter.default.post(
+                name: .stoqlyAnnouncement,
+                object: nil,
+                userInfo: payload
+            )
+        }
     }
 }
 
@@ -218,6 +257,16 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        postAnnouncementIfNeeded(from: notification.request.content.userInfo)
         completionHandler([.banner, .badge, .sound])
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        postAnnouncementIfNeeded(from: response.notification.request.content.userInfo)
+        completionHandler()
     }
 }

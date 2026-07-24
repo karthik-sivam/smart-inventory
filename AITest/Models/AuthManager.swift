@@ -50,6 +50,7 @@ class AuthManager: ObservableObject {
                         email: user.email,
                         isPro: SubscriptionManager.shared.isPro
                     )
+                    FCMTopicManager.syncRegistrationIfSignedIn()
                 }
             }
         }

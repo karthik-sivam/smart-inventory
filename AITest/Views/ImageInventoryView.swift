@@ -114,7 +114,16 @@ struct ImageInventoryView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "camera.badge.plus")
                             .foregroundColor(.stoqlyPrimary)
-                        Text("\(remaining) photo scan\(remaining == 1 ? "" : "s") left this month")
+                        Text(
+                            String(
+                                format: String(
+                                    localized: "ai.image.quotaRemaining",
+                                    defaultValue: "%1$d photo scan%2$@ left this month"
+                                ),
+                                remaining,
+                                remaining == 1 ? "" : "s"
+                            )
+                        )
                             .font(.subheadline)
                         Spacer()
                         Button("Go Pro") { showingPaywall = true }
@@ -250,7 +259,16 @@ struct ImageInventoryView: View {
                             if let existing = matchedExistingItem {
                                 Label("Matched to existing item", systemImage: "checkmark.circle.fill")
                                     .font(.caption).foregroundColor(.stoqlySuccess)
-                                Text("Current stock: \(existing.currentQuantity.smartFormatted) \(existing.uom?.symbol ?? "")")
+                                Text(
+                                    String(
+                                        format: String(
+                                            localized: "image.currentStock",
+                                            defaultValue: "Current stock: %1$@ %2$@"
+                                        ),
+                                        existing.currentQuantity.smartFormatted,
+                                        existing.uom?.symbol ?? ""
+                                    )
+                                )
                                     .font(.caption).foregroundColor(.secondary)
                             } else {
                                 Label("New item detected", systemImage: "plus.circle.fill")
@@ -363,7 +381,16 @@ struct ImageInventoryView: View {
                         .onDelete { parsedItems.remove(atOffsets: $0) }
                     } header: {
                         HStack {
-                            Text("\(parsedItems.count) product\(parsedItems.count == 1 ? "" : "s") found")
+                            Text(
+                                String(
+                                    format: String(
+                                        localized: "image.productsFound",
+                                        defaultValue: "%1$d product%2$@ found"
+                                    ),
+                                    parsedItems.count,
+                                    parsedItems.count == 1 ? "" : "s"
+                                )
+                            )
                             Spacer()
                             Text("Swipe to remove")
                                 .font(.caption2)
@@ -384,7 +411,15 @@ struct ImageInventoryView: View {
                             .background(Color.stoqlyPrimaryTint)
                             .cornerRadius(AppTheme.radiusMd)
 
-                        Button("Save All (\(parsedItems.count))") {
+                        Button(
+                            String(
+                                format: String(
+                                    localized: "image.saveAll",
+                                    defaultValue: "Save All (%1$d)"
+                                ),
+                                parsedItems.count
+                            )
+                        ) {
                             Task { await saveAllItems() }
                         }
                         .stoqlyButtonStyle()
@@ -450,7 +485,7 @@ struct ImageInventoryView: View {
         }
     }
 
-    private func formField<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+    private func formField<Content: View>(label: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
                 .font(.caption).fontWeight(.semibold).foregroundColor(.secondary)
@@ -474,7 +509,16 @@ struct ImageInventoryView: View {
     @ViewBuilder
     private func fluidInfoView(fillPercent: Double?, remainingVolume: String?, unit: String) -> some View {
         if let fill = fillPercent {
-            Text("~\(Int(fill))% full\(remainingVolume.map { " · \($0)" } ?? "")")
+            Text(
+                String(
+                    format: String(
+                        localized: "image.fluidFillLevel",
+                        defaultValue: "~%1$d%% full%2$@"
+                    ),
+                    Int(fill),
+                    remainingVolume.map { " · \($0)" } ?? ""
+                )
+            )
                 .font(.caption)
                 .foregroundColor(.secondary)
         } else if fluidMode && (unit.lowercased().contains("l") || unit.lowercased() == "ml") {
@@ -560,7 +604,7 @@ struct ImageInventoryView: View {
 
         let storage = selectedStorage
         guard let storage else {
-            errorMessage = "Please select a storage area."
+            errorMessage = String(localized: "ai.selectStorage", defaultValue: "Please select a storage area.")
             return
         }
 

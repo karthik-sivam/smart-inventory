@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SwiftUI
 
 /// Movement types for inventory IN flows.
 enum MovementTypeIn: String, CaseIterable, Codable {
@@ -8,6 +9,32 @@ enum MovementTypeIn: String, CaseIterable, Codable {
     case returnFromCustomer = "Return from Customer"
     case adjustmentUp   = "Adjustment (Up)"
     case openingStock   = "Opening Stock"
+
+    var localizedTitle: String {
+        switch self {
+        case .purchase:
+            return String(localized: "movement.in.purchase", defaultValue: "Purchase")
+        case .transferIn:
+            return String(localized: "movement.in.transferIn", defaultValue: "Transfer In")
+        case .returnFromCustomer:
+            return String(localized: "movement.in.returnFromCustomer", defaultValue: "Return from Customer")
+        case .adjustmentUp:
+            return String(localized: "movement.in.adjustmentUp", defaultValue: "Adjustment (Up)")
+        case .openingStock:
+            return String(localized: "movement.in.openingStock", defaultValue: "Opening Stock")
+        }
+    }
+
+    /// Catalog-backed label for SwiftUI `Text` / pickers (rawValue stays the persistence key).
+    var localizedLabel: LocalizedStringKey {
+        switch self {
+        case .purchase: "Purchase"
+        case .transferIn: "Transfer In"
+        case .returnFromCustomer: "Return from Customer"
+        case .adjustmentUp: "Adjustment (Up)"
+        case .openingStock: "Opening Stock"
+        }
+    }
 }
 
 /// Movement types for inventory OUT flows.
@@ -17,6 +44,31 @@ enum MovementTypeOut: String, CaseIterable, Codable {
     case returnToSupplier = "Return to Supplier"
     case transferOut    = "Transfer Out"
     case adjustmentDown = "Adjustment (Down)"
+
+    var localizedTitle: String {
+        switch self {
+        case .saleOut:
+            return String(localized: "movement.out.sale", defaultValue: "Sale")
+        case .waste:
+            return String(localized: "movement.out.waste", defaultValue: "Waste / Spoilage")
+        case .returnToSupplier:
+            return String(localized: "movement.out.returnToSupplier", defaultValue: "Return to Supplier")
+        case .transferOut:
+            return String(localized: "movement.out.transferOut", defaultValue: "Transfer Out")
+        case .adjustmentDown:
+            return String(localized: "movement.out.adjustmentDown", defaultValue: "Adjustment (Down)")
+        }
+    }
+
+    var localizedLabel: LocalizedStringKey {
+        switch self {
+        case .saleOut: "Sale"
+        case .waste: "Waste / Spoilage"
+        case .returnToSupplier: "Return to Supplier"
+        case .transferOut: "Transfer Out"
+        case .adjustmentDown: "Adjustment (Down)"
+        }
+    }
 }
 
 /// Records a single inventory movement (stock in or out) with full audit trail.
@@ -76,4 +128,8 @@ final class InventoryMovement {
 
     var totalValue: Double { quantity * pricePerUnit }
     var isIN: Bool { direction == "IN" }
+
+    var localizedMovementTypeLabel: String {
+        MovementTypeDisplay.localizedLabel(for: movementType)
+    }
 }

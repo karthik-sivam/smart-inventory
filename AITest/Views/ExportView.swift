@@ -166,12 +166,8 @@ struct ExportView: View {
                 ShareSheet(items: [url])
             }
         }
-        .alert("Export Complete", isPresented: $showingAlert) {
-            Button("OK") {
-                if exportedFileURL != nil {
-                    showingShareSheet = true
-                }
-            }
+        .alert(String(localized: "export.failed.title", defaultValue: "Export Failed"), isPresented: $showingAlert) {
+            Button(String(localized: "OK", defaultValue: "OK"), role: .cancel) {}
         } message: {
             Text(alertMessage)
         }
@@ -190,13 +186,12 @@ struct ExportView: View {
             if let fileURL = await exportManager.exportData(exportData) {
                 await MainActor.run {
                     exportedFileURL = fileURL
-                    alertMessage = "Your \(selectedFormat == .csv ? "Excel" : "PDF") file has been created successfully!"
-                    showingAlert = true
+                    showingShareSheet = true
                     AdManager.shared.recordCompletion(event: .exportCompleted)
                 }
             } else {
                 await MainActor.run {
-                    alertMessage = "Failed to export data. Please try again."
+                    alertMessage = String(localized: "export.failed.message", defaultValue: "Failed to export data. Please try again.")
                     showingAlert = true
                 }
             }
@@ -205,8 +200,8 @@ struct ExportView: View {
 }
 
 struct ExportTypeCard: View {
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
     let icon: String
     let isSelected: Bool
     let action: () -> Void
@@ -253,8 +248,8 @@ struct ExportTypeCard: View {
 }
 
 struct FormatCard: View {
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
     let icon: String
     let isSelected: Bool
     let action: () -> Void
@@ -323,9 +318,23 @@ struct ExportPreviewCard: View {
             }
             
             VStack(alignment: .leading, spacing: 8) {
-                PreviewRow(label: "Items to export", value: "\(previewItemCount)")
-                PreviewRow(label: "File size", value: "~\(estimatedFileSize)")
-                PreviewRow(label: "Format", value: format == .csv ? "Excel compatible" : "Professional report")
+                PreviewRow(
+                    label: "Items to export",
+                    value: "\(previewItemCount)"
+                )
+                PreviewRow(
+                    label: "File size",
+                    value: String(
+                        format: String(localized: "~%@", defaultValue: "~%@"),
+                        estimatedFileSize
+                    )
+                )
+                PreviewRow(
+                    label: "Format",
+                    value: format == .csv
+                        ? String(localized: "Excel compatible", defaultValue: "Excel compatible")
+                        : String(localized: "Professional report", defaultValue: "Professional report")
+                )
             }
         }
         .padding()
@@ -336,11 +345,11 @@ struct ExportPreviewCard: View {
     private var previewTitle: String {
         switch exportType {
         case .inventorySummary:
-            return "Complete Inventory"
+            return String(localized: "Complete Inventory", defaultValue: "Complete Inventory")
         case .lowStockList:
-            return "Low Stock Items"
+            return String(localized: "Low Stock Items", defaultValue: "Low Stock Items")
         case .reorderList:
-            return "Reorder List"
+            return String(localized: "Reorder List", defaultValue: "Reorder List")
         }
     }
     
@@ -366,7 +375,7 @@ struct ExportPreviewCard: View {
 }
 
 struct PreviewRow: View {
-    let label: String
+    let label: LocalizedStringKey
     let value: String
     
     var body: some View {

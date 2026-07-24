@@ -141,7 +141,7 @@ struct StorageDetailView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         FilterChip(
-                            title: "All",
+                            title: String(localized: "All", defaultValue: "All"),
                             isSelected: selectedCategory == nil,
                             color: .stoqlyPrimary,
                             action: {
@@ -172,7 +172,15 @@ struct StorageDetailView: View {
                         Image(systemName: "tray.fill")
                             .font(.system(size: 52))
                             .foregroundStyle(Color.stoqlyPrimary.opacity(0.7))
-                        Text("\(storage.name) is empty")
+                        Text(
+                            String(
+                                format: String(
+                                    localized: "storage.emptyMessage",
+                                    defaultValue: "%@ is empty"
+                                ),
+                                storage.name
+                            )
+                        )
                             .font(.title3).fontWeight(.semibold)
                         Text(
                             searchText.isEmpty
@@ -276,7 +284,14 @@ struct StorageDetailView: View {
                 preselectedStorage: storage,
                 onComplete: { savedCount in
                     showingSmartCount = false
-                    toastMessage = "\(savedCount) item\(savedCount == 1 ? "" : "s") updated"
+                    toastMessage = String(
+                        format: String(
+                            localized: "toast.itemsUpdated",
+                            defaultValue: "%1$d item%2$@ updated"
+                        ),
+                        savedCount,
+                        savedCount == 1 ? "" : "s"
+                    )
                 }
             )
             .sheetStyle()
@@ -325,13 +340,24 @@ struct StorageDetailView: View {
                     modelContext.delete(item)
                     modelContext.safeSave(context: "storageDetail delete item")
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
-                    toastMessage = "\"\(name)\" deleted"
+                    toastMessage = String(
+                        format: String(localized: "toast.itemDeleted", defaultValue: "\"%@\" deleted"),
+                        name
+                    )
                 }
                 showingDeleteAlert = nil
             }
         } message: {
             if let item = showingDeleteAlert {
-                Text("Are you sure you want to delete '\(item.name)'? This action cannot be undone.")
+                Text(
+                    String(
+                        format: String(
+                            localized: "storage.deleteItemConfirm",
+                            defaultValue: "Are you sure you want to delete '%@'? This action cannot be undone."
+                        ),
+                        item.name
+                    )
+                )
             }
         }
         .toast(message: $toastMessage)
@@ -348,7 +374,16 @@ struct StorageDetailView: View {
             if showPurchaseToast {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
-                    Text("\(savedPurchaseCount) item\(savedPurchaseCount == 1 ? "" : "s") received into stock")
+                    Text(
+                        String(
+                            format: String(
+                                localized: "storage.purchaseReceived",
+                                defaultValue: "%1$d item%2$@ received into stock"
+                            ),
+                            savedPurchaseCount,
+                            savedPurchaseCount == 1 ? "" : "s"
+                        )
+                    )
                         .font(.subheadline).fontWeight(.medium)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 10)
@@ -378,7 +413,7 @@ struct StorageDetailView: View {
 }
 
 struct StatCard: View {
-    let title: String
+    let title: LocalizedStringKey
     let value: String
     let color: Color
     
@@ -420,7 +455,7 @@ struct ItemCard: View {
                     .foregroundColor(.primary)
                 
                 HStack {
-                    Text("SKU: \(item.sku)")
+                    Text(String(format: String(localized: "item.sku.label", defaultValue: "SKU: %@"), item.sku))
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
@@ -993,7 +1028,16 @@ struct ItemDetailView: View {
                                 VStack(alignment: .leading, spacing: 3) {
                                     HStack(spacing: 6) {
                                         if let qty = batchItem.quantity {
-                                            Text("\(qty.smartFormatted) \(item.uom?.symbol ?? "units")")
+                                            Text(
+                                                String(
+                                                    format: String(
+                                                        localized: "item.qtyWithUnit",
+                                                        defaultValue: "%1$@ %2$@"
+                                                    ),
+                                                    qty.smartFormatted,
+                                                    item.uom?.symbol ?? String(localized: "units", defaultValue: "units")
+                                                )
+                                            )
                                                 .font(.subheadline).fontWeight(.semibold)
                                         } else {
                                             Text(item.uom?.symbol ?? "units")
@@ -1081,7 +1125,14 @@ struct ItemDetailView: View {
                     if item.reorderPercentage > 0 && item.maxQuantity > 0 {
                         DetailRow(
                             label: "Reorder Threshold",
-                            value: "\(Int(item.reorderPercentage))% of max (\(item.effectiveMinQuantity.smartFormatted))"
+                            value: String(
+                                format: String(
+                                    localized: "item.reorderThresholdValue",
+                                    defaultValue: "%1$d%% of max (%2$@)"
+                                ),
+                                Int(item.reorderPercentage),
+                                item.effectiveMinQuantity.smartFormatted
+                            )
                         )
                     } else {
                         DetailRow(label: "Min Quantity", value: item.minQuantity > 0 ? item.minQuantity.smartFormatted : "—")
@@ -1100,7 +1151,13 @@ struct ItemDetailView: View {
                             let pct = item.unitCost > 0 ? (variance / item.unitCost * 100) : 0
                             if variance > 0 {
                                 Label(
-                                    "Price up \(String(format: "%.1f", pct))% vs unit cost",
+                                    String(
+                                        format: String(
+                                            localized: "item.priceUpVsCost",
+                                            defaultValue: "Price up %1$@%% vs unit cost"
+                                        ),
+                                        String(format: "%.1f", pct)
+                                    ),
                                     systemImage: "arrow.up.circle"
                                 )
                                 .foregroundColor(.orange)
@@ -1108,7 +1165,13 @@ struct ItemDetailView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             } else if variance < 0 {
                                 Label(
-                                    "Price down \(String(format: "%.1f", abs(pct)))% vs unit cost",
+                                    String(
+                                        format: String(
+                                            localized: "item.priceDownVsCost",
+                                            defaultValue: "Price down %1$@%% vs unit cost"
+                                        ),
+                                        String(format: "%.1f", abs(pct))
+                                    ),
                                     systemImage: "arrow.down.circle"
                                 )
                                 .foregroundColor(.green)
@@ -1144,7 +1207,16 @@ struct ItemDetailView: View {
                             CountHistoryRow(count: count, uomSymbol: item.uom?.symbol ?? "")
                         }
                         if sortedHistory.count > 5 {
-                            Text("\(sortedHistory.count - 5) older count\(sortedHistory.count - 5 == 1 ? "" : "s") not shown")
+                            Text(
+                                String(
+                                    format: String(
+                                        localized: "item.olderCountsHidden",
+                                        defaultValue: "%1$d older count%2$@ not shown"
+                                    ),
+                                    sortedHistory.count - 5,
+                                    sortedHistory.count - 5 == 1 ? "" : "s"
+                                )
+                            )
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -1230,7 +1302,15 @@ struct ItemDetailView: View {
                 dismiss()
             }
         } message: {
-            Text("Are you sure you want to delete '\(item.name)'? This action cannot be undone.")
+            Text(
+                String(
+                    format: String(
+                        localized: "storage.deleteItemConfirm",
+                        defaultValue: "Are you sure you want to delete '%@'? This action cannot be undone."
+                    ),
+                    item.name
+                )
+            )
         }
         .onAppear {
             detailVM.bind(modelContext: modelContext)
@@ -1365,7 +1445,15 @@ struct ItemDetailView: View {
 
             // Value
             if item.unitCost > 0 {
-                Text("Total value: \(currencyManager.formatPrice(item.totalValue))")
+                Text(
+                    String(
+                        format: String(
+                            localized: "item.totalValue",
+                            defaultValue: "Total value: %@"
+                        ),
+                        currencyManager.formatPrice(item.totalValue)
+                    )
+                )
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -1410,11 +1498,21 @@ struct ItemDetailView: View {
                 Text("0")
                 Spacer()
                 if item.minQuantity > 0 {
-                    Text("Min \(item.minQuantity.smartFormatted)")
+                    Text(
+                        String(
+                            format: String(localized: "item.minLabel", defaultValue: "Min %@"),
+                            item.minQuantity.smartFormatted
+                        )
+                    )
                         .foregroundColor(.stoqlyWarning)
                 }
                 Spacer()
-                Text("Max \(item.maxQuantity.smartFormatted)")
+                Text(
+                    String(
+                        format: String(localized: "item.maxLabel", defaultValue: "Max %@"),
+                        item.maxQuantity.smartFormatted
+                    )
+                )
             }
             .font(.caption2)
             .foregroundColor(.secondary)
@@ -1426,7 +1524,7 @@ struct ItemDetailView: View {
 // MARK: - Reusable section wrapper
 
 private struct DetailSection<Content: View>: View {
-    let title: String
+    let title: LocalizedStringKey
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -1454,7 +1552,7 @@ private struct DetailSection<Content: View>: View {
 // MARK: - Detail row
 
 struct DetailRow: View {
-    let label: String
+    let label: LocalizedStringKey
     let value: String
     var valueColor: Color = .primary
 
@@ -1491,7 +1589,17 @@ private struct CountHistoryRow: View {
                 .foregroundColor(count.variance > 0 ? .green : count.variance < 0 ? .red : .secondary)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(count.previousQuantity.smartFormatted) → \(count.countedQuantity.smartFormatted) \(uomSymbol)")
+                Text(
+                    String(
+                        format: String(
+                            localized: "countHistory.transition",
+                            defaultValue: "%1$@ → %2$@ %3$@"
+                        ),
+                        count.previousQuantity.smartFormatted,
+                        count.countedQuantity.smartFormatted,
+                        uomSymbol
+                    )
+                )
                     .font(.subheadline).fontWeight(.medium)
                 HStack(spacing: 6) {
                     Text(count.countDate.formatted(date: .abbreviated, time: .shortened))
@@ -1534,7 +1642,16 @@ struct CountItemView: View {
                     HStack {
                         Text("Current Quantity:")
                         Spacer()
-                        Text("\(item.currentQuantity.smartFormatted) \(item.uom?.symbol ?? "")")
+                        Text(
+                            String(
+                                format: String(
+                                    localized: "item.qtyWithUnit",
+                                    defaultValue: "%1$@ %2$@"
+                                ),
+                                item.currentQuantity.smartFormatted,
+                                item.uom?.symbol ?? ""
+                            )
+                        )
                             .fontWeight(.medium)
                     }
                     
@@ -1578,7 +1695,16 @@ struct CountItemView: View {
                         HStack {
                             Text("New Quantity:")
                             Spacer()
-                            Text("\(newQuantity.smartFormatted) \(item.uom?.symbol ?? "")")
+                            Text(
+                                String(
+                                    format: String(
+                                        localized: "item.qtyWithUnit",
+                                        defaultValue: "%1$@ %2$@"
+                                    ),
+                                    newQuantity.smartFormatted,
+                                    item.uom?.symbol ?? ""
+                                )
+                            )
                                 .fontWeight(.medium)
                         }
                     }
@@ -1625,6 +1751,13 @@ struct QuickCountView: View {
     enum CountMode: String, CaseIterable {
         case setTo     = "Set to"
         case adjustBy  = "Adjust by"
+
+        var localizedTitle: LocalizedStringKey {
+            switch self {
+            case .setTo: "Set to"
+            case .adjustBy: "Adjust by"
+            }
+        }
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -1696,7 +1829,16 @@ struct QuickCountView: View {
                             Circle()
                                 .fill(item.isOutOfStock ? Color.stoqlyDanger : item.isLowStock ? Color.stoqlyWarning : Color.stoqlySuccess)
                                 .frame(width: 8, height: 8)
-                            Text("Current: \(item.currentQuantity.smartFormatted) \(item.uom?.symbol ?? "units")")
+                        Text(
+                            String(
+                                format: String(
+                                    localized: "quickCount.currentQty",
+                                    defaultValue: "Current: %1$@ %2$@"
+                                ),
+                                item.currentQuantity.smartFormatted,
+                                item.uom?.symbol ?? String(localized: "units", defaultValue: "units")
+                            )
+                        )
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -1709,7 +1851,7 @@ struct QuickCountView: View {
                         // Mode toggle
                         Picker("Count Mode", selection: $countMode) {
                             ForEach(CountMode.allCases, id: \.self) { mode in
-                                Text(mode.rawValue).tag(mode)
+                                Text(mode.localizedTitle).tag(mode)
                             }
                         }
                         .pickerStyle(.segmented)
@@ -1807,13 +1949,40 @@ struct QuickCountView: View {
                             Group {
                                 if countMode == .setTo {
                                     // Shows delta from current
-                                    Text(v == 0 ? "No change" : "\(v > 0 ? "+" : "")\(v.smartFormatted) from current")
+                                    Text(
+                                        v == 0
+                                            ? String(localized: "quickCount.noChange", defaultValue: "No change")
+                                            : String(
+                                                format: String(
+                                                    localized: "quickCount.deltaFromCurrent",
+                                                    defaultValue: "%1$@%2$@ from current"
+                                                ),
+                                                v > 0 ? "+" : "",
+                                                v.smartFormatted
+                                            )
+                                    )
                                 } else {
                                     // Shows resulting absolute quantity
                                     if let result = resultingQuantity {
-                                        Text(v == 0
-                                             ? "No change (stays \(item.currentQuantity.smartFormatted))"
-                                             : "\(item.currentQuantity.smartFormatted) → \(result.smartFormatted) \(item.uom?.symbol ?? "")")
+                                        Text(
+                                            v == 0
+                                                ? String(
+                                                    format: String(
+                                                        localized: "quickCount.noChangeStays",
+                                                        defaultValue: "No change (stays %@)"
+                                                    ),
+                                                    item.currentQuantity.smartFormatted
+                                                )
+                                                : String(
+                                                    format: String(
+                                                        localized: "quickCount.quantityTransition",
+                                                        defaultValue: "%1$@ → %2$@ %3$@"
+                                                    ),
+                                                    item.currentQuantity.smartFormatted,
+                                                    result.smartFormatted,
+                                                    item.uom?.symbol ?? ""
+                                                )
+                                        )
                                     }
                                 }
                             }
@@ -1948,7 +2117,18 @@ struct QuickCountView: View {
                 let current = item.currentQuantity.smartFormatted
                 let entered = qty.smartFormatted
                 let uom = item.uom?.symbol ?? "units"
-                Text("Changing \(item.name) from \(current) to \(entered) \(uom). Double-check before saving.")
+                Text(
+                    String(
+                        format: String(
+                            localized: "quickCount.largeChangeConfirm",
+                            defaultValue: "Changing %1$@ from %2$@ to %3$@ %4$@. Double-check before saving."
+                        ),
+                        item.name,
+                        current,
+                        entered,
+                        uom
+                    )
+                )
             }
         }
         .sheet(isPresented: $showingCalculator) {
@@ -2044,8 +2224,8 @@ struct CountFirstTimeTipsView: View {
     private struct CountTip: Identifiable {
         let id = UUID()
         let icon: String
-        let title: String
-        let description: String
+        let title: LocalizedStringKey
+        let description: LocalizedStringKey
     }
 
     private let tips: [CountTip] = [

@@ -247,8 +247,8 @@ struct SmartCountView: View {
     private func modeCard(
         icon: String,
         iconColor: Color,
-        title: String,
-        description: String,
+        title: LocalizedStringKey,
+        description: LocalizedStringKey,
         featureType: AIUsageManager.FeatureType,
         action: @escaping () -> Void
     ) -> some View {
@@ -284,7 +284,20 @@ struct SmartCountView: View {
                             Image(systemName: canUse ? "checkmark.circle.fill" : "xmark.circle.fill")
                                 .font(.caption2)
                                 .foregroundColor(canUse ? .stoqlySuccess : .stoqlyDanger)
-                            Text(canUse ? "\(remaining) use\(remaining == 1 ? "" : "s") remaining" : "Limit reached — upgrade to Pro")
+                            Text(
+                                canUse
+                                    ? String(
+                                        format: String(
+                                            localized: "%lld use(s) remaining",
+                                            defaultValue: "%lld use(s) remaining"
+                                        ),
+                                        remaining
+                                    )
+                                    : String(
+                                        localized: "Limit reached — upgrade to Pro",
+                                        defaultValue: "Limit reached — upgrade to Pro"
+                                    )
+                            )
                                 .font(.caption2)
                                 .foregroundColor(canUse ? .stoqlySuccess : .stoqlyDanger)
                         }

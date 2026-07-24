@@ -63,11 +63,17 @@ final class AIInventoryService {
     /// Takes the raw text from SFSpeechRecognizer and returns a list of items
     /// the user mentioned. Handles natural speech like "5 kg of flour, 2 boxes
     /// of sugar, and we're out of salt".
-    func parseVoiceTranscript(_ transcript: String, inventoryHints: [String] = []) async throws -> [ParsedInventoryItem] {
+    func parseVoiceTranscript(
+        _ transcript: String,
+        inventoryHints: [String] = [],
+        appLanguageCode: String? = nil
+    ) async throws -> [ParsedInventoryItem] {
         let inventoryHint = inventoryHints.prefix(50).joined(separator: ", ")
         let contextPrefix = inventoryHint.isEmpty
             ? ""
             : "The user's inventory includes: \(inventoryHint). Use these as spelling hints when matching spoken product names.\n\n"
+
+        let quantityHints = Self.quantityExpressionHints(for: appLanguageCode)
 
         let prompt = """
         \(contextPrefix)You are an inventory assistant. The user has dictated an inventory count verbally.
@@ -95,10 +101,39 @@ final class AIInventoryService {
         - "confidence" 0.0-1.0 how confident you are this is a real inventory item
         - Skip filler words and conversation
         - Return [] if nothing recognisable was said
-        - Understand Indian English quantity expressions: 'two and a half kilo' = 2.5 kg, 'one dozen' = 12 units, 'half litre' = 0.5 L, 'quarter kg' = 0.25 kg. Extract item name, quantity as a number, and unit separately.
+        \(quantityHints)
         """
 
         return try await callClaude(textPrompt: prompt, imageData: nil)
+    }
+
+    /// Language-specific quantity expression hints for voice extraction (S14-B6).
+    private static func quantityExpressionHints(for appLanguageCode: String?) -> String {
+        let code = appLanguageCode?.split(separator: "-").first.map(String.init) ?? "en"
+        switch code {
+        case "hi":
+            return "- Understand Hindi quantity expressions: 'ek dozen' = 12, 'aadha kilo' / 'aadha kg' = 0.5 kg, 'pauna kilo' = 0.75 kg, 'sava kilo' = 1.25 kg, 'do kilo' = 2 kg. Also Indian English: 'two and a half kilo' = 2.5 kg, 'half litre' = 0.5 L."
+        case "ta":
+            return "- Understand Tamil quantity expressions: 'arai kilo' = 0.5 kg, 'oru kilo' = 1 kg, 'rendu kilo' = 2 kg, 'oru dozen' = 12 units."
+        case "te":
+            return "- Understand Telugu quantity expressions: 'okati kilo' = 1 kg, 'rendu kilo' = 2 kg, 'half kilo' = 0.5 kg, 'okati dozen' = 12 units."
+        case "kn":
+            return "- Understand Kannada quantity expressions: 'ondu kilo' = 1 kg, 'eradu kilo' = 2 kg, 'half kilo' = 0.5 kg."
+        case "ml":
+            return "- Understand Malayalam quantity expressions: 'onnu kilo' = 1 kg, 'randu kilo' = 2 kg, 'half kilo' = 0.5 kg."
+        case "ar":
+            return "- Understand Arabic quantity expressions: 'نصف كيلو' = 0.5 kg, 'كilo واحد' = 1 kg, 'دزينة' = 12 units."
+        case "es":
+            return "- Understand Spanish: 'medio kilo' = 0.5 kg, 'un kilo y medio' = 1.5 kg, 'una docena' = 12."
+        case "fr":
+            return "- Understand French: 'demi kilo' = 0.5 kg, 'un kilo et demi' = 1.5 kg, 'une douzaine' = 12."
+        case "de":
+            return "- Understand German: 'ein halbes Kilo' = 0.5 kg, 'anderthalb Kilo' = 1.5 kg, 'ein Dutzend' = 12."
+        case "ja":
+            return "- Understand Japanese: '半キロ' = 0.5 kg, '1キロ' = 1 kg, '1ダース' = 12."
+        default:
+            return "- Understand Indian English quantity expressions: 'two and a half kilo' = 2.5 kg, 'one dozen' = 12 units, 'half litre' = 0.5 L, 'quarter kg' = 0.25 kg. Extract item name, quantity as a number, and unit separately."
+        }
     }
 
     // MARK: - Product photo → item

@@ -14,16 +14,27 @@ struct HelpCentreView: View {
     private struct FAQItem: Identifiable {
         let id = UUID()
         let section: String
-        let question: String
-        let answer: String
+        let question: LocalizedStringKey
+        let answer: LocalizedStringKey
+
+        var sectionTitle: LocalizedStringKey {
+            switch section {
+            case "Getting Started": "Getting Started"
+            case "SmartCount": "SmartCount"
+            case "Reorder Alerts": "Reorder Alerts"
+            case "Reports": "Reports"
+            case "Pro": "Pro"
+            default: LocalizedStringKey(section)
+            }
+        }
     }
 
-    private let suggestedQuestions = [
-        "How do I add a new item?",
-        "What is the difference between Free and Pro?",
-        "How do Photo Inventory counts work?",
-        "How do I set a low stock alert?",
-        "How do I add my team members?",
+    private let suggestedQuestions: [String] = [
+        String(localized: "help.suggested.addItem", defaultValue: "How do I add a new item?"),
+        String(localized: "help.suggested.freeVsPro", defaultValue: "What is the difference between Free and Pro?"),
+        String(localized: "help.suggested.photoInventory", defaultValue: "How do Photo Inventory counts work?"),
+        String(localized: "help.suggested.lowStock", defaultValue: "How do I set a low stock alert?"),
+        String(localized: "help.suggested.teamMembers", defaultValue: "How do I add my team members?"),
     ]
 
     private let allItems: [FAQItem] = [
@@ -69,8 +80,7 @@ struct HelpCentreView: View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return allItems }
         return allItems.filter {
-            $0.question.localizedCaseInsensitiveContains(query)
-                || $0.answer.localizedCaseInsensitiveContains(query)
+            $0.section.localizedCaseInsensitiveContains(query)
         }
     }
 
@@ -81,8 +91,8 @@ struct HelpCentreView: View {
 
     var body: some View {
         List {
-            ForEach(groupedSections, id: \.0) { section, items in
-                Section(section) {
+            ForEach(groupedSections, id: \.0) { _, items in
+                Section(items.first?.sectionTitle ?? "") {
                     ForEach(items) { item in
                         VStack(alignment: .leading, spacing: 6) {
                             Text(item.question)
@@ -118,7 +128,16 @@ struct HelpCentreView: View {
         VStack(alignment: .leading, spacing: 12) {
             let remaining = AIUsageManager.shared.remaining(.helpChat, isPro: subscriptionManager.isPro)
             if !subscriptionManager.isPro {
-                Text("\(remaining) free question\(remaining == 1 ? "" : "s") remaining this month")
+                Text(
+                    String(
+                        format: String(
+                            localized: "help.aiQuotaRemaining",
+                            defaultValue: "%1$d free question%2$@ remaining this month"
+                        ),
+                        remaining,
+                        remaining == 1 ? "" : "s"
+                    )
+                )
                     .font(.caption)
                     .foregroundColor(remaining == 0 ? .red : .secondary)
             }
@@ -196,7 +215,7 @@ struct HelpCentreView: View {
 
         guard AIUsageManager.shared.canUse(.helpChat, isPro: subscriptionManager.isPro) else {
             if subscriptionManager.isPro {
-                aiError = "Something went wrong with usage tracking. Please try again."
+                aiError = String(localized: "help.aiUsageError", defaultValue: "Something went wrong with usage tracking. Please try again.")
             } else {
                 showPaywall = true
             }

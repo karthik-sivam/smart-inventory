@@ -9,15 +9,19 @@ struct QuickSaleSheet: View {
 
     @State private var quantityText: String = "1"
     @State private var sellingPriceText: String = ""
+    @State private var priceWasEdited = false
     @State private var saleDate: Date = Date()
-    @State private var notes: String = ""
     @State private var showDatePicker: Bool = false
     @State private var showNotes: Bool = false
+    @State private var notes: String = ""
     @State private var isSaving: Bool = false
+    @State private var showNegativeStockAlert = false
+    @State private var negativeStockAlertMessage = ""
 
     private var qty: Double { Double(quantityText) ?? 0 }
     private var price: Double { Double(sellingPriceText) ?? 0 }
-    private var revenue: Double { qty * price }
+    private var unitPrice: Double { priceWasEdited ? price : (price > 0 ? price : item.fallbackSalePrice) }
+    private var revenue: Double { qty * unitPrice }
     private var cost: Double { qty * item.unitCost }
     private var profit: Double { revenue - cost }
 
@@ -28,8 +32,11 @@ struct QuickSaleSheet: View {
                     itemInfoSection
                     quantitySection
                     sellingPriceSection
+                    if unitPrice > 0 && qty > 0 {
+                        saleTotalSection
+                    }
                     dateSection
-                    if price > 0 {
+                    if unitPrice > 0 {
                         profitPreview
                     }
                     notesSection
@@ -42,6 +49,7 @@ struct QuickSaleSheet: View {
                         .disabled(qty <= 0 || isSaving)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
+                        .accessibilityIdentifier("quickSaleRecordButton")
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 24)
@@ -60,7 +68,21 @@ struct QuickSaleSheet: View {
             }
         }
         .onAppear {
-            sellingPriceText = item.sellingPrice > 0 ? String(format: "%.2f", item.sellingPrice) : ""
+            if item.sellingPrice > 0 {
+                sellingPriceText = String(format: "%.2f", item.sellingPrice)
+            } else if item.fallbackSalePrice > 0 {
+                sellingPriceText = String(format: "%.2f", item.fallbackSalePrice)
+            }
+        }
+        .alert(
+            String(localized: "sale.negativeStock.title", defaultValue: "Negative Stock"),
+            isPresented: $showNegativeStockAlert
+        ) {
+            Button(String(localized: "OK", defaultValue: "OK"), role: .cancel) {
+                dismiss()
+            }
+        } message: {
+            Text(negativeStockAlertMessage)
         }
     }
 
@@ -96,6 +118,7 @@ struct QuickSaleSheet: View {
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("quickSaleQuantityField")
                 Button {
                     let current = Double(quantityText) ?? 0
                     quantityText = (current + 1).smartFormatted
@@ -117,7 +140,7 @@ struct QuickSaleSheet: View {
 
     private var sellingPriceSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("SELLING PRICE")
+            Text(String(localized: "sale.pricePerUnit.label", defaultValue: "Price/unit").uppercased())
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundColor(.secondary)
@@ -125,20 +148,53 @@ struct QuickSaleSheet: View {
                 Text(currencyManager.selectedCurrency.symbol)
                 TextField("0.00", text: $sellingPriceText)
                     .keyboardType(.decimalPad)
+                    .onChange(of: sellingPriceText) { _, _ in
+                        priceWasEdited = true
+                    }
+                    .accessibilityIdentifier("quickSalePriceField")
             }
             if item.sellingPrice > 0,
                sellingPriceText.isEmpty || abs((Double(sellingPriceText) ?? 0) - item.sellingPrice) > 0.001 {
                 Button("Use default price (\(currencyManager.formatPrice(item.sellingPrice)))") {
                     sellingPriceText = String(format: "%.2f", item.sellingPrice)
+                    priceWasEdited = false
+                }
+                .font(.caption)
+            } else if item.sellingPrice == 0, item.fallbackSalePrice > 0, !priceWasEdited {
+                Button("Use fallback price (\(currencyManager.formatPrice(item.fallbackSalePrice)))") {
+                    sellingPriceText = String(format: "%.2f", item.fallbackSalePrice)
+                    priceWasEdited = false
                 }
                 .font(.caption)
             }
-            if sellingPriceText.isEmpty || price == 0 {
-                Text("No selling price — profit won't be tracked")
-                    .font(.caption)
+            if item.sellingPrice == 0 {
+                Text(String(
+                    localized: "sale.noSellingPrice.warning",
+                    defaultValue: "Selling price not set. Set selling price for better profit insights."
+                ))
+                .font(.caption)
+                .foregroundColor(.orange)
+            }
+            if unitPrice > 0 && qty > 0 {
+                Text("= \(currencyManager.formatPrice(revenue))")
+                    .font(.caption2)
                     .foregroundColor(.secondary)
             }
         }
+    }
+
+    private var saleTotalSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(String(localized: "sale.total.label", defaultValue: "Sale Total"))
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Text(currencyManager.formatPrice(revenue))
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(.stoqlyPrimary)
+                .accessibilityIdentifier("quickSaleSaleTotal")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var dateSection: some View {
@@ -212,7 +268,7 @@ struct QuickSaleSheet: View {
         isSaving = true
 
         let soldQty = qty
-        let unitPrice = price > 0 ? price : item.sellingPrice
+        let resolvedPrice = unitPrice
         let unitCost = item.unitCost
         let storageName = item.storage?.name ?? "Unknown"
 
@@ -222,7 +278,7 @@ struct QuickSaleSheet: View {
             storageName: storageName,
             quantityBefore: item.currentQuantity,
             quantityAfter: item.currentQuantity - soldQty,
-            notes: "Sale: \(soldQty.smartFormatted) @ \(currencyManager.formatPrice(unitPrice))"
+            notes: "Sale: \(soldQty.smartFormatted) @ \(currencyManager.formatPrice(resolvedPrice))"
         )
         modelContext.insert(event)
 
@@ -233,7 +289,7 @@ struct QuickSaleSheet: View {
             storageName: storageName,
             category: item.category,
             quantitySold: soldQty,
-            pricePerUnit: unitPrice,
+            pricePerUnit: resolvedPrice,
             costPerUnit: unitCost,
             notes: notes,
             occurredAt: saleDate
@@ -249,7 +305,7 @@ struct QuickSaleSheet: View {
             direction: "OUT",
             movementType: MovementTypeOut.saleOut.rawValue,
             quantity: soldQty,
-            pricePerUnit: unitPrice,
+            pricePerUnit: resolvedPrice,
             notes: "Quick Sale",
             occurredAt: saleDate,
             linkedSaleEventId: sale.id
@@ -270,13 +326,20 @@ struct QuickSaleSheet: View {
         AnalyticsManager.shared.track(.saleRecorded(
             itemId: item.id.uuidString,
             qty: soldQty,
-            sellingPrice: unitPrice,
+            sellingPrice: resolvedPrice,
             costPrice: unitCost,
-            profit: (unitPrice - unitCost) * soldQty,
+            profit: (resolvedPrice - unitCost) * soldQty,
             storageId: item.storage?.id.uuidString ?? ""
         ))
 
         isSaving = false
-        dismiss()
+
+        let negativeLines = SaleHelpers.negativeStockMessages(for: [item])
+        if negativeLines.isEmpty {
+            dismiss()
+        } else {
+            negativeStockAlertMessage = negativeLines.joined(separator: "\n")
+            showNegativeStockAlert = true
+        }
     }
 }

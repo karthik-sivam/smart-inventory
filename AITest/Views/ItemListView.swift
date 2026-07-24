@@ -150,7 +150,7 @@ struct ItemListView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 FilterChip(
-                                    title: "All",
+                                    title: String(localized: "All", defaultValue: "All"),
                                     isSelected: viewModel.selectedCategory == nil,
                                     color: .blue,
                                     action: {
@@ -358,7 +358,10 @@ struct ItemListView: View {
                     let name = item.name
                     viewModel.deleteItem(item)
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
-                    toastMessage = "\"\(name)\" deleted"
+                    toastMessage = String(
+                        format: String(localized: "toast.itemDeleted", defaultValue: "\"%@\" deleted"),
+                        name
+                    )
                 }
                 showingDeleteAlert = nil
             }

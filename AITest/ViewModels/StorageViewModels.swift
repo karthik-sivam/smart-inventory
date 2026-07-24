@@ -19,7 +19,14 @@ final class StorageListViewModel: ObservableObject {
 
     var freeStorageUsageText: String? {
         guard !SubscriptionManager.shared.isPro else { return nil }
-        return "\(storages.count) of \(Self.freeStorageCap) storages used"
+        return String(
+            format: String(
+                localized: "storage.freeUsage",
+                defaultValue: "%1$d of %2$d storages used"
+            ),
+            storages.count,
+            Self.freeStorageCap
+        )
     }
     private var modelContext: ModelContext?
 

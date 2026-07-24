@@ -11,6 +11,7 @@ struct SettingsView: View {
     @StateObject private var teamManager = TeamManager.shared
     @StateObject private var adManager = AdManager.shared
     @StateObject private var trackingManager = TrackingPermissionManager.shared
+    @EnvironmentObject private var localizationManager: LocalizationManager
 
     @AppStorage(NotificationManager.dailySummaryEnabledKey) private var dailySummaryEnabled = false
     @AppStorage(NotificationManager.dailySummaryHourKey) private var dailySummaryHour = 18
@@ -20,6 +21,7 @@ struct SettingsView: View {
     ) ?? Date()
 
     @State private var showPaywall = false
+    @State private var showLanguagePicker = false
 
     var body: some View {
         NavigationStack {
@@ -186,6 +188,23 @@ struct SettingsView: View {
                     }
                 }
 
+                Section(header: Text(String(localized: "Language", defaultValue: "Language"))) {
+                    Button {
+                        showLanguagePicker = true
+                    } label: {
+                        HStack {
+                            Label(String(localized: "Language", defaultValue: "Language"), systemImage: "globe")
+                            Spacer()
+                            Text(localizationManager.currentDisplayName())
+                                .foregroundColor(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .accessibilityIdentifier("languageSettingsRow")
+                }
+
                 // MARK: - Privacy & Ads (debug builds only)
                 #if DEBUG
                 Section(header: Text("Privacy & Ads")) {
@@ -349,6 +368,11 @@ struct SettingsView: View {
             PaywallView(source: "pro_feature")
                 .sheetStyle()
         }
+        .sheet(isPresented: $showLanguagePicker) {
+            LanguagePickerView()
+                .environmentObject(localizationManager)
+                .sheetStyle()
+        }
         .task {
             await subscriptionManager.loadProducts()
         }
@@ -503,4 +527,5 @@ extension SecretsManager {
 #Preview {
     SettingsView()
         .environmentObject(CurrencyManager())
+        .environmentObject(LocalizationManager.shared)
 }

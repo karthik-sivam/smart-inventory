@@ -102,6 +102,14 @@ final class InventoryItem {
         currentQuantity * unitCost
     }
 
+    /// Fallback sale price when the user has not entered one: selling → last purchase → unit cost → 0.
+    var fallbackSalePrice: Double {
+        if sellingPrice > 0 { return sellingPrice }
+        if lastPurchasePrice > 0 { return lastPurchasePrice }
+        if unitCost > 0 { return unitCost }
+        return 0
+    }
+
     /// The most urgent expiry date for this item:
     /// the earliest batch expiry if batches exist, otherwise the item's own
     /// stored `expiryDate`. Items without batches behave exactly as before.
@@ -128,13 +136,13 @@ final class InventoryItem {
 
     var stockStatus: String {
         if isOutOfStock {
-            return "Out of Stock"
+            return String(localized: "Out of Stock", defaultValue: "Out of Stock")
         } else if isLowStock {
-            return "Low Stock"
+            return String(localized: "Low Stock", defaultValue: "Low Stock")
         } else if isOverStock {
-            return "Over Stock"
+            return String(localized: "Over Stock", defaultValue: "Over Stock")
         } else {
-            return "In Stock"
+            return String(localized: "In Stock", defaultValue: "In Stock")
         }
     }
 

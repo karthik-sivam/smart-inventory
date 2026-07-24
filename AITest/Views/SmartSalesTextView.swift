@@ -52,6 +52,7 @@ struct SmartSalesTextView: View {
                 .font(.body)
                 .frame(minHeight: 160)
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray4)))
+                .accessibilityIdentifier("smartSalesTextInput")
                 .overlay(alignment: .topLeading) {
                     if inputText.isEmpty {
                         Text("Type or paste a sales list, e.g.:\n5 chips\n2 waters\n1 sandwich")
@@ -74,6 +75,7 @@ struct SmartSalesTextView: View {
                 .buttonStyle(.borderedProminent).tint(.stoqlyAccent).controlSize(.large)
                 .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("smartSalesParseButton")
 
             Spacer()
         }

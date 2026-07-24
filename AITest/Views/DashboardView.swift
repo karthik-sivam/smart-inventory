@@ -45,8 +45,8 @@ struct DashboardView: View {
     private struct TipCard: Identifiable {
         let id: String
         let icon: String
-        let text: String
-        let action: String
+        let text: LocalizedStringKey
+        let action: LocalizedStringKey
     }
 
     private var dismissedTips: Set<String> { Set(dismissedTipsRaw.split(separator: ",").map(String.init)) }
@@ -65,15 +65,37 @@ struct DashboardView: View {
 
     private struct InsightDetailContext: Identifiable {
         let id = UUID()
-        let title: String
+        let title: LocalizedStringKey
         let items: [InventoryItem]
     }
 
-    enum DashboardSalesPeriod: String, CaseIterable {
-        case today = "Today"
-        case thisWeek = "This Week"
-        case lastThirtyDays = "Last 30 Days"
-        case thisMonth = "This Month"
+    enum DashboardSalesPeriod: CaseIterable, Hashable {
+        case today
+        case thisWeek
+        case lastThirtyDays
+        case thisMonth
+
+        var localizedTitle: LocalizedStringKey {
+            switch self {
+            case .today: "Today"
+            case .thisWeek: "This Week"
+            case .lastThirtyDays: "Last 30 Days"
+            case .thisMonth: "This Month"
+            }
+        }
+
+        var localizedTitleString: String {
+            switch self {
+            case .today:
+                String(localized: "Today", defaultValue: "Today")
+            case .thisWeek:
+                String(localized: "This Week", defaultValue: "This Week")
+            case .lastThirtyDays:
+                String(localized: "Last 30 Days", defaultValue: "Last 30 Days")
+            case .thisMonth:
+                String(localized: "This Month", defaultValue: "This Month")
+            }
+        }
     }
 
     var body: some View {
@@ -211,14 +233,17 @@ struct DashboardView: View {
                     .frame(height: 0)
 
                     VStack(spacing: 16) {
-                        // Trial expiry banner
+                        // Pro-access expiry banner (Stoqly has no trial — this is the
+                        // subscription/grant expiry, worded as "Pro", never "trial")
                         if let days = subscriptionManager.trialDaysRemaining, days <= 3 {
                             HStack(spacing: 10) {
                                 Image(systemName: "clock.fill")
                                     .foregroundColor(.stoqlyWarning)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(days == 0 ? "Your trial expires today"
-                                                   : "Trial expires in \(days) day\(days == 1 ? "" : "s")")
+                                    Text(days == 0
+                                         ? String(localized: "Your Pro access expires today")
+                                         : String(format: String(localized: "Pro access expires in %1$lld day%2$@"),
+                                                  days, days == 1 ? "" : "s"))
                                         .font(.subheadline).fontWeight(.semibold)
                                     Text("Upgrade to keep all your Pro features.")
                                         .font(.caption).foregroundColor(.secondary)
@@ -241,7 +266,7 @@ struct DashboardView: View {
                                 value: currencyManager.formatPrice(dashboardPeriodRevenue),
                                 icon: "cart.fill",
                                 gradient: AppTheme.kpiGradients[0],
-                                deltaText: dashboardSalesPeriod.rawValue,
+                                deltaText: dashboardSalesPeriod.localizedTitleString,
                                 deltaPositive: dashboardPeriodRevenue > 0 ? true : nil,
                                 action: { showingReports = true }
                             )
@@ -330,7 +355,15 @@ struct DashboardView: View {
                                 HStack(spacing: 10) {
                                     Image(systemName: "chart.line.uptrend.xyaxis")
                                         .foregroundColor(.orange)
-                                    Text("\(priceCreepItems.count) item\(priceCreepItems.count == 1 ? "" : "s") purchased above unit cost recently")
+                                    Text(
+                                        String(
+                                            format: String(
+                                                localized: "dashboard.priceCreep.banner",
+                                                defaultValue: "%lld item(s) purchased above unit cost recently"
+                                            ),
+                                            priceCreepItems.count
+                                        )
+                                    )
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                         .multilineTextAlignment(.leading)
@@ -570,7 +603,7 @@ struct DashboardView: View {
 
     private var salesPerformanceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sales Performance")
+            Text(String(localized: "Sales Performance", defaultValue: "Sales Performance"))
                 .font(.headline)
                 .fontWeight(.semibold)
 
@@ -580,7 +613,7 @@ struct DashboardView: View {
                         Button {
                             dashboardSalesPeriod = period
                         } label: {
-                            Text(period.rawValue)
+                            Text(period.localizedTitleString)
                                 .font(.caption)
                                 .fontWeight(dashboardSalesPeriod == period ? .semibold : .regular)
                                 .lineLimit(1)
@@ -603,13 +636,13 @@ struct DashboardView: View {
 
             if allSaleEvents.isEmpty {
                 VStack(spacing: 8) {
-                    Text("No sales recorded yet.")
+                    Text(String(localized: "No sales recorded yet.", defaultValue: "No sales recorded yet."))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-                    Text("Start recording sales to see your profit insights here.")
+                    Text(String(localized: "dashboard.salesPerformance.emptyHint", defaultValue: "Start recording sales to see your profit insights here."))
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Button("Record Your First Sale →") {
+                    Button(String(localized: "dashboard.recordFirstSale", defaultValue: "Record Your First Sale →")) {
                         selectedTab = 1
                     }
                     .font(.caption)
@@ -619,14 +652,14 @@ struct DashboardView: View {
             } else {
                 Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 4) {
                     GridRow {
-                        Text("Revenue")
+                        Text(String(localized: "Revenue", defaultValue: "Revenue"))
                             .font(.caption).foregroundColor(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        Text("Profit")
+                        Text(String(localized: "Profit", defaultValue: "Profit"))
                             .font(.caption).foregroundColor(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         if dashboardPeriodMargin != nil {
-                            Text("Margin")
+                            Text(String(localized: "Margin", defaultValue: "Margin"))
                                 .font(.caption).foregroundColor(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -734,7 +767,7 @@ struct DashboardView: View {
 // so every KPI has its own distinct colour — far more scannable than white tiles.
 
 struct DashboardCard: View {
-    let title: String
+    let title: LocalizedStringKey
     let value: String
     let icon: String
     let gradient: (Color, Color)
@@ -743,7 +776,7 @@ struct DashboardCard: View {
     let action: (() -> Void)?
 
     init(
-        title: String,
+        title: LocalizedStringKey,
         value: String,
         icon: String,
         gradient: (Color, Color),
@@ -858,7 +891,13 @@ private struct InventoryHealthCard: View {
     }
 
     private var label: String {
-        score >= 80 ? "Good" : score >= 50 ? "Fair" : "Needs Attention"
+        if score >= 80 {
+            return String(localized: "Good", defaultValue: "Good")
+        }
+        if score >= 50 {
+            return String(localized: "Fair", defaultValue: "Fair")
+        }
+        return String(localized: "Needs Attention", defaultValue: "Needs Attention")
     }
 
     private var labelColor: Color {
@@ -868,7 +907,7 @@ private struct InventoryHealthCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Inventory Health")
+                Text(String(localized: "Inventory Health", defaultValue: "Inventory Health"))
                     .font(.headline).fontWeight(.semibold)
                 Spacer()
                 Text("\(score)")
@@ -1010,7 +1049,7 @@ private struct HealthDetailView: View {
 
 private struct HealthDetailRow: View {
     let item: InventoryItem
-    let badge: String
+    let badge: LocalizedStringKey
     let badgeColor: Color
 
     var body: some View {
@@ -1018,7 +1057,7 @@ private struct HealthDetailRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.name)
                     .font(.subheadline).fontWeight(.medium)
-                Text(item.storage?.name ?? "No Storage")
+                Text(item.storage?.name ?? String(localized: "activity.noStorage", defaultValue: "No Storage"))
                     .font(.caption).foregroundColor(.secondary)
             }
             Spacer()
@@ -1041,14 +1080,14 @@ private struct Insight: Identifiable {
     let id = UUID()
     let icon: String
     let iconColor: Color
-    let title: String
+    let title: LocalizedStringKey
     let subtitle: String
     let relatedItems: [InventoryItem]
 }
 
 private struct SmartInsightsCard: View {
     let items: [InventoryItem]
-    let onShowItems: (String, [InventoryItem]) -> Void
+    let onShowItems: (LocalizedStringKey, [InventoryItem]) -> Void
 
     private var insights: [Insight] {
         var result: [Insight] = []
@@ -1061,7 +1100,13 @@ private struct SmartInsightsCard: View {
                 icon: "cart.badge.questionmark",
                 iconColor: .purple,
                 title: "Missing cost prices",
-                subtitle: "\(noCost.count) item\(noCost.count == 1 ? "" : "s") have no cost price — profit margin tracking is incomplete",
+                subtitle: String(
+                    format: String(
+                        localized: "insight.missingCost.subtitle",
+                        defaultValue: "%1$lld item(s) have no cost price — profit margin tracking is incomplete"
+                    ),
+                    noCost.count
+                ),
                 relatedItems: noCost
             ))
         }
@@ -1072,7 +1117,13 @@ private struct SmartInsightsCard: View {
                 icon: "tag.slash",
                 iconColor: .teal,
                 title: "Missing selling prices",
-                subtitle: "\(noSelling.count) item\(noSelling.count == 1 ? "" : "s") have no selling price — revenue tracking won't be accurate",
+                subtitle: String(
+                    format: String(
+                        localized: "insight.missingSelling.subtitle",
+                        defaultValue: "%1$lld item(s) have no selling price — revenue tracking won't be accurate"
+                    ),
+                    noSelling.count
+                ),
                 relatedItems: noSelling
             ))
         }
@@ -1083,7 +1134,13 @@ private struct SmartInsightsCard: View {
                 icon: "bell.slash",
                 iconColor: .orange,
                 title: "Low-stock alerts disabled",
-                subtitle: "\(noMin.count) item\(noMin.count == 1 ? "" : "s") have no minimum quantity — you won't get restock alerts",
+                subtitle: String(
+                    format: String(
+                        localized: "insight.noMinQty.subtitle",
+                        defaultValue: "%1$lld item(s) have no minimum quantity — you won't get restock alerts"
+                    ),
+                    noMin.count
+                ),
                 relatedItems: noMin
             ))
         }
@@ -1110,7 +1167,14 @@ private struct SmartInsightsCard: View {
                 icon: "clock.badge.exclamationmark",
                 iconColor: .red,
                 title: "Running low soon",
-                subtitle: "\(soonOOS.count) item\(soonOOS.count == 1 ? "" : "s") may run out within 7 days: \(names)",
+                subtitle: String(
+                    format: String(
+                        localized: "insight.runningLowSoon.subtitle",
+                        defaultValue: "%1$lld item(s) may run out within 7 days: %2$@"
+                    ),
+                    soonOOS.count,
+                    names
+                ),
                 relatedItems: soonOOS.map { $0.0 }
             ))
         }
@@ -1130,7 +1194,13 @@ private struct SmartInsightsCard: View {
                 icon: "moon.zzz",
                 iconColor: .indigo,
                 title: "Possible dead stock",
-                subtitle: "\(deadStock.count) item\(deadStock.count == 1 ? "" : "s") with stock haven't been touched in 60+ days",
+                subtitle: String(
+                    format: String(
+                        localized: "insight.deadStock.subtitle",
+                        defaultValue: "%1$lld item(s) with stock haven't been touched in 60+ days"
+                    ),
+                    deadStock.count
+                ),
                 relatedItems: Array(deadStock)
             ))
         }
@@ -1143,7 +1213,13 @@ private struct SmartInsightsCard: View {
                     icon: "exclamationmark.triangle",
                     iconColor: .orange,
                     title: "Inventory value at risk",
-                    subtitle: "\(atRisk.count) low/OOS item\(atRisk.count == 1 ? "" : "s") represent stock that needs restocking",
+                    subtitle: String(
+                        format: String(
+                            localized: "insight.valueAtRisk.subtitle",
+                            defaultValue: "%1$lld low/OOS item(s) represent stock that needs restocking"
+                        ),
+                        atRisk.count
+                    ),
                     relatedItems: atRisk
                 ))
             }
@@ -1156,7 +1232,13 @@ private struct SmartInsightsCard: View {
                 icon: "questionmark.circle",
                 iconColor: .secondary,
                 title: "Never audited",
-                subtitle: "\(neverCounted.count) item\(neverCounted.count == 1 ? "" : "s") have never been counted — quantities unverified",
+                subtitle: String(
+                    format: String(
+                        localized: "insight.neverAudited.subtitle",
+                        defaultValue: "%1$lld item(s) have never been counted — quantities unverified"
+                    ),
+                    neverCounted.count
+                ),
                 relatedItems: neverCounted
             ))
         }
@@ -1167,7 +1249,7 @@ private struct SmartInsightsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Label("Smart Insights", systemImage: "sparkles")
+                Label(String(localized: "Smart Insights", defaultValue: "Smart Insights"), systemImage: "sparkles")
                     .font(.headline).fontWeight(.semibold)
                 Spacer()
             }
@@ -1179,7 +1261,7 @@ private struct SmartInsightsCard: View {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.seal.fill")
                         .foregroundColor(.stoqlySuccess)
-                    Text("Everything looks healthy — no issues detected.")
+                    Text(String(localized: "insight.allHealthy", defaultValue: "Everything looks healthy — no issues detected."))
                         .font(.subheadline).foregroundColor(.secondary)
                 }
                 .padding(.horizontal, 16)
@@ -1222,7 +1304,7 @@ private struct SmartInsightsCard: View {
 }
 
 private struct InsightDetailView: View {
-    let title: String
+    let title: LocalizedStringKey
     let items: [InventoryItem]
     @EnvironmentObject private var currencyManager: CurrencyManager
     @Environment(\.dismiss) private var dismiss

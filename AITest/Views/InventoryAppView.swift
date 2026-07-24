@@ -428,7 +428,7 @@ struct CountView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         FilterChip(
-                            title: "All Storages",
+                            title: String(localized: "All Storages", defaultValue: "All Storages"),
                             isSelected: viewModel.selectedStorage == nil,
                             color: .stoqlyPrimary
                         ) {
@@ -452,16 +452,16 @@ struct CountView: View {
                 // Status filter chips
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        FilterChip(title: "Due", isSelected: viewModel.statusFilter == .due, color: .stoqlyPrimary) {
+                        FilterChip(title: String(localized: "Due", defaultValue: "Due"), isSelected: viewModel.statusFilter == .due, color: .stoqlyPrimary) {
                             viewModel.setStatusFilter(.due)
                         }
-                        FilterChip(title: "Uncounted", isSelected: viewModel.statusFilter == .uncounted, color: .orange) {
+                        FilterChip(title: String(localized: "Uncounted", defaultValue: "Uncounted"), isSelected: viewModel.statusFilter == .uncounted, color: .orange) {
                             viewModel.setStatusFilter(.uncounted)
                         }
-                        FilterChip(title: "Low Stock", isSelected: viewModel.statusFilter == .lowStock, color: .red) {
+                        FilterChip(title: String(localized: "Low Stock", defaultValue: "Low Stock"), isSelected: viewModel.statusFilter == .lowStock, color: .red) {
                             viewModel.setStatusFilter(.lowStock)
                         }
-                        FilterChip(title: "All", isSelected: viewModel.statusFilter == .all, color: .gray) {
+                        FilterChip(title: String(localized: "All", defaultValue: "All"), isSelected: viewModel.statusFilter == .all, color: .gray) {
                             viewModel.setStatusFilter(.all)
                         }
                     }
@@ -649,12 +649,22 @@ struct CountItemCard: View {
 
     private func lastCountedText(for item: InventoryItem) -> String {
         guard let latest = item.countHistory.sorted(by: { $0.countDate > $1.countDate }).first else {
-            return "Never counted"
+            return String(localized: "Never counted", defaultValue: "Never counted")
         }
         let days = Calendar.current.dateComponents([.day], from: latest.countDate, to: Date()).day ?? 0
-        if days == 0 { return "Counted today" }
-        if days == 1 { return "Counted yesterday" }
-        return "Counted \(days) days ago"
+        if days == 0 {
+            return String(localized: "Counted today", defaultValue: "Counted today")
+        }
+        if days == 1 {
+            return String(localized: "Counted yesterday", defaultValue: "Counted yesterday")
+        }
+        return String(
+            format: String(
+                localized: "Counted %lld days ago",
+                defaultValue: "Counted %lld days ago"
+            ),
+            days
+        )
     }
 }
 

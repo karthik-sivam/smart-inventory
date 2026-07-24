@@ -205,7 +205,11 @@ struct AuthView: View {
         .alert("Success", isPresented: $showSuccessMessage) {
             Button("OK") { }
         } message: {
-            Text(successMessage)
+            Text(
+                successMessage.isEmpty
+                    ? String(localized: "auth.success.generic", defaultValue: "Success!")
+                    : successMessage
+            )
         }
         .sheet(isPresented: $showForgotPassword) {
             ForgotPasswordView()
@@ -244,7 +248,7 @@ struct AuthView: View {
 
 struct AuthTextField: View {
     @Binding var text: String
-    let placeholder: String
+    let placeholder: LocalizedStringKey
     let icon: String
     var isSecure: Bool = false
     
@@ -350,7 +354,7 @@ struct ForgotPasswordView: View {
                 dismiss()
             }
         } message: {
-            Text("Password reset email sent! Please check your inbox.")
+            Text(String(localized: "auth.passwordResetSent", defaultValue: "Password reset email sent! Please check your inbox."))
         }
     }
     

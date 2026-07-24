@@ -134,7 +134,7 @@ struct ProfileView: View {
                                     .font(.subheadline)
                                     .fontWeight(.medium)
                                 if let last = firestoreManager.lastSyncDate {
-                                    Text("Last synced \(last, style: .relative) ago")
+                                    Text(last, style: .relative)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 } else {

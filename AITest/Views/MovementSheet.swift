@@ -73,14 +73,14 @@ struct MovementSheet: View {
             if direction == "IN" {
                 Picker("Type", selection: $movementTypeIn) {
                     ForEach(MovementTypeIn.allCases, id: \.self) { type in
-                        Text(type.rawValue).tag(type)
+                        Text(type.localizedLabel).tag(type)
                     }
                 }
                 .pickerStyle(.menu)
             } else {
                 Picker("Type", selection: $movementTypeOut) {
                     ForEach(MovementTypeOut.allCases, id: \.self) { type in
-                        Text(type.rawValue).tag(type)
+                        Text(type.localizedLabel).tag(type)
                     }
                 }
                 .pickerStyle(.menu)
@@ -119,7 +119,7 @@ struct MovementSheet: View {
         }
     }
 
-    private var priceSectionTitle: String {
+    private var priceSectionTitle: LocalizedStringKey {
         if direction == "IN" && movementTypeIn == .purchase {
             return "Purchase Price per Unit"
         }

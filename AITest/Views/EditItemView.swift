@@ -170,6 +170,7 @@ struct EditItemView: View {
                         TextField("0.00", text: $formVM.unitCost)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .accessibilityIdentifier("editItemUnitCost")
                     }
                     HStack {
                         Text("Last Purchase Price")
@@ -177,6 +178,7 @@ struct EditItemView: View {
                         TextField("0.00", text: $formVM.lastPurchasePrice)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .accessibilityIdentifier("editItemLastPurchasePrice")
                     }
                     HStack {
                         Text("Selling Price")
@@ -185,6 +187,7 @@ struct EditItemView: View {
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .accessibilityLabel("Selling price per unit")
+                            .accessibilityIdentifier("editItemSellingPrice")
                     }
                     if let sp = Double(formVM.sellingPrice), sp > 0 {
                         let cost = Double(formVM.unitCost) ?? 0
@@ -364,10 +367,10 @@ struct EditItemView: View {
         let qty = Double(formVM.currentQuantity) ?? 0
         let minQ = effectiveEditMinQuantity
         let maxQ = Double(formVM.maxQuantity) ?? 0
-        if qty <= 0 { return "Out of Stock" }
-        if minQ > 0 && qty > 0 && qty <= minQ { return "Low Stock" }
-        if maxQ > 0 && qty >= maxQ { return "Over Stock" }
-        return "In Stock"
+        if qty <= 0 { return String(localized: "Out of Stock", defaultValue: "Out of Stock") }
+        if minQ > 0 && qty > 0 && qty <= minQ { return String(localized: "Low Stock", defaultValue: "Low Stock") }
+        if maxQ > 0 && qty >= maxQ { return String(localized: "Over Stock", defaultValue: "Over Stock") }
+        return String(localized: "In Stock", defaultValue: "In Stock")
     }
 
     private var editStockStatusColor: Color {

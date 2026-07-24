@@ -38,4 +38,15 @@ enum SecretsManager {
     static var amplitudeAPIKey: String? {
         plist?["AMPLITUDE_API_KEY"] as? String
     }
+
+    /// Sarvam AI API key for cloud speech-to-text (Indian language fallback).
+    /// Add Key = SARVAM_API_KEY  Type = String  Value = <your key>  to Secrets.plist.
+    static var sarvamAPIKey: String? {
+        plist?["SARVAM_API_KEY"] as? String
+    }
+
+    static var hasSarvamKey: Bool {
+        guard let key = sarvamAPIKey, !key.isEmpty else { return false }
+        return true
+    }
 }

@@ -79,7 +79,15 @@ struct ReorderListView: View {
                             }
 
                             HStack {
-                                Text("\(sortedItems.count) item\(sortedItems.count == 1 ? "" : "s") to restock")
+                                Text(
+                                    String(
+                                        format: String(
+                                            localized: "%lld item(s) to restock",
+                                            defaultValue: "%lld item(s) to restock"
+                                        ),
+                                        sortedItems.count
+                                    )
+                                )
                                     .font(.subheadline).foregroundColor(.secondary)
                                 Spacer()
                             }
@@ -169,10 +177,28 @@ struct ReorderRowView: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("Need \(deficit.smartFormatted)\(item.uom.map { " \($0.symbol)" } ?? "")")
+                    Text(
+                        String(
+                            format: String(
+                                localized: "Need %@%@",
+                                defaultValue: "Need %@%@"
+                            ),
+                            deficit.smartFormatted,
+                            item.uom.map { " \($0.symbol)" } ?? ""
+                        )
+                    )
                         .font(.subheadline).fontWeight(.bold)
                         .foregroundColor(.primary)
-                    Text("Have: \(item.currentQuantity.smartFormatted) / Min: \(item.effectiveMinQuantity.smartFormatted)")
+                    Text(
+                        String(
+                            format: String(
+                                localized: "Have: %@ / Min: %@",
+                                defaultValue: "Have: %@ / Min: %@"
+                            ),
+                            item.currentQuantity.smartFormatted,
+                            item.effectiveMinQuantity.smartFormatted
+                        )
+                    )
                         .font(.caption2).foregroundColor(.secondary)
                 }
             }

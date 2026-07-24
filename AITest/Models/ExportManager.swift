@@ -9,6 +9,24 @@ import WebKit
 class ExportManager: ObservableObject {
     @Published var isExporting = false
     @Published var exportProgress: Double = 0.0
+
+    private final class PDFNavigationHandler: NSObject, WKNavigationDelegate {
+        var onDidFinish: ((WKWebView) -> Void)?
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                self.onDidFinish?(webView)
+            }
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            self.onDidFinish?(webView)
+        }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            self.onDidFinish?(webView)
+        }
+    }
     
     enum ExportType {
         case inventorySummary
@@ -116,10 +134,10 @@ class ExportManager: ObservableObject {
         
         // Add summary section
         csv += "\nSummary\n"
-        csv += "Total Items,\(items.count)\n"
-        csv += "Total Value,\(String(format: "%.2f", items.reduce(0) { $0 + $1.totalValue }))\n"
-        csv += "Out of Stock,\(items.filter { $0.isOutOfStock }.count)\n"
-        csv += "Low Stock,\(items.filter { $0.isLowStock }.count)\n"
+        csv += "\(escapeCSVField("Total Items")),\(escapeCSVField(String(items.count)))\n"
+        csv += "\(escapeCSVField("Total Value")),\(escapeCSVField(String(format: "%.2f", items.reduce(0) { $0 + $1.totalValue })))\n"
+        csv += "\(escapeCSVField("Out of Stock")),\(escapeCSVField(String(items.filter { $0.isOutOfStock }.count)))\n"
+        csv += "\(escapeCSVField("Low Stock")),\(escapeCSVField(String(items.filter { $0.isLowStock }.count)))\n"
         
         return csv
     }
@@ -165,7 +183,7 @@ class ExportManager: ObservableObject {
                 String(format: "%.2f", item.maxQuantity),
                 String(format: "%.2f", reorderQuantity),
                 escapeCSVField(item.uom?.symbol ?? ""),
-                priority
+                escapeCSVField(priority)
             ].joined(separator: ",")
             
             csv += row + "\n"
@@ -412,10 +430,7 @@ class ExportManager: ObservableObject {
     }
     
     private func escapeCSVField(_ field: String) -> String {
-        if field.contains(",") || field.contains("\"") || field.contains("\n") {
-            return "\"\(field.replacingOccurrences(of: "\"", with: "\"\""))\""
-        }
-        return field
+        "\"\(field.replacingOccurrences(of: "\"", with: "\"\""))\""
     }
     
     private func generateFileName(_ exportType: ExportType, format: String) -> String {
@@ -444,7 +459,8 @@ class ExportManager: ObservableObject {
         let fileURL = documentsPath.appendingPathComponent(fileName)
         
         do {
-            try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            let bom = "\u{FEFF}"
+            try (bom + content).write(to: fileURL, atomically: true, encoding: .utf8)
             return fileURL
         } catch {
             print("Error saving file: \(error)")
@@ -469,73 +485,96 @@ class ExportManager: ObservableObject {
     }
     
     private func convertHTMLToPDF(_ htmlContent: String) async -> Data? {
-        return await withCheckedContinuation { continuation in
-            DispatchQueue.main.async {
-                let webView = WKWebView()
-                webView.loadHTMLString(htmlContent, baseURL: nil)
-                
-                webView.evaluateJavaScript("document.readyState") { result, error in
-                    if error != nil {
-                        // Fallback to simple text-based PDF
-                        continuation.resume(returning: self.createSimplePDF(htmlContent))
-                        return
-                    }
-                    
-                    // Wait a bit for content to load
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        let pdfConfiguration = WKPDFConfiguration()
-                        pdfConfiguration.rect = CGRect(x: 0, y: 0, width: 612, height: 792) // US Letter size
-                        webView.createPDF(configuration: pdfConfiguration) { result in
+        await withCheckedContinuation { continuation in
+            Task { @MainActor in
+                var retainedWebView: WKWebView?
+                var retainedHandler: PDFNavigationHandler?
+
+                let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 612, height: 792))
+                let handler = PDFNavigationHandler()
+                retainedWebView = webView
+                retainedHandler = handler
+
+                var resumed = false
+                func finish(with data: Data?) {
+                    guard !resumed else { return }
+                    resumed = true
+                    retainedWebView = nil
+                    retainedHandler = nil
+                    continuation.resume(returning: data)
+                }
+
+                handler.onDidFinish = { webView in
+                    let pdfConfiguration = WKPDFConfiguration()
+                    pdfConfiguration.rect = CGRect(x: 0, y: 0, width: 612, height: 792)
+                    webView.createPDF(configuration: pdfConfiguration) { result in
+                        Task { @MainActor in
                             switch result {
                             case .success(let pdfData):
-                                continuation.resume(returning: pdfData)
+                                finish(with: pdfData)
                             case .failure(let error):
                                 print("PDF creation failed: \(error)")
-                                // Fallback to simple text-based PDF
-                                continuation.resume(returning: self.createSimplePDF(htmlContent))
+                                finish(with: self.createSimplePDF(htmlContent))
                             }
                         }
                     }
                 }
+
+                webView.navigationDelegate = handler
+                webView.loadHTMLString(htmlContent, baseURL: nil)
             }
         }
     }
-    
+
     private func createSimplePDF(_ htmlContent: String) -> Data? {
-        // Create a simple text-based PDF as fallback
+        var cleaned = htmlContent
+        cleaned = cleaned.replacingOccurrences(
+            of: "(?s)<style[^>]*>.*?</style>",
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: "(?s)<script[^>]*>.*?</script>",
+            with: "",
+            options: .regularExpression
+        )
+
         let pdfData = NSMutableData()
         UIGraphicsBeginPDFContextToData(pdfData, CGRect(x: 0, y: 0, width: 612, height: 792), nil)
-        
         let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792)
         UIGraphicsBeginPDFPage()
-        
         let context = UIGraphicsGetCurrentContext()
         context?.setFillColor(UIColor.white.cgColor)
         context?.fill(pageRect)
-        
-        // Extract text content from HTML (simple approach)
-        let textContent = htmlContent.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
-            .replacingOccurrences(of: "&nbsp;", with: " ")
-            .replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-        
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 6
-        
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 12),
-            .foregroundColor: UIColor.black,
-            .paragraphStyle: paragraphStyle
-        ]
-        
-        let attributedString = NSAttributedString(string: textContent, attributes: attributes)
+
         let textRect = CGRect(x: 50, y: 50, width: 512, height: 692)
-        
-        attributedString.draw(in: textRect)
-        
+        if let htmlData = cleaned.data(using: .utf8),
+           let attributed = try? NSAttributedString(
+               data: htmlData,
+               options: [
+                   .documentType: NSAttributedString.DocumentType.html,
+                   .characterEncoding: String.Encoding.utf8.rawValue
+               ],
+               documentAttributes: nil
+           ) {
+            attributed.draw(in: textRect)
+        } else {
+            let textContent = cleaned.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+                .replacingOccurrences(of: "&nbsp;", with: " ")
+                .replacingOccurrences(of: "&amp;", with: "&")
+                .replacingOccurrences(of: "&lt;", with: "<")
+                .replacingOccurrences(of: "&gt;", with: ">")
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.lineSpacing = 6
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 12),
+                .foregroundColor: UIColor.black,
+                .paragraphStyle: paragraphStyle
+            ]
+            NSAttributedString(string: textContent, attributes: attributes).draw(in: textRect)
+        }
+
         UIGraphicsEndPDFContext()
-        
         return pdfData as Data
     }
-} 
+}

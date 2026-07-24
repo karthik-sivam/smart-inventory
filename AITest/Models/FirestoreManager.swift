@@ -66,10 +66,17 @@ class FirestoreManager: ObservableObject {
 
         var description: String {
             switch self {
-            case .idle:           return "Not synced"
-            case .syncing:        return "Syncing…"
-            case .success:        return "Synced"
-            case .failed(let msg): return "Sync failed: \(msg)"
+            case .idle:
+                return String(localized: "Not synced", defaultValue: "Not synced")
+            case .syncing:
+                return String(localized: "Syncing…", defaultValue: "Syncing…")
+            case .success:
+                return String(localized: "Synced", defaultValue: "Synced")
+            case .failed(let msg):
+                return String(
+                    format: String(localized: "Sync failed: %@", defaultValue: "Sync failed: %@"),
+                    msg
+                )
             }
         }
 
@@ -166,6 +173,22 @@ class FirestoreManager: ObservableObject {
         ) { error in
             if let error {
                 print("[Firestore] Failed to write isPro: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Persists the device FCM token on the signed-in user document for targeted push.
+    func writeFCMToken(uid: String, token: String) {
+        db.collection("users").document(uid).setData(
+            [
+                "fcmToken": token,
+                "fcmPlatform": "ios",
+                "fcmUpdatedAt": FieldValue.serverTimestamp()
+            ],
+            merge: true
+        ) { error in
+            if let error {
+                print("[Firestore] Failed to write FCM token: \(error.localizedDescription)")
             }
         }
     }

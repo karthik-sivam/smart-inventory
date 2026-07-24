@@ -99,7 +99,16 @@ struct PaperInventoryView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "doc.viewfinder")
                             .foregroundColor(.stoqlyPrimary)
-                        Text("\(remaining) sheet scan\(remaining == 1 ? "" : "s") left this month")
+                        Text(
+                            String(
+                                format: String(
+                                    localized: "ai.paper.quotaRemaining",
+                                    defaultValue: "%1$d sheet scan%2$@ left this month"
+                                ),
+                                remaining,
+                                remaining == 1 ? "" : "s"
+                            )
+                        )
                             .font(.subheadline)
                         Spacer()
                         Button("Go Pro") { showingPaywall = true }
@@ -400,7 +409,7 @@ struct PaperInventoryView: View {
 
     private func saveAll() async {
         guard let storage = selectedStorage else {
-            errorMessage = "Please select a storage area."
+            errorMessage = String(localized: "ai.selectStorage", defaultValue: "Please select a storage area.")
             return
         }
 

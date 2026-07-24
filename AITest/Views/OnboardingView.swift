@@ -231,8 +231,8 @@ struct PageIndicator: View {
 struct OnboardingPage {
     let icon: String
     let iconColors: [Color]
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
     let accentColor: Color
 }
 

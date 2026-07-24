@@ -15,7 +15,7 @@ import SwiftUI
 // │  • PDF export                                                   │
 // │  • Push notifications (low stock alerts)                        │
 // ├─────────────────────────────────────────────────────────────────┤
-// │  PRO  $2.99/month · $22.99/year (7-day free trial)              │
+// │  PRO  $2.99/month · $22.99/year (no free trial)                 │
 // │  Everything in Free, plus:                                      │
 // │  • Unlimited storage areas                                      │
 // │  • Unlimited items per storage                                  │
@@ -254,6 +254,7 @@ class SubscriptionManager: ObservableObject {
 
         // Mirror the resolved entitlement (StoreKit and/or manual grant), not StoreKit alone.
         FirestoreManager.shared.writeProStatus(isPro)
+        FCMTopicManager.syncProTopics(isPro: isPro)
 
         if hasRemovedAds {
             AdManager.shared.disableAds()
@@ -318,6 +319,7 @@ class SubscriptionManager: ObservableObject {
             AdManager.shared.disableAds()
             // Mirror immediately — do not wait for a later refreshPurchaseStatus().
             FirestoreManager.shared.writeProStatus(isPro)
+            FCMTopicManager.syncProTopics(isPro: isPro)
         case ProductID.removeAds.rawValue:
             hasRemovedAds = true
             AdManager.shared.disableAds()
@@ -388,13 +390,17 @@ class SubscriptionManager: ObservableObject {
               let annual  = proAnnualProduct,
               monthly.price > 0 else { return "" }
         let savings = ((monthly.price * 12 - annual.price) / (monthly.price * 12)) * 100
-        return String(format: "Save %.0f%%", NSDecimalNumber(decimal: savings).doubleValue)
+        return String(
+            format: String(localized: "Save %.0f%%", defaultValue: "Save %.0f%%"),
+            NSDecimalNumber(decimal: savings).doubleValue
+        )
     }
 }
 
 // MARK: - Paywall View
 
 struct PaywallView: View {
+    /// Pre-localized feature name shown in the unlock headline (e.g. unlimited storages).
     var featureContext: String? = nil
     var source: String = "unknown"
 
@@ -406,9 +412,14 @@ struct PaywallView: View {
 
     private var paywallHeadline: String {
         if let featureContext, selectedTab == .pro {
-            return "Unlock \(featureContext)"
+            return String(
+                format: String(localized: "Unlock %@", defaultValue: "Unlock %@"),
+                featureContext
+            )
         }
-        return selectedTab == .pro ? "Upgrade to Stoqly Pro" : "Remove Ads"
+        return selectedTab == .pro
+            ? String(localized: "Upgrade to Stoqly Pro", defaultValue: "Upgrade to Stoqly Pro")
+            : String(localized: "Remove Ads", defaultValue: "Remove Ads")
     }
 
     /// Price hint shown in the header — derives from live StoreKit prices
@@ -417,15 +428,31 @@ struct PaywallView: View {
         switch selectedTab {
         case .pro:
             if let monthly = sub.proMonthlyProduct {
-                return "From \(monthly.displayPrice) / month"
+                return String(
+                    format: String(localized: "From %@ / month", defaultValue: "From %@ / month"),
+                    monthly.displayPrice
+                )
             }
-            return sub.isLoading ? "Loading pricing…" : "Monthly & annual plans available"
+            return sub.isLoading
+                ? String(localized: "Loading pricing…", defaultValue: "Loading pricing…")
+                : String(localized: "Monthly & annual plans available", defaultValue: "Monthly & annual plans available")
         case .removeAds:
             if let removeAds = sub.removeAdsProduct {
-                return "\(removeAds.displayPrice) · one-time"
+                return String(
+                    format: String(localized: "%@ · one-time", defaultValue: "%@ · one-time"),
+                    removeAds.displayPrice
+                )
             }
-            return sub.isLoading ? "Loading pricing…" : "One-time purchase"
+            return sub.isLoading
+                ? String(localized: "Loading pricing…", defaultValue: "Loading pricing…")
+                : String(localized: "One-time purchase", defaultValue: "One-time purchase")
         }
+    }
+
+    private var paywallSubtitle: String {
+        selectedTab == .pro
+            ? String(localized: "For businesses that are growing", defaultValue: "For businesses that are growing")
+            : String(localized: "Support the app · Enjoy ad-free", defaultValue: "Support the app · Enjoy ad-free")
     }
 
     var body: some View {
@@ -447,9 +474,7 @@ struct PaywallView: View {
 
                         Text(paywallHeadline)
                             .font(.title2).fontWeight(.bold)
-                        Text(selectedTab == .pro
-                             ? "For businesses that are growing"
-                             : "Support the app · Enjoy ad-free")
+                        Text(paywallSubtitle)
                             .font(.subheadline).foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
 
@@ -511,7 +536,10 @@ struct PaywallView: View {
                                 }
                             } else {
                                 if let removeAds = sub.removeAdsProduct {
-                                    ProductCard(product: removeAds, badge: "One-time purchase")
+                                    ProductCard(
+                                        product: removeAds,
+                                        badge: String(localized: "One-time purchase", defaultValue: "One-time purchase")
+                                    )
                                 }
                             }
                         }
@@ -650,7 +678,7 @@ private struct FreeIncludedBanner: View {
 // MARK: - Supporting Views
 
 private struct PaywallSectionHeader: View {
-    let title: String
+    let title: LocalizedStringKey
     var body: some View {
         Text(title)
             .font(.caption)
@@ -664,8 +692,8 @@ private struct PaywallSectionHeader: View {
 struct PaywallFeatureRow: View {
     let icon: String
     let color: Color
-    let text: String
-    var note: String? = nil
+    let text: LocalizedStringKey
+    var note: LocalizedStringKey? = nil
     var isFree: Bool = false
 
     var body: some View {
@@ -718,7 +746,13 @@ struct ProductCard: View {
             let savingPct = (Double(truncating: annualisedMonthly - product.price as NSDecimalNumber)
                             / Double(truncating: annualisedMonthly as NSDecimalNumber)) * 100
             let saving = Int(savingPct.rounded())
-            return "Billed annually · save \(saving)% vs monthly"
+            return String(
+                format: String(
+                    localized: "Billed annually · save %lld%% vs monthly",
+                    defaultValue: "Billed annually · save %lld%% vs monthly"
+                ),
+                saving
+            )
         }
         return product.description
     }
@@ -764,15 +798,15 @@ struct ProductCard: View {
                             .font(.title3).fontWeight(.bold)
 
                         if product.subscription?.subscriptionPeriod.unit == .month {
-                            Text("/ month")
+                            Text("/ month", comment: "Subscription period suffix on paywall price")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         } else if product.subscription?.subscriptionPeriod.unit == .year {
-                            Text("/ year")
+                            Text("/ year", comment: "Subscription period suffix on paywall price")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         } else {
-                            Text("one-time")
+                            Text("one-time", comment: "One-time purchase suffix on paywall price")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
@@ -821,7 +855,12 @@ struct ProLockOverlay: View {
         Button(action: onTap) {
             HStack(spacing: 6) {
                 Image(systemName: "lock.fill")
-                Text("Pro: \(featureName)")
+                Text(
+                    String(
+                        format: String(localized: "Pro: %@", defaultValue: "Pro: %@"),
+                        featureName
+                    )
+                )
             }
             .font(.caption).fontWeight(.medium)
             .foregroundColor(.white)

@@ -35,10 +35,7 @@ struct MovementsListView: View {
     }
 
     private func sectionTitle(for date: Date) -> String {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return "Today" }
-        if cal.isDateInYesterday(date) { return "Yesterday" }
-        return date.formatted(date: .abbreviated, time: .omitted)
+        AppLocaleFormatting.sectionDayTitle(for: date)
     }
 
     private func movementRow(_ movement: InventoryMovement) -> some View {
@@ -46,10 +43,28 @@ struct MovementsListView: View {
             Image(systemName: movement.isIN ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
                 .foregroundColor(movement.isIN ? .green : .red)
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(movement.movementType) · \(movement.quantity.smartFormatted)")
+                Text(
+                    String(
+                        format: String(
+                            localized: "%@ · %@",
+                            defaultValue: "%@ · %@"
+                        ),
+                        movement.localizedMovementTypeLabel,
+                        movement.quantity.smartFormatted
+                    )
+                )
                     .font(.subheadline)
                     .fontWeight(.medium)
-                Text("\(movement.itemName) · \(movement.occurredAt.formatted(date: .abbreviated, time: .shortened))")
+                Text(
+                    String(
+                        format: String(
+                            localized: "%@ · %@",
+                            defaultValue: "%@ · %@"
+                        ),
+                        movement.itemName,
+                        AppLocaleFormatting.abbreviatedDateTime(movement.occurredAt)
+                    )
+                )
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

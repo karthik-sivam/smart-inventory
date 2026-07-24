@@ -78,23 +78,35 @@ struct SmartSalesEntryView: View {
         VStack(spacing: 12) {
             modeCard(icon: "mic.fill", iconColor: .stoqlyPrimary, title: "Voice",
                      description: "Say what you sold. \"5 chips, 2 waters, 1 sandwich\". AI parses into a sale list.",
+                     accessibilityId: "voice",
                      action: { showingVoice = true })
             modeCard(icon: "camera.fill", iconColor: .stoqlyAccent, title: "Photo",
                      description: "Photograph a handwritten chit, receipt, or invoice. AI reads every line.",
+                     accessibilityId: "photo",
                      action: { showingPhoto = true })
             modeCard(icon: "text.alignleft", iconColor: .blue, title: "Text",
                      description: "Type or paste a free-form sales list. AI structures it for you.",
+                     accessibilityId: "text",
                      action: { showingText = true })
             modeCard(icon: "tablecells", iconColor: .green, title: "CSV / Excel",
                      description: "Import a spreadsheet of sales. Map columns then confirm.",
+                     accessibilityId: "csv_excel",
                      action: { showingCSV = true })
             modeCard(icon: "doc.fill", iconColor: .orange, title: "PDF",
                      description: "Upload a PDF invoice or sales report. AI extracts the sale rows.",
+                     accessibilityId: "pdf",
                      action: { showingPDF = true })
         }
     }
 
-    private func modeCard(icon: String, iconColor: Color, title: String, description: String, action: @escaping () -> Void) -> some View {
+    private func modeCard(
+        icon: String,
+        iconColor: Color,
+        title: LocalizedStringKey,
+        description: LocalizedStringKey,
+        accessibilityId: String,
+        action: @escaping () -> Void
+    ) -> some View {
         let isPro = subscriptionManager.isPro
         return Button(action: isPro ? action : { showingPaywall = true }) {
             HStack(spacing: 16) {
@@ -125,7 +137,7 @@ struct SmartSalesEntryView: View {
             .opacity(isPro ? 1.0 : 0.7)
         }
         .buttonStyle(PlainButtonStyle())
-        .accessibilityIdentifier("smartSalesMode_\(title.lowercased().replacingOccurrences(of: " ", with: "_"))")
+        .accessibilityIdentifier("smartSalesMode_\(accessibilityId)")
     }
 
     private var proUpsellBanner: some View {
