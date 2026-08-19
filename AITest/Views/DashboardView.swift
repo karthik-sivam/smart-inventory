@@ -41,6 +41,9 @@ struct DashboardView: View {
     @State private var showingReports = false
     @State private var localeChangeCurrency: Currency? = nil
     @AppStorage("stoqly_dismissedTips") private var dismissedTipsRaw = ""
+    @State private var showingFeedbackPrompt = false
+    @State private var showingDashboardFeedback = false
+    @State private var didEvaluateFeedbackPrompt = false
 
     private struct TipCard: Identifiable {
         let id: String
@@ -87,13 +90,22 @@ struct DashboardView: View {
         var localizedTitleString: String {
             switch self {
             case .today:
-                String(localized: "Today", defaultValue: "Today")
+                L("Today", "Today")
             case .thisWeek:
-                String(localized: "This Week", defaultValue: "This Week")
+                L("This Week", "This Week")
             case .lastThirtyDays:
-                String(localized: "Last 30 Days", defaultValue: "Last 30 Days")
+                L("Last 30 Days", "Last 30 Days")
             case .thisMonth:
-                String(localized: "This Month", defaultValue: "This Month")
+                L("This Month", "This Month")
+            }
+        }
+
+        var analyticsKey: String {
+            switch self {
+            case .today: "today"
+            case .thisWeek: "this_week"
+            case .lastThirtyDays: "last_30_days"
+            case .thisMonth: "this_month"
             }
         }
     }
@@ -157,6 +169,7 @@ struct DashboardView: View {
 
                 if !subscriptionManager.isPro {
                     ProUpgradeStrip {
+                        AnalyticsManager.shared.track(.upgradeCtaTapped(source: "go_pro_strip"))
                         NotificationCenter.default.post(
                             name: NSNotification.Name("stoqly.showPaywall"),
                             object: nil
@@ -241,8 +254,8 @@ struct DashboardView: View {
                                     .foregroundColor(.stoqlyWarning)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(days == 0
-                                         ? String(localized: "Your Pro access expires today")
-                                         : String(format: String(localized: "Pro access expires in %1$lld day%2$@"),
+                                         ? L("Your Pro access expires today", "Your Pro access expires today")
+                                         : String(format: L("Pro access expires in %1$lld day%2$@", "Pro access expires in %1$lld day%2$@"),
                                                   days, days == 1 ? "" : "s"))
                                         .font(.subheadline).fontWeight(.semibold)
                                     Text("Upgrade to keep all your Pro features.")
@@ -268,7 +281,10 @@ struct DashboardView: View {
                                 gradient: AppTheme.kpiGradients[0],
                                 deltaText: dashboardSalesPeriod.localizedTitleString,
                                 deltaPositive: dashboardPeriodRevenue > 0 ? true : nil,
-                                action: { showingReports = true }
+                                action: {
+                                    AnalyticsManager.shared.track(.dashboardCardTapped(card: "revenue"))
+                                    showingReports = true
+                                }
                             )
 
                             DashboardCard(
@@ -276,9 +292,12 @@ struct DashboardView: View {
                                 value: currencyManager.formatPrice(dashboardPeriodProfit),
                                 icon: "chart.line.uptrend.xyaxis",
                                 gradient: AppTheme.kpiGradients[1],
-                                deltaText: dashboardPeriodMarginText,
+                                deltaText: dashboardProfitBadgeText,
                                 deltaPositive: dashboardPeriodProfit >= 0 ? true : nil,
-                                action: { showingReports = true }
+                                action: {
+                                    AnalyticsManager.shared.track(.dashboardCardTapped(card: "gross_profit"))
+                                    showingReports = true
+                                }
                             )
 
                             DashboardCard(
@@ -286,7 +305,10 @@ struct DashboardView: View {
                                 value: "\(lowStockItems.count)",
                                 icon: "exclamationmark.triangle.fill",
                                 gradient: AppTheme.kpiGradients[2],
-                                action: { showingReorderList = true }
+                                action: {
+                                    AnalyticsManager.shared.track(.dashboardCardTapped(card: "low_stock"))
+                                    showingReorderList = true
+                                }
                             )
                             .accessibilityIdentifier("lowStockKpiCard")
 
@@ -295,7 +317,10 @@ struct DashboardView: View {
                                 value: "\(outOfStockItems.count)",
                                 icon: "xmark.circle.fill",
                                 gradient: AppTheme.kpiGradients[3],
-                                action: { showingOutOfStockItems = true }
+                                action: {
+                                    AnalyticsManager.shared.track(.dashboardCardTapped(card: "out_of_stock"))
+                                    showingOutOfStockItems = true
+                                }
                             )
 
                             DashboardCard(
@@ -303,7 +328,10 @@ struct DashboardView: View {
                                 value: "\(expiringSoonItems.count)",
                                 icon: "calendar.badge.exclamationmark",
                                 gradient: AppTheme.kpiGradients[5],
-                                action: { showingExpiringSoonItems = true }
+                                action: {
+                                    AnalyticsManager.shared.track(.dashboardCardTapped(card: "expiring_soon"))
+                                    showingExpiringSoonItems = true
+                                }
                             )
 
                             DashboardCard(
@@ -311,7 +339,10 @@ struct DashboardView: View {
                                 value: currencyManager.formatPrice(totalInventoryValue),
                                 icon: "dollarsign.circle.fill",
                                 gradient: AppTheme.kpiGradients[4],
-                                action: { showingValueByCategory = true }
+                                action: {
+                                    AnalyticsManager.shared.track(.dashboardCardTapped(card: "total_value"))
+                                    showingValueByCategory = true
+                                }
                             )
                         }
                         .padding(.horizontal)
@@ -335,6 +366,9 @@ struct DashboardView: View {
                                         .frame(width: 160)
                                         .background(Color(.systemGray6))
                                         .cornerRadius(12)
+                                        .onTapGesture {
+                                            AnalyticsManager.shared.track(.dashboardTipTapped(tip: tip.id))
+                                        }
                                     }
                                 }
                                 .padding(.horizontal)
@@ -345,7 +379,10 @@ struct DashboardView: View {
                             InventoryHealthCard(items: Array(items))
                                 .padding(.horizontal)
                                 .contentShape(Rectangle())
-                                .onTapGesture { showingHealthDetail = true }
+                                .onTapGesture {
+                                    AnalyticsManager.shared.track(.dashboardCardTapped(card: "inventory_health"))
+                                    showingHealthDetail = true
+                                }
                         }
 
                         if !priceCreepItems.isEmpty {
@@ -357,10 +394,7 @@ struct DashboardView: View {
                                         .foregroundColor(.orange)
                                     Text(
                                         String(
-                                            format: String(
-                                                localized: "dashboard.priceCreep.banner",
-                                                defaultValue: "%lld item(s) purchased above unit cost recently"
-                                            ),
+                                            format: L("dashboard.priceCreep.banner", "%lld item(s) purchased above unit cost recently"),
                                             priceCreepItems.count
                                         )
                                     )
@@ -378,6 +412,11 @@ struct DashboardView: View {
                             }
                             .buttonStyle(.plain)
                             .padding(.horizontal)
+                        }
+
+                        if showingFeedbackPrompt {
+                            feedbackPromptCard
+                                .padding(.horizontal)
                         }
 
                         if !items.isEmpty {
@@ -455,6 +494,15 @@ struct DashboardView: View {
         .onAppear {
             initializeStandardUOMs()
             AnalyticsManager.shared.track(.dashboardViewed)
+            FeedbackPromptManager.recordInstallIfNeeded()
+            if !didEvaluateFeedbackPrompt {
+                didEvaluateFeedbackPrompt = true
+                if FeedbackPromptManager.shouldShow(itemCount: items.count) {
+                    showingFeedbackPrompt = true
+                    FeedbackPromptManager.markShown()
+                    AnalyticsManager.shared.track(.feedbackPromptShown)
+                }
+            }
             if let suggested = currencyManager.checkLocaleChange() {
                 withAnimation { localeChangeCurrency = suggested }
             }
@@ -465,10 +513,26 @@ struct DashboardView: View {
                 }
             }
         }
+        #if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: FeedbackPromptManager.previewNotification)) { _ in
+            didEvaluateFeedbackPrompt = false
+            showingFeedbackPrompt = false
+            if FeedbackPromptManager.shouldShow(itemCount: items.count) {
+                showingFeedbackPrompt = true
+                FeedbackPromptManager.markShown()
+                AnalyticsManager.shared.track(.feedbackPromptShown)
+            }
+        }
+        #endif
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             if let suggested = currencyManager.checkLocaleChange() {
                 withAnimation { localeChangeCurrency = suggested }
             }
+        }
+        .sheet(isPresented: $showingDashboardFeedback) {
+            FeedbackView()
+                .environmentObject(AuthManager.shared)
+                .sheetStyle()
         }
         .sheet(isPresented: $showingProfile) {
             ProfileView()
@@ -550,6 +614,19 @@ struct DashboardView: View {
                 .environmentObject(subscriptionManager)
                 .sheetStyle()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NotificationRoute.notificationName)) { notification in
+            guard let route = notification.userInfo?["route"] as? String else { return }
+            switch route {
+            case NotificationRoute.reorder.rawValue:
+                showingReorderList = true
+            case NotificationRoute.expiry.rawValue:
+                showingExpiringSoonItems = true
+            case NotificationRoute.reports.rawValue:
+                showingReports = true
+            default:
+                break
+            }
+        }
     }
 
     private var dashboardPeriodRange: ClosedRange<Date> {
@@ -587,9 +664,56 @@ struct DashboardView: View {
         return dashboardPeriodProfit / dashboardPeriodRevenue * 100
     }
 
-    private var dashboardPeriodMarginText: String? {
-        guard let margin = dashboardPeriodMargin else { return nil }
-        return String(format: "%.0f%% margin", margin)
+    /// Always includes the selected period so Gross Profit matches Revenue at 0 (S41).
+    private var dashboardProfitBadgeText: String {
+        let period = dashboardSalesPeriod.localizedTitleString
+        if let margin = dashboardPeriodMargin {
+            return String(format: L("dashboard.marginBadge", "%1$@ · %2$.0f%% margin"), period, margin)
+        }
+        return period
+    }
+
+    private var feedbackPromptCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L("feedback.prompt.title", "Enjoying Stoqly?"))
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    Text(L("feedback.prompt.subtitle", "Tell us what you love or what we can improve."))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Button {
+                    AnalyticsManager.shared.track(.feedbackPromptDismissed)
+                    withAnimation { showingFeedbackPrompt = false }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(6)
+                }
+                .accessibilityIdentifier("feedbackPromptDismiss")
+            }
+            Button {
+                AnalyticsManager.shared.track(.feedbackPromptTapped)
+                showingDashboardFeedback = true
+            } label: {
+                Text(L("feedback.prompt.cta", "Share feedback"))
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("feedbackPromptShare")
+        }
+        .padding(16)
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(16)
+        .accessibilityIdentifier("feedbackPromptCard")
     }
 
     private var dashboardPeriodAsReportPeriod: ReportsView.ReportPeriod {
@@ -603,7 +727,7 @@ struct DashboardView: View {
 
     private var salesPerformanceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(String(localized: "Sales Performance", defaultValue: "Sales Performance"))
+            Text(L("Sales Performance", "Sales Performance"))
                 .font(.headline)
                 .fontWeight(.semibold)
 
@@ -612,6 +736,7 @@ struct DashboardView: View {
                     ForEach(DashboardSalesPeriod.allCases, id: \.self) { period in
                         Button {
                             dashboardSalesPeriod = period
+                            AnalyticsManager.shared.track(.dashboardPeriodChanged(period: period.analyticsKey))
                         } label: {
                             Text(period.localizedTitleString)
                                 .font(.caption)
@@ -636,13 +761,13 @@ struct DashboardView: View {
 
             if allSaleEvents.isEmpty {
                 VStack(spacing: 8) {
-                    Text(String(localized: "No sales recorded yet.", defaultValue: "No sales recorded yet."))
+                    Text(L("No sales recorded yet.", "No sales recorded yet."))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-                    Text(String(localized: "dashboard.salesPerformance.emptyHint", defaultValue: "Start recording sales to see your profit insights here."))
+                    Text(L("dashboard.salesPerformance.emptyHint", "Start recording sales to see your profit insights here."))
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Button(String(localized: "dashboard.recordFirstSale", defaultValue: "Record Your First Sale →")) {
+                    Button(L("dashboard.recordFirstSale", "Record Your First Sale →")) {
                         selectedTab = 1
                     }
                     .font(.caption)
@@ -652,14 +777,14 @@ struct DashboardView: View {
             } else {
                 Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 4) {
                     GridRow {
-                        Text(String(localized: "Revenue", defaultValue: "Revenue"))
+                        Text(L("Revenue", "Revenue"))
                             .font(.caption).foregroundColor(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        Text(String(localized: "Profit", defaultValue: "Profit"))
+                        Text(L("Profit", "Profit"))
                             .font(.caption).foregroundColor(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         if dashboardPeriodMargin != nil {
-                            Text(String(localized: "Margin", defaultValue: "Margin"))
+                            Text(L("Margin", "Margin"))
                                 .font(.caption).foregroundColor(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -684,6 +809,7 @@ struct DashboardView: View {
                 Divider()
 
                 Button {
+                    AnalyticsManager.shared.track(.viewFullReportTapped)
                     showingReports = true
                 } label: {
                     HStack {
@@ -825,8 +951,10 @@ struct DashboardCard: View {
                     .foregroundColor(.white.opacity(0.82))
                     .padding(.top, 2)
 
-                // Delta badge (optional)
-                if let delta = deltaText, deltaPositive != nil {
+                // Delta / period badge (optional) — show whenever text is present
+                // (do NOT gate on deltaPositive; the period label must always show,
+                // even when revenue is 0).
+                if let delta = deltaText, !delta.isEmpty {
                     Text(delta)
                         .font(.caption2)
                         .fontWeight(.semibold)
@@ -892,12 +1020,12 @@ private struct InventoryHealthCard: View {
 
     private var label: String {
         if score >= 80 {
-            return String(localized: "Good", defaultValue: "Good")
+            return L("Good", "Good")
         }
         if score >= 50 {
-            return String(localized: "Fair", defaultValue: "Fair")
+            return L("Fair", "Fair")
         }
-        return String(localized: "Needs Attention", defaultValue: "Needs Attention")
+        return L("Needs Attention", "Needs Attention")
     }
 
     private var labelColor: Color {
@@ -907,7 +1035,7 @@ private struct InventoryHealthCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(String(localized: "Inventory Health", defaultValue: "Inventory Health"))
+                Text(L("Inventory Health", "Inventory Health"))
                     .font(.headline).fontWeight(.semibold)
                 Spacer()
                 Text("\(score)")
@@ -1057,7 +1185,7 @@ private struct HealthDetailRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.name)
                     .font(.subheadline).fontWeight(.medium)
-                Text(item.storage?.name ?? String(localized: "activity.noStorage", defaultValue: "No Storage"))
+                Text(item.storage?.name ?? L("activity.noStorage", "No Storage"))
                     .font(.caption).foregroundColor(.secondary)
             }
             Spacer()
@@ -1082,6 +1210,7 @@ private struct Insight: Identifiable {
     let iconColor: Color
     let title: LocalizedStringKey
     let subtitle: String
+    let analyticsKey: String
     let relatedItems: [InventoryItem]
 }
 
@@ -1101,12 +1230,10 @@ private struct SmartInsightsCard: View {
                 iconColor: .purple,
                 title: "Missing cost prices",
                 subtitle: String(
-                    format: String(
-                        localized: "insight.missingCost.subtitle",
-                        defaultValue: "%1$lld item(s) have no cost price — profit margin tracking is incomplete"
-                    ),
+                    format: L("insight.missingCost.subtitle", "%1$lld item(s) have no cost price — profit margin tracking is incomplete"),
                     noCost.count
                 ),
+                analyticsKey: "missing_cost",
                 relatedItems: noCost
             ))
         }
@@ -1118,12 +1245,10 @@ private struct SmartInsightsCard: View {
                 iconColor: .teal,
                 title: "Missing selling prices",
                 subtitle: String(
-                    format: String(
-                        localized: "insight.missingSelling.subtitle",
-                        defaultValue: "%1$lld item(s) have no selling price — revenue tracking won't be accurate"
-                    ),
+                    format: L("insight.missingSelling.subtitle", "%1$lld item(s) have no selling price — revenue tracking won't be accurate"),
                     noSelling.count
                 ),
+                analyticsKey: "missing_selling",
                 relatedItems: noSelling
             ))
         }
@@ -1135,12 +1260,10 @@ private struct SmartInsightsCard: View {
                 iconColor: .orange,
                 title: "Low-stock alerts disabled",
                 subtitle: String(
-                    format: String(
-                        localized: "insight.noMinQty.subtitle",
-                        defaultValue: "%1$lld item(s) have no minimum quantity — you won't get restock alerts"
-                    ),
+                    format: L("insight.noMinQty.subtitle", "%1$lld item(s) have no minimum quantity — you won't get restock alerts"),
                     noMin.count
                 ),
+                analyticsKey: "low_stock_alerts_disabled",
                 relatedItems: noMin
             ))
         }
@@ -1168,13 +1291,11 @@ private struct SmartInsightsCard: View {
                 iconColor: .red,
                 title: "Running low soon",
                 subtitle: String(
-                    format: String(
-                        localized: "insight.runningLowSoon.subtitle",
-                        defaultValue: "%1$lld item(s) may run out within 7 days: %2$@"
-                    ),
+                    format: L("insight.runningLowSoon.subtitle", "%1$lld item(s) may run out within 7 days: %2$@"),
                     soonOOS.count,
                     names
                 ),
+                analyticsKey: "running_low_soon",
                 relatedItems: soonOOS.map { $0.0 }
             ))
         }
@@ -1195,12 +1316,10 @@ private struct SmartInsightsCard: View {
                 iconColor: .indigo,
                 title: "Possible dead stock",
                 subtitle: String(
-                    format: String(
-                        localized: "insight.deadStock.subtitle",
-                        defaultValue: "%1$lld item(s) with stock haven't been touched in 60+ days"
-                    ),
+                    format: L("insight.deadStock.subtitle", "%1$lld item(s) with stock haven't been touched in 60+ days"),
                     deadStock.count
                 ),
+                analyticsKey: "dead_stock",
                 relatedItems: Array(deadStock)
             ))
         }
@@ -1214,12 +1333,10 @@ private struct SmartInsightsCard: View {
                     iconColor: .orange,
                     title: "Inventory value at risk",
                     subtitle: String(
-                        format: String(
-                            localized: "insight.valueAtRisk.subtitle",
-                            defaultValue: "%1$lld low/OOS item(s) represent stock that needs restocking"
-                        ),
+                        format: L("insight.valueAtRisk.subtitle", "%1$lld low/OOS item(s) represent stock that needs restocking"),
                         atRisk.count
                     ),
+                    analyticsKey: "value_at_risk",
                     relatedItems: atRisk
                 ))
             }
@@ -1233,12 +1350,10 @@ private struct SmartInsightsCard: View {
                 iconColor: .secondary,
                 title: "Never audited",
                 subtitle: String(
-                    format: String(
-                        localized: "insight.neverAudited.subtitle",
-                        defaultValue: "%1$lld item(s) have never been counted — quantities unverified"
-                    ),
+                    format: L("insight.neverAudited.subtitle", "%1$lld item(s) have never been counted — quantities unverified"),
                     neverCounted.count
                 ),
+                analyticsKey: "never_audited",
                 relatedItems: neverCounted
             ))
         }
@@ -1249,7 +1364,7 @@ private struct SmartInsightsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Label(String(localized: "Smart Insights", defaultValue: "Smart Insights"), systemImage: "sparkles")
+                Label(L("Smart Insights", "Smart Insights"), systemImage: "sparkles")
                     .font(.headline).fontWeight(.semibold)
                 Spacer()
             }
@@ -1261,7 +1376,7 @@ private struct SmartInsightsCard: View {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.seal.fill")
                         .foregroundColor(.stoqlySuccess)
-                    Text(String(localized: "insight.allHealthy", defaultValue: "Everything looks healthy — no issues detected."))
+                    Text(L("insight.allHealthy", "Everything looks healthy — no issues detected."))
                         .font(.subheadline).foregroundColor(.secondary)
                 }
                 .padding(.horizontal, 16)
@@ -1292,6 +1407,7 @@ private struct SmartInsightsCard: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         guard !insight.relatedItems.isEmpty else { return }
+                        AnalyticsManager.shared.track(.dashboardInsightTapped(insight: insight.analyticsKey))
                         onShowItems(insight.title, Array(insight.relatedItems))
                     }
                 }

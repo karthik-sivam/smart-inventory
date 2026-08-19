@@ -15,6 +15,7 @@ import FirebaseInAppMessaging
 import GoogleSignIn
 import UserNotifications
 import FirebaseFirestore
+import FacebookCore
 
 // MARK: - Add these Firebase packages in Xcode (they're already in firebase-ios-sdk):
 //   Project → Package Dependencies → firebase-ios-sdk → already added ✓
@@ -89,6 +90,13 @@ struct SmartInventoryApp: App {
                     )
                 }
                 .onOpenURL { url in
+                    if ApplicationDelegate.shared.application(
+                        UIApplication.shared,
+                        open: url,
+                        options: [:]
+                    ) {
+                        return
+                    }
                     // Handle Google Sign-In redirect URLs
                     GIDSignIn.sharedInstance.handle(url)
                 }
@@ -104,6 +112,7 @@ struct SmartInventoryApp: App {
                     await subscriptionManager.applyManualProGrantIfNeeded()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                    MetaAppEvents.activateApp()
                     // Re-fetch manual grant + StoreKit when returning to foreground so
                     // revoked/expired manualProUntil clears Pro without requiring relaunch.
                     Task { await subscriptionManager.applyManualProGrantIfNeeded() }
@@ -141,6 +150,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // 1. Firebase — must be first
         FirebaseApp.configure()
+
+        // 2. Meta (Facebook) SDK — App Events + AEM for install campaigns
+        ApplicationDelegate.shared.application(
+            application,
+            didFinishLaunchingWithOptions: launchOptions
+        )
+        MetaAppEvents.configureAutoLogging()
 
         // Enable offline persistence so writes queue locally when offline
         // and sync automatically when connectivity is restored.
@@ -182,6 +198,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         print("🔥 Firebase configured. Crashlytics active (debug symbols uploaded on archive).")
         #endif
 
+        if Auth.auth().currentUser == nil {
+            FCMTopicManager.syncGuestTopicIfNeeded()
+        }
+
         // 4. Firestore — persistence configured immediately after FirebaseApp.configure() above.
 
         return true
@@ -193,6 +213,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         open url: URL,
         options: [UIApplication.OpenURLOptionsKey: Any] = [:]
     ) -> Bool {
+        if ApplicationDelegate.shared.application(app, open: url, options: options) {
+            return true
+        }
         return GIDSignIn.sharedInstance.handle(url)
     }
 
@@ -224,6 +247,7 @@ extension AppDelegate: MessagingDelegate {
         #endif
         Task { @MainActor in
             FCMTopicManager.syncRegistrationIfSignedIn(token: fcmToken)
+            FCMTopicManager.syncGuestTopicIfNeeded()
         }
     }
 }
@@ -266,7 +290,22 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        postAnnouncementIfNeeded(from: response.notification.request.content.userInfo)
+        let userInfo = response.notification.request.content.userInfo
+        postAnnouncementIfNeeded(from: userInfo)
+        postNotificationRouteIfNeeded(from: userInfo)
         completionHandler()
+    }
+}
+
+private extension AppDelegate {
+    nonisolated func postNotificationRouteIfNeeded(from userInfo: [AnyHashable: Any]) {
+        guard let route = userInfo["route"] as? String, !route.isEmpty else { return }
+        Task { @MainActor in
+            NotificationCenter.default.post(
+                name: NotificationRoute.notificationName,
+                object: nil,
+                userInfo: ["route": route]
+            )
+        }
     }
 }

@@ -136,13 +136,13 @@ final class InventoryItem {
 
     var stockStatus: String {
         if isOutOfStock {
-            return String(localized: "Out of Stock", defaultValue: "Out of Stock")
+            return L("Out of Stock", "Out of Stock")
         } else if isLowStock {
-            return String(localized: "Low Stock", defaultValue: "Low Stock")
+            return L("Low Stock", "Low Stock")
         } else if isOverStock {
-            return String(localized: "Over Stock", defaultValue: "Over Stock")
+            return L("Over Stock", "Over Stock")
         } else {
-            return String(localized: "In Stock", defaultValue: "In Stock")
+            return L("In Stock", "In Stock")
         }
     }
 

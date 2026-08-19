@@ -24,7 +24,7 @@ struct ActivityEventRow: View {
                 if let actor = event.performedBy, !actor.isEmpty {
                     Text(
                         String(
-                            format: String(localized: "by %@", defaultValue: "by %@"),
+                            format: L("by %@", "by %@"),
                             actor
                         )
                     )

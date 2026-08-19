@@ -155,7 +155,9 @@ SYSTEM_PROMPT = (
     "Never mix in characters from another Indic script (e.g. no Devanagari/Hindi "
     "or Bengali characters inside a Tamil/Telugu/Kannada/Malayalam translation). "
     "Every non-Latin character must belong to {lang}'s own script.\n"
-    "7. Return ONLY a JSON object mapping each id to its translation. No prose."
+    "7. OUTPUT FORMAT: return one line per input id, formatted exactly as the id, "
+    "then a single TAB character, then the translation — e.g. `0\t<translation>`. "
+    "Do NOT use JSON, do NOT wrap translations in quotes, no numbering words, no commentary."
 )
 
 API_URL = "https://api.anthropic.com/v1/messages"
@@ -212,16 +214,35 @@ def call_claude(model, system, user_content, max_tokens=4000, retries=4):
     raise RuntimeError("Claude API failed after retries")
 
 
-def parse_json_map(text):
-    """Extract a JSON object from a model response (tolerates code fences)."""
+def parse_translations(text):
+    """Parse the model's reply into {id: translation}.
+
+    Primary format is TAB-delimited lines ('<id>\\t<translation>') which cannot
+    break on quotes/commas the way JSON does. Falls back to JSON and to a
+    tolerant 'id: translation' line parse so older/looser replies still work.
+    """
     text = text.strip()
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
         text = re.sub(r"\n?```$", "", text).strip()
+
+    # 1) TAB / colon delimited lines: 0<TAB>trans   or   0: trans   or   "0": "trans"
+    out = {}
+    line_re = re.compile(r'^\s*"?(\d+)"?\s*[\t:]\s*(.*?)\s*,?\s*$')
+    for line in text.splitlines():
+        m = line_re.match(line)
+        if m:
+            val = m.group(2).strip().strip('"').strip()
+            if val:
+                out[m.group(1)] = val
+    if out:
+        return out
+
+    # 2) Fallback: strict JSON object
     start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end == -1:
-        raise ValueError("no JSON object in response")
-    return json.loads(text[start:end + 1])
+    if start != -1 and end != -1:
+        return json.loads(text[start:end + 1])
+    raise ValueError("could not parse translations from response")
 
 
 def source_text_for(key, entry):
@@ -319,10 +340,12 @@ def main():
         for i in range(0, len(gaps), args.batch_size):
             batch = gaps[i:i + args.batch_size]
             payload = {str(j): src for j, (k, src, e) in enumerate(batch)}
+            lines = "\n".join(f"{j}\t{src}" for j, (k, src, e) in enumerate(batch))
             user = ("Translate these UI strings into " + LANGUAGES[lang] +
-                    ". Return JSON {id: translation}.\n" + json.dumps(payload, ensure_ascii=False))
+                    ". Each input line is 'id<TAB>English'. Reply with one line per id as "
+                    "'id<TAB>translation' (a real tab). No JSON, no quotes.\n" + lines)
             try:
-                result = parse_json_map(call_claude(args.model, system, user))
+                result = parse_translations(call_claude(args.model, system, user))
             except Exception as ex:
                 print(f"  batch {i}: FAILED ({ex}); skipping", file=sys.stderr)
                 continue
@@ -338,6 +361,10 @@ def main():
                 entry.setdefault("localizations", {})[lang] = {
                     "stringUnit": {"state": "needs_review", "value": tr}
                 }
+                # Protect from Xcode stale-dropping: an entry we translate must be
+                # kept in the build even if the extractor can't match it to code.
+                if "extractionState" not in entry:
+                    entry["extractionState"] = "manual"
                 grand_total += 1
             print(f"  {min(i + args.batch_size, len(gaps))}/{len(gaps)}")
             # persist incrementally so a crash never loses work

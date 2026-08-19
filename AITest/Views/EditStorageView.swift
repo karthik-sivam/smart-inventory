@@ -74,7 +74,7 @@ struct EditStorageView: View {
                     }
                     
                     HStack {
-                        Text(String(localized: "Total Value", defaultValue: "Total Value"))
+                        Text(L("Total Value", "Total Value"))
                         Spacer()
                         Text(currencyManager.formatPrice(storage.totalValue))
                             .fontWeight(.medium)
@@ -89,6 +89,7 @@ struct EditStorageView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Edit Storage")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -97,7 +98,17 @@ struct EditStorageView: View {
                         dismiss()
                     }
                 }
-                
+
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
+                }
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         saveStorage()

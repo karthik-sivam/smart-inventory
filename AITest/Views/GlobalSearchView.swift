@@ -7,6 +7,7 @@ struct GlobalSearchView: View {
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
     @StateObject private var historyManager = SearchHistoryManager()
+    @State private var searchDebounceTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -18,7 +19,10 @@ struct GlobalSearchView: View {
                         .focused($isSearchFocused)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
-                        .onSubmit { historyManager.record(searchText) }
+                        .onSubmit {
+                            historyManager.record(searchText)
+                            trackSearchPerformed()
+                        }
                     if !searchText.isEmpty {
                         Button(action: { searchText = "" }) {
                             Image(systemName: "xmark.circle.fill")
@@ -36,7 +40,10 @@ struct GlobalSearchView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(historyManager.queries, id: \.self) { query in
-                                Button(action: { searchText = query }) {
+                                Button(action: {
+                                    searchText = query
+                                    trackSearchPerformed()
+                                }) {
                                     HStack(spacing: 4) {
                                         Image(systemName: "clock")
                                             .font(.caption2)
@@ -125,6 +132,24 @@ struct GlobalSearchView: View {
             }
         }
         .onAppear { isSearchFocused = true }
+        .onChange(of: searchText) { _, newValue in
+            searchDebounceTask?.cancel()
+            guard !newValue.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+            searchDebounceTask = Task {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                guard !Task.isCancelled else { return }
+                trackSearchPerformed()
+            }
+        }
+    }
+
+    private func trackSearchPerformed() {
+        let trimmed = searchText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        AnalyticsManager.shared.track(.searchPerformed(
+            scope: "global",
+            resultCount: searchResults.count
+        ))
     }
 
     private var searchResults: [InventoryItem] {

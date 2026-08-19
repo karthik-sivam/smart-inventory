@@ -131,6 +131,8 @@ final class ItemFormViewModel: ObservableObject {
     @Published var isEnriching: Bool = false
     /// Tracks which template was used to pre-fill this add-item form (if any).
     var sourceTemplateId: UUID? = nil
+    var analyticsSource: String = "fab"
+    var analyticsInputMethod: String = "manual"
 
     private var modelContext: ModelContext?
 
@@ -207,9 +209,11 @@ final class ItemFormViewModel: ObservableObject {
         !name.isEmpty && !currentQuantity.isEmpty
     }
 
-    func saveNew() {
-        guard let modelContext else { return }
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    /// Returns `false` when the free item cap blocked the insert.
+    @discardableResult
+    func saveNew() -> Bool {
+        guard let modelContext else { return false }
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
 
         if selectedUOM == nil {
             let uoms = (try? modelContext.fetch(FetchDescriptor<UOM>())) ?? []
@@ -219,7 +223,11 @@ final class ItemFormViewModel: ObservableObject {
             let storages = (try? modelContext.fetch(FetchDescriptor<Storage>())) ?? []
             selectedStorage = storages.first(where: { $0.name == "Test Warehouse" }) ?? storages.first
         }
-        guard let uom = selectedUOM, let storage = selectedStorage else { return }
+        guard let uom = selectedUOM, let storage = selectedStorage else { return false }
+
+        if SubscriptionManager.shared.freeItemCapReached(storage: storage, context: modelContext) {
+            return false
+        }
 
         let qty = Double(currentQuantity) ?? 0
         let item = InventoryItem(
@@ -258,7 +266,9 @@ final class ItemFormViewModel: ObservableObject {
         AnalyticsManager.shared.track(.itemAdded(
             category: item.category,
             hasBarcode: !item.barcode.isEmpty,
-            hasPhoto: item.photoURL != nil
+            hasPhoto: item.photoURL != nil,
+            source: analyticsSource,
+            inputMethod: analyticsInputMethod
         ))
 
         let event = ActivityEvent(
@@ -276,6 +286,7 @@ final class ItemFormViewModel: ObservableObject {
         SpotlightManager.shared.index(item)
 
         AdManager.shared.recordCompletion(event: .itemAdded)
+        return true
     }
 
     func saveEdits(to item: InventoryItem) {

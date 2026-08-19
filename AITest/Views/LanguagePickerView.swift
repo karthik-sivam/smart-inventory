@@ -3,6 +3,7 @@ import SwiftUI
 struct LanguagePickerView: View {
     @EnvironmentObject private var localizationManager: LocalizationManager
     @Environment(\.dismiss) private var dismiss
+    @State private var showRestartAlert = false
 
     var body: some View {
         NavigationStack {
@@ -14,14 +15,24 @@ struct LanguagePickerView: View {
                 }
             }
             .accessibilityIdentifier("languagePicker")
-            .navigationTitle(String(localized: "Language", defaultValue: "Language"))
+            .navigationTitle(L("Language", "Language"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel", defaultValue: "Cancel")) {
+                    Button(L("Cancel", "Cancel")) {
                         dismiss()
                     }
                 }
+            }
+            .alert(
+                L("language.restart.title", "Restart to apply"),
+                isPresented: $showRestartAlert
+            ) {
+                Button(L("OK", "OK")) {
+                    dismiss()
+                }
+            } message: {
+                Text(L("language.restart.message", "Please reopen Stoqly to finish switching the language."))
             }
         }
     }
@@ -29,8 +40,16 @@ struct LanguagePickerView: View {
     @ViewBuilder
     private func languageRow(_ option: LanguageOption) -> some View {
         Button {
+            guard !localizationManager.isSelected(option) else { return }
+            let wasRTL = localizationManager.layoutDirection == .rightToLeft
             localizationManager.setLanguage(option.code)
-            dismiss()
+            let nowRTL = localizationManager.layoutDirection == .rightToLeft
+            if wasRTL != nowRTL {
+                showRestartAlert = true
+            } else {
+                AppWindowCoordinator.reRootWindow(animated: true)
+                dismiss()
+            }
         } label: {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {

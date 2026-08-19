@@ -10,6 +10,7 @@ struct HelpCentreView: View {
     @State private var isAsking = false
     @State private var aiError: String?
     @State private var showPaywall = false
+    @State private var showFeedback = false
 
     private struct FAQItem: Identifiable {
         let id = UUID()
@@ -30,11 +31,11 @@ struct HelpCentreView: View {
     }
 
     private let suggestedQuestions: [String] = [
-        String(localized: "help.suggested.addItem", defaultValue: "How do I add a new item?"),
-        String(localized: "help.suggested.freeVsPro", defaultValue: "What is the difference between Free and Pro?"),
-        String(localized: "help.suggested.photoInventory", defaultValue: "How do Photo Inventory counts work?"),
-        String(localized: "help.suggested.lowStock", defaultValue: "How do I set a low stock alert?"),
-        String(localized: "help.suggested.teamMembers", defaultValue: "How do I add my team members?"),
+        L("help.suggested.addItem", "How do I add a new item?"),
+        L("help.suggested.freeVsPro", "What is the difference between Free and Pro?"),
+        L("help.suggested.photoInventory", "How do Photo Inventory counts work?"),
+        L("help.suggested.lowStock", "How do I set a low stock alert?"),
+        L("help.suggested.teamMembers", "How do I add my team members?"),
     ]
 
     private let allItems: [FAQItem] = [
@@ -115,12 +116,41 @@ struct HelpCentreView: View {
             Section(header: Text("Ask AI")) {
                 aiChatSection
             }
+
+            Section(header: Text(L("feedback.contact.header", "Contact"))) {
+                Button {
+                    showFeedback = true
+                } label: {
+                    Label(L("feedback.send", "Send Feedback"), systemImage: "text.bubble")
+                }
+                .accessibilityIdentifier("sendFeedbackRow")
+
+                Button {
+                    openEmailSupport()
+                } label: {
+                    Label(L("feedback.emailSupport", "Email Support"), systemImage: "envelope")
+                }
+                .accessibilityIdentifier("emailSupportRow")
+            }
         }
         .navigationTitle("Help & FAQ")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "Search help topics")
         .sheet(isPresented: $showPaywall) {
             PaywallView(source: "help_chat").sheetStyle()
+        }
+        .sheet(isPresented: $showFeedback) {
+            FeedbackView()
+                .environmentObject(AuthManager.shared)
+                .sheetStyle()
+        }
+    }
+
+    private func openEmailSupport() {
+        let subject = L("feedback.email.subject", "Stoqly Feedback")
+        let mailtoString = "mailto:\(HelpAndSupport.supportEmail)?subject=\(subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+        if let url = URL(string: mailtoString), UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
         }
     }
 
@@ -130,10 +160,7 @@ struct HelpCentreView: View {
             if !subscriptionManager.isPro {
                 Text(
                     String(
-                        format: String(
-                            localized: "help.aiQuotaRemaining",
-                            defaultValue: "%1$d free question%2$@ remaining this month"
-                        ),
+                        format: L("help.aiQuotaRemaining", "%1$d free question%2$@ remaining this month"),
                         remaining,
                         remaining == 1 ? "" : "s"
                     )
@@ -213,9 +240,11 @@ struct HelpCentreView: View {
         let trimmed = aiQuestion.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
+        AnalyticsManager.shared.track(.aiHelpQuestionAsked(question: trimmed))
+
         guard AIUsageManager.shared.canUse(.helpChat, isPro: subscriptionManager.isPro) else {
             if subscriptionManager.isPro {
-                aiError = String(localized: "help.aiUsageError", defaultValue: "Something went wrong with usage tracking. Please try again.")
+                aiError = L("help.aiUsageError", "Something went wrong with usage tracking. Please try again.")
             } else {
                 showPaywall = true
             }

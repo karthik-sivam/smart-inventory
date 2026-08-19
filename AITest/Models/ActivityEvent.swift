@@ -39,25 +39,25 @@ final class ActivityEvent {
 
     var displayDescription: String {
         let storage = storageName.isEmpty
-            ? String(localized: "activity.noStorage", defaultValue: "No Storage")
+            ? L("activity.noStorage", "No Storage")
             : storageName
         switch eventType {
         case "ItemAdded":
             return String(
-                format: String(localized: "activity.addedTo", defaultValue: "Added to %@"),
+                format: L("activity.addedTo", "Added to %@"),
                 storage
             )
         case "ItemCounted":
             if quantityBefore == nil && quantityAfter == nil {
                 return String(
-                    format: String(localized: "activity.countRecordedIn", defaultValue: "Count recorded in %@"),
+                    format: L("activity.countRecordedIn", "Count recorded in %@"),
                     storage
                 )
             }
             let before = quantityBefore.map { $0.smartFormatted } ?? "?"
             let after = quantityAfter.map { $0.smartFormatted } ?? "?"
             return String(
-                format: String(localized: "activity.countUpdated", defaultValue: "Count updated: %1$@ → %2$@"),
+                format: L("activity.countUpdated", "Count updated: %1$@ → %2$@"),
                 before,
                 after
             )
@@ -65,33 +65,33 @@ final class ActivityEvent {
             let before = quantityBefore.map { $0.smartFormatted } ?? "?"
             let after = quantityAfter.map { $0.smartFormatted } ?? "?"
             if before == after {
-                return String(localized: "activity.itemDetailsUpdated", defaultValue: "Item details updated")
+                return L("activity.itemDetailsUpdated", "Item details updated")
             }
             return String(
-                format: String(localized: "activity.quantityChanged", defaultValue: "Quantity: %1$@ -> %2$@"),
+                format: L("activity.quantityChanged", "Quantity: %1$@ -> %2$@"),
                 before,
                 after
             )
         case "ItemDeleted":
             return String(
-                format: String(localized: "activity.removedFrom", defaultValue: "Removed from %@"),
+                format: L("activity.removedFrom", "Removed from %@"),
                 storage
             )
         case "LowStockAlert":
-            return String(localized: "activity.lowStockAlert", defaultValue: "Low stock alert triggered")
+            return L("activity.lowStockAlert", "Low stock alert triggered")
         case "StorageCreated":
-            return String(localized: "activity.storageCreated", defaultValue: "Storage area created")
+            return L("activity.storageCreated", "Storage area created")
         case "SaleMade":
             if let before = quantityBefore, let after = quantityAfter {
                 let soldQty = (before - after).smartFormatted
                 return String(
-                    format: String(localized: "activity.saleRecordedQty", defaultValue: "Sale recorded: %1$@ sold from %2$@"),
+                    format: L("activity.saleRecordedQty", "Sale recorded: %1$@ sold from %2$@"),
                     soldQty,
                     storage
                 )
             }
             return String(
-                format: String(localized: "activity.saleRecordedFrom", defaultValue: "Sale recorded from %@"),
+                format: L("activity.saleRecordedFrom", "Sale recorded from %@"),
                 storage
             )
         case "MovementLogged":
@@ -99,19 +99,45 @@ final class ActivityEvent {
                 let change = after - before
                 let sign = change >= 0 ? "+" : ""
                 return String(
-                    format: String(localized: "activity.movementChange", defaultValue: "Movement: %1$@%2$@ in %3$@"),
+                    format: L("activity.movementChange", "Movement: %1$@%2$@ in %3$@"),
                     sign,
                     change.smartFormatted,
                     storage
                 )
             }
             return String(
-                format: String(localized: "activity.movementLoggedIn", defaultValue: "Movement logged in %@"),
+                format: L("activity.movementLoggedIn", "Movement logged in %@"),
                 storage
             )
         case "BulkCountImported":
             return String(
-                format: String(localized: "activity.bulkCountImported", defaultValue: "Bulk count imported in %@"),
+                format: L("activity.bulkCountImported", "Bulk count imported in %@"),
+                storage
+            )
+        case "SaleReversed":
+            if let before = quantityBefore, let after = quantityAfter {
+                return String(
+                    format: L("activity.saleReversed", "Sale reversed: %1$@ → %2$@ in %3$@"),
+                    before.smartFormatted,
+                    after.smartFormatted,
+                    storage
+                )
+            }
+            return String(
+                format: L("activity.saleReversedSimple", "Sale reversed in %@"),
+                storage
+            )
+        case "MovementReversed":
+            if let before = quantityBefore, let after = quantityAfter {
+                return String(
+                    format: L("activity.movementReversed", "Movement reversed: %1$@ → %2$@ in %3$@"),
+                    before.smartFormatted,
+                    after.smartFormatted,
+                    storage
+                )
+            }
+            return String(
+                format: L("activity.movementReversedSimple", "Movement reversed in %@"),
                 storage
             )
         default:
@@ -130,6 +156,8 @@ final class ActivityEvent {
         case "SaleMade": return "cart.fill"
         case "MovementLogged": return "arrow.up.arrow.down.circle.fill"
         case "BulkCountImported": return "list.clipboard.fill"
+        case "SaleReversed": return "arrow.uturn.backward.circle.fill"
+        case "MovementReversed": return "arrow.uturn.backward.circle.fill"
         default: return "circle.fill"
         }
     }
@@ -145,6 +173,8 @@ final class ActivityEvent {
         case "SaleMade": return "green"
         case "MovementLogged": return "blue"
         case "BulkCountImported": return "blue"
+        case "SaleReversed": return "orange"
+        case "MovementReversed": return "orange"
         default: return "gray"
         }
     }

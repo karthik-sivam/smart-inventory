@@ -1,6 +1,7 @@
 import Foundation
 import StoreKit
 import SwiftUI
+import SwiftData
 
 // MARK: - SubscriptionManager
 //
@@ -157,6 +158,7 @@ class SubscriptionManager: ObservableObject {
                 switch product.id {
                 case ProductID.removeAds.rawValue:
                     AnalyticsManager.shared.track(.removeAdsPurchased)
+                    logMetaPurchase(for: product)
                 case ProductID.proMonthly.rawValue, ProductID.proAnnual.rawValue:
                     let plan = product.id.contains("annual") ? "annual" : "monthly"
                     AnalyticsManager.shared.track(.subscriptionStarted(plan: plan))
@@ -166,6 +168,7 @@ class SubscriptionManager: ObservableObject {
                         isPro: true,
                         signupMethod: UserDefaults.standard.string(forKey: "signupMethod") ?? "unknown"
                     )
+                    logMetaPurchase(for: product)
                 default:
                     break
                 }
@@ -286,6 +289,12 @@ class SubscriptionManager: ObservableObject {
 
     // MARK: - Helpers
 
+    private func logMetaPurchase(for product: Product) {
+        let amount = NSDecimalNumber(decimal: product.price).doubleValue
+        let currency = Locale.current.currency?.identifier ?? "USD"
+        MetaAppEvents.logPurchase(amount: amount, currency: currency)
+    }
+
     nonisolated private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
         switch result {
         case .unverified: throw StoreKitError.notEntitled
@@ -343,6 +352,41 @@ class SubscriptionManager: ObservableObject {
         isPro || currentItemCount < Self.freeItemLimit
     }
 
+    /// Authoritative per-storage count (S44). Uses fetchCount so it does not lag like `storage.items`.
+    func itemCount(in storage: Storage, context: ModelContext) -> Int {
+        let sid = storage.persistentModelID
+        let descriptor = FetchDescriptor<InventoryItem>(
+            predicate: #Predicate<InventoryItem> { item in
+                item.storage?.persistentModelID == sid
+            }
+        )
+        return (try? context.fetchCount(descriptor)) ?? storage.items.count
+    }
+
+    /// Write-time cap check. True when a free user is already at or over the 50-item limit.
+    func freeItemCapReached(storage: Storage, context: ModelContext) -> Bool {
+        guard !isPro else { return false }
+        return itemCount(in: storage, context: context) >= Self.freeItemLimit
+    }
+
+    /// Slots left under the free 50-item cap. Pro returns `Int.max`.
+    func remainingFreeItemSlots(storage: Storage?, context: ModelContext) -> Int {
+        guard !isPro else { return Int.max }
+        guard let storage else { return 0 }
+        return max(0, Self.freeItemLimit - itemCount(in: storage, context: context))
+    }
+
+    /// Advances `runningCount` when a new item may be inserted. Returns false at the free cap.
+    func canInsertNewItem(runningCount: inout Int) -> Bool {
+        if isPro {
+            runningCount += 1
+            return true
+        }
+        guard runningCount < Self.freeItemLimit else { return false }
+        runningCount += 1
+        return true
+    }
+
     /// Free: last 30 days. Pro: full history + trend charts.
     var analyticsDateLimit: Date? {
         isPro ? nil : Calendar.current.date(byAdding: .day, value: -Self.freeAnalyticsDays, to: Date())
@@ -391,7 +435,7 @@ class SubscriptionManager: ObservableObject {
               monthly.price > 0 else { return "" }
         let savings = ((monthly.price * 12 - annual.price) / (monthly.price * 12)) * 100
         return String(
-            format: String(localized: "Save %.0f%%", defaultValue: "Save %.0f%%"),
+            format: L("Save %.0f%%", "Save %.0f%%"),
             NSDecimalNumber(decimal: savings).doubleValue
         )
     }
@@ -403,23 +447,25 @@ struct PaywallView: View {
     /// Pre-localized feature name shown in the unlock headline (e.g. unlimited storages).
     var featureContext: String? = nil
     var source: String = "unknown"
+    var trigger: String? = nil
 
     @StateObject private var sub = SubscriptionManager.shared
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: PaywallTab = .pro
+    @State private var didTrackShown = false
 
     enum PaywallTab { case pro, removeAds }
 
     private var paywallHeadline: String {
         if let featureContext, selectedTab == .pro {
             return String(
-                format: String(localized: "Unlock %@", defaultValue: "Unlock %@"),
+                format: L("Unlock %@", "Unlock %@"),
                 featureContext
             )
         }
         return selectedTab == .pro
-            ? String(localized: "Upgrade to Stoqly Pro", defaultValue: "Upgrade to Stoqly Pro")
-            : String(localized: "Remove Ads", defaultValue: "Remove Ads")
+            ? L("Upgrade to Stoqly Pro", "Upgrade to Stoqly Pro")
+            : L("Remove Ads", "Remove Ads")
     }
 
     /// Price hint shown in the header — derives from live StoreKit prices
@@ -429,30 +475,30 @@ struct PaywallView: View {
         case .pro:
             if let monthly = sub.proMonthlyProduct {
                 return String(
-                    format: String(localized: "From %@ / month", defaultValue: "From %@ / month"),
+                    format: L("From %@ / month", "From %@ / month"),
                     monthly.displayPrice
                 )
             }
             return sub.isLoading
-                ? String(localized: "Loading pricing…", defaultValue: "Loading pricing…")
-                : String(localized: "Monthly & annual plans available", defaultValue: "Monthly & annual plans available")
+                ? L("Loading pricing…", "Loading pricing…")
+                : L("Monthly & annual plans available", "Monthly & annual plans available")
         case .removeAds:
             if let removeAds = sub.removeAdsProduct {
                 return String(
-                    format: String(localized: "%@ · one-time", defaultValue: "%@ · one-time"),
+                    format: L("%@ · one-time", "%@ · one-time"),
                     removeAds.displayPrice
                 )
             }
             return sub.isLoading
-                ? String(localized: "Loading pricing…", defaultValue: "Loading pricing…")
-                : String(localized: "One-time purchase", defaultValue: "One-time purchase")
+                ? L("Loading pricing…", "Loading pricing…")
+                : L("One-time purchase", "One-time purchase")
         }
     }
 
     private var paywallSubtitle: String {
         selectedTab == .pro
-            ? String(localized: "For businesses that are growing", defaultValue: "For businesses that are growing")
-            : String(localized: "Support the app · Enjoy ad-free", defaultValue: "Support the app · Enjoy ad-free")
+            ? L("For businesses that are growing", "For businesses that are growing")
+            : L("Support the app · Enjoy ad-free", "Support the app · Enjoy ad-free")
     }
 
     var body: some View {
@@ -538,7 +584,7 @@ struct PaywallView: View {
                                 if let removeAds = sub.removeAdsProduct {
                                     ProductCard(
                                         product: removeAds,
-                                        badge: String(localized: "One-time purchase", defaultValue: "One-time purchase")
+                                        badge: L("One-time purchase", "One-time purchase")
                                     )
                                 }
                             }
@@ -587,7 +633,10 @@ struct PaywallView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") { dismiss() }
+                    Button("Close") {
+                        AnalyticsManager.shared.track(.paywallDismissed)
+                        dismiss()
+                    }
                 }
             }
             .onChange(of: sub.purchaseState) { _, state in
@@ -596,7 +645,9 @@ struct PaywallView: View {
         }
         .task { await sub.loadProducts() }
         .onAppear {
-            AnalyticsManager.shared.track(.paywallShown(source: source))
+            guard !didTrackShown else { return }
+            didTrackShown = true
+            AnalyticsManager.shared.track(.paywallShown(source: source, trigger: trigger))
         }
     }
 }
@@ -747,18 +798,22 @@ struct ProductCard: View {
                             / Double(truncating: annualisedMonthly as NSDecimalNumber)) * 100
             let saving = Int(savingPct.rounded())
             return String(
-                format: String(
-                    localized: "Billed annually · save %lld%% vs monthly",
-                    defaultValue: "Billed annually · save %lld%% vs monthly"
-                ),
+                format: L("Billed annually · save %lld%% vs monthly", "Billed annually · save %lld%% vs monthly"),
                 saving
             )
         }
         return product.description
     }
 
+    private var analyticsPlan: String {
+        if product.subscription?.subscriptionPeriod.unit == .month { return "monthly" }
+        if product.subscription?.subscriptionPeriod.unit == .year { return "annual" }
+        return "remove_ads"
+    }
+
     var body: some View {
         Button {
+            AnalyticsManager.shared.track(.paywallCtaTapped(plan: analyticsPlan))
             Task { await sub.purchase(product) }
         } label: {
             HStack(spacing: 16) {
@@ -857,7 +912,7 @@ struct ProLockOverlay: View {
                 Image(systemName: "lock.fill")
                 Text(
                     String(
-                        format: String(localized: "Pro: %@", defaultValue: "Pro: %@"),
+                        format: L("Pro: %@", "Pro: %@"),
                         featureName
                     )
                 )

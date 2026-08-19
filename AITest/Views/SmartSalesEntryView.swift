@@ -79,24 +79,33 @@ struct SmartSalesEntryView: View {
             modeCard(icon: "mic.fill", iconColor: .stoqlyPrimary, title: "Voice",
                      description: "Say what you sold. \"5 chips, 2 waters, 1 sandwich\". AI parses into a sale list.",
                      accessibilityId: "voice",
-                     action: { showingVoice = true })
+                     action: { openSaleMode("voice") { showingVoice = true } })
             modeCard(icon: "camera.fill", iconColor: .stoqlyAccent, title: "Photo",
                      description: "Photograph a handwritten chit, receipt, or invoice. AI reads every line.",
                      accessibilityId: "photo",
-                     action: { showingPhoto = true })
+                     action: { openSaleMode("photo") { showingPhoto = true } })
             modeCard(icon: "text.alignleft", iconColor: .blue, title: "Text",
                      description: "Type or paste a free-form sales list. AI structures it for you.",
                      accessibilityId: "text",
-                     action: { showingText = true })
+                     action: { openSaleMode("text") { showingText = true } })
             modeCard(icon: "tablecells", iconColor: .green, title: "CSV / Excel",
                      description: "Import a spreadsheet of sales. Map columns then confirm.",
                      accessibilityId: "csv_excel",
-                     action: { showingCSV = true })
+                     action: { openSaleMode("csv") { showingCSV = true } })
             modeCard(icon: "doc.fill", iconColor: .orange, title: "PDF",
                      description: "Upload a PDF invoice or sales report. AI extracts the sale rows.",
                      accessibilityId: "pdf",
-                     action: { showingPDF = true })
+                     action: { openSaleMode("pdf") { showingPDF = true } })
         }
+    }
+
+    private func openSaleMode(_ mode: String, action: () -> Void) {
+        guard subscriptionManager.isPro else {
+            showingPaywall = true
+            return
+        }
+        AnalyticsManager.shared.track(.saleEntryStarted(mode: mode))
+        action()
     }
 
     private func modeCard(

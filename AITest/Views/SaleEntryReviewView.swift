@@ -60,7 +60,7 @@ struct SaleEntryReviewView: View {
             VStack(spacing: 10) {
                 if saleTotal > 0 {
                     VStack(spacing: 4) {
-                        Text(String(localized: "sale.total.label", defaultValue: "Sale Total"))
+                        Text(L("sale.total.label", "Sale Total"))
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Text(currencyManager.formatPrice(saleTotal))
@@ -91,11 +91,21 @@ struct SaleEntryReviewView: View {
             }
             .padding(.vertical, 16)
         }
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Review Sales")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Cancel") { onCancel() }
+            }
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil, from: nil, for: nil
+                    )
+                }
             }
         }
         .sheet(isPresented: Binding(
@@ -110,10 +120,10 @@ struct SaleEntryReviewView: View {
             }
         }
         .alert(
-            String(localized: "sale.negativeStock.title", defaultValue: "Negative Stock"),
+            L("sale.negativeStock.title", "Negative Stock"),
             isPresented: $showNegativeStockAlert
         ) {
-            Button(String(localized: "OK", defaultValue: "OK"), role: .cancel) {
+            Button(L("OK", "OK"), role: .cancel) {
                 finishConfirm(count: pendingConfirmCount)
             }
         } message: {
@@ -333,7 +343,7 @@ struct SaleReviewRow: View {
                         }
                     }
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(String(localized: "sale.pricePerUnit.label", defaultValue: "Price/unit"))
+                        Text(L("sale.pricePerUnit.label", "Price/unit"))
                             .font(.caption).foregroundColor(.secondary)
                         HStack(spacing: 4) {
                             Text(currencyManager.selectedCurrency.symbol).font(.caption).foregroundColor(.secondary)
@@ -344,10 +354,7 @@ struct SaleReviewRow: View {
                                 }
                         }
                         if row.resolvedItem?.sellingPrice == 0 {
-                            Text(String(
-                                localized: "sale.noSellingPrice.warning",
-                                defaultValue: "Selling price not set. Set selling price for better profit insights."
-                            ))
+                            Text(L("sale.noSellingPrice.warning", "Selling price not set. Set selling price for better profit insights."))
                             .font(.caption2)
                             .foregroundColor(.orange)
                         }

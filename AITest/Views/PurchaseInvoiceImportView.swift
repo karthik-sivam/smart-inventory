@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import PDFKit
 import UniformTypeIdentifiers
+import SwiftData
 
 struct PurchaseInvoiceImportView: View {
     let defaultStorage: Storage?
@@ -56,6 +57,9 @@ struct PurchaseInvoiceImportView: View {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+        .onAppear {
+            AnalyticsManager.shared.track(.purchaseEntryStarted(mode: "invoice"))
         }
         .sheet(isPresented: $showingPhoto) {
             PurchaseInvoicePhotoView(
@@ -115,6 +119,7 @@ struct PurchaseInvoicePhotoView: View {
     var onCompleted: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
+    @Query(sort: \InventoryItem.name) private var allItems: [InventoryItem]
 
     @State private var capturedImage: UIImage?
     @State private var showingCamera = false
@@ -188,7 +193,10 @@ struct PurchaseInvoicePhotoView: View {
             return
         }
         do {
-            parsedRows = try await AIInventoryService.shared.parsePurchaseInvoiceImage(imageData: data)
+            parsedRows = try await AIInventoryService.shared.parsePurchaseInvoiceImage(
+                imageData: data,
+                knownItemNames: Array(allItems.prefix(50).map(\.name))
+            )
             step = 2
         } catch {
             errorMessage = error.localizedDescription
@@ -204,6 +212,7 @@ struct PurchaseInvoicePDFView: View {
     var onCompleted: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
+    @Query(sort: \InventoryItem.name) private var allItems: [InventoryItem]
 
     @State private var pdfURL: URL?
     @State private var pdfThumbnail: UIImage?
@@ -297,7 +306,10 @@ struct PurchaseInvoicePDFView: View {
                         images.append(page.thumbnail(of: CGSize(width: 1024, height: 1400), for: .mediaBox))
                     }
                 }
-                parsedRows = try await AIInventoryService.shared.parsePurchaseInvoicePDF(pages: images)
+                parsedRows = try await AIInventoryService.shared.parsePurchaseInvoicePDF(
+                    pages: images,
+                    knownItemNames: Array(allItems.prefix(50).map(\.name))
+                )
                 step = 2
             } catch {
                 errorMessage = error.localizedDescription

@@ -30,15 +30,15 @@ struct ReportsView: View {
         var localizedTitleString: String {
             switch self {
             case .today:
-                return String(localized: "Today", defaultValue: "Today")
+                return L("Today", "Today")
             case .thisWeek:
-                return String(localized: "This Week", defaultValue: "This Week")
+                return L("This Week", "This Week")
             case .thisMonth:
-                return String(localized: "This Month", defaultValue: "This Month")
+                return L("This Month", "This Month")
             case .last30Days:
-                return String(localized: "Last 30 Days", defaultValue: "Last 30 Days")
+                return L("Last 30 Days", "Last 30 Days")
             case .custom:
-                return String(localized: "Custom", defaultValue: "Custom")
+                return L("Custom", "Custom")
             }
         }
 
@@ -336,7 +336,7 @@ struct ReportsView: View {
                     Spacer()
                     Text(
                         String(
-                            format: String(localized: "reports.topItemSold", defaultValue: "%1$@ sold · %2$@"),
+                            format: L("reports.topItemSold", "%1$@ sold · %2$@"),
                             entry.qty.smartFormatted,
                             currencyManager.formatPrice(entry.revenue)
                         )
@@ -364,11 +364,11 @@ struct ReportsView: View {
                         Text(
                             avgMargin < 0
                                 ? String(
-                                    format: String(localized: "reports.margin.belowCost", defaultValue: "%@: Selling below cost"),
+                                    format: L("reports.margin.belowCost", "%@: Selling below cost"),
                                     name
                                 )
                                 : String(
-                                    format: String(localized: "reports.margin.percent", defaultValue: "%1$@: %2$@%% margin"),
+                                    format: L("reports.margin.percent", "%1$@: %2$@%% margin"),
                                     name,
                                     String(format: "%.0f", avgMargin)
                                 )
@@ -404,7 +404,7 @@ struct ReportsView: View {
 
                 Text(
                     String(
-                        format: String(localized: "reports.movements.inOut", defaultValue: "IN: %1$@  ·  OUT: %2$@"),
+                        format: L("reports.movements.inOut", "IN: %1$@  ·  OUT: %2$@"),
                         inQty.smartFormatted,
                         outQty.smartFormatted
                     )
@@ -413,7 +413,7 @@ struct ReportsView: View {
                     .foregroundColor(.secondary)
                 Text(
                     String(
-                        format: String(localized: "reports.movements.salesWaste", defaultValue: "Sales: %1$@  ·  Waste: %2$@"),
+                        format: L("reports.movements.salesWaste", "Sales: %1$@  ·  Waste: %2$@"),
                         salesOut.smartFormatted,
                         wasteOut.smartFormatted
                     )

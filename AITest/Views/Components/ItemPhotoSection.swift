@@ -11,6 +11,7 @@ struct ItemPhotoSection: View {
     @State private var pickerItem: PhotosPickerItem? = nil
     @State private var thumbnailImage: Image? = nil
     @State private var showingPaywall = false
+    @State private var showProHint = false
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
 
     var body: some View {
@@ -19,7 +20,31 @@ struct ItemPhotoSection: View {
                 proPhotoRow
             } else {
                 freePhotoRow
+                if showProHint {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Add a photo so your team can identify stock at a glance. Item photos are a Pro feature.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button {
+                            AnalyticsManager.shared.track(.upgradeCtaTapped(source: "item_photo"))
+                            showingPaywall = true
+                        } label: {
+                            Text("Upgrade to Pro")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("itemPhotoUpgradeButton")
+                    }
+                    .padding(.vertical, 4)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
+        }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView(source: "item_photo", trigger: "item_photo").sheetStyle()
         }
     }
 
@@ -82,7 +107,10 @@ struct ItemPhotoSection: View {
 
     @ViewBuilder
     private var freePhotoRow: some View {
-        Button(action: { showingPaywall = true }) {
+        Button(action: {
+            AnalyticsManager.shared.track(.proLockTapped(feature: "item_photo"))
+            withAnimation(.easeInOut(duration: 0.2)) { showProHint.toggle() }
+        }) {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
@@ -114,7 +142,6 @@ struct ItemPhotoSection: View {
             }
         }
         .buttonStyle(.plain)
-        .sheet(isPresented: $showingPaywall) { PaywallView(source: "pro_feature").sheetStyle() }
     }
 
     private var hasPhoto: Bool {

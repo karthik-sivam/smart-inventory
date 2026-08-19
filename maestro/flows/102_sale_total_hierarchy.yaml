@@ -1,0 +1,25 @@
+# Flow 102 — Quick Sale shows Price/unit caption and prominent Sale Total
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: seed_sale_test_item.yaml
+- tapOn: "Sales"
+- tapOn:
+    id: "salesAddButton"
+    optional: true
+- tapOn:
+    id: "salesEmptyRecordButton"
+    optional: true
+- tapOn: "Record a Sale"
+    optional: true
+- tapOn: "Sale Test Item"
+    optional: true
+- assertVisible: "Record Sale"
+- assertVisible: "PRICE/UNIT"
+    optional: true
+- assertVisible: "Price/unit"
+    optional: true
+- assertVisible: "Sale Total"
+- assertVisible:
+    id: "quickSaleSaleTotal"
+- tapOn: "Cancel"

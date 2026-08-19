@@ -16,6 +16,12 @@ struct ParsedInventoryItem: Identifiable {
     var confidence: Double         // 0.0–1.0 from AI
     var fillPercent: Double?       // liquid fill level 0–100
     var remainingVolume: String?   // e.g. "~325ml"
+    var unitCost: Double?
+    var sellingPrice: Double?
+    var expiryDate: Date?
+    var sku: String?
+    var barcode: String?
+    var minQuantity: Double?
 }
 
 // MARK: - AIInventoryError
@@ -58,6 +64,42 @@ final class AIInventoryService {
     private let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     private let model    = "claude-haiku-4-5-20251001"
 
+    private static let optionalItemFieldsPrompt = """
+    Optional fields — include ONLY if clearly stated; otherwise omit or set null (do NOT guess):
+    - "unitCost", "sellingPrice", "minQuantity": numbers
+    - "expiryDate": ISO date string YYYY-MM-DD when a clear expiry is mentioned
+    - "sku", "barcode": strings
+    - "notes": extra detail not captured elsewhere
+    """
+
+    private static let machineFieldsEnglishRule = """
+    Keep "unit", "quantity", "category", "fillPercent", "remainingVolume" and all numeric/machine fields in standard ENGLISH/numeric form (pcs, kg, g, L, mL, btl, can). Only the "name" field follows the user's spoken/written language.
+    """
+
+    private static func appLanguageNameRule(for lang: String) -> String {
+        """
+        LANGUAGE: The app is set to language code '\(lang)'. This affects ONLY the "name" field: for GENERIC/unbranded items, write the name in that language's native script; keep brand names and on-label text EXACTLY as printed/written. \(machineFieldsEnglishRule)
+        """
+    }
+
+    private static func todayISO() -> String {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.timeZone = .current
+        df.dateFormat = "yyyy-MM-dd"
+        return df.string(from: Date())
+    }
+
+    private static var expiryDateAnchorPrompt: String {
+        """
+        Today's date is \(todayISO()) (the device's local date).
+        Expiry rules:
+        - Resolve relative expiry expressions ("in 5 days", "expires next week", "end of month", "in 2 months") to an absolute calendar date in YYYY-MM-DD, computed from today's date above.
+        - A future expiry MUST be a date AFTER today. Never output a past date unless the user explicitly states the item is already expired.
+        - If no expiry is mentioned, return null. Do not invent one.
+        """
+    }
+
     // MARK: - Voice transcript → items
 
     /// Takes the raw text from SFSpeechRecognizer and returns a list of items
@@ -75,7 +117,9 @@ final class AIInventoryService {
 
         let quantityHints = Self.quantityExpressionHints(for: appLanguageCode)
 
-        let prompt = """
+        let promptBody = """
+        \(Self.expiryDateAnchorPrompt)
+
         \(contextPrefix)You are an inventory assistant. The user has dictated an inventory count verbally.
 
         Transcript: "\(transcript)"
@@ -89,20 +133,36 @@ final class AIInventoryService {
             "quantity": 5.0,
             "unit": "kg",
             "category": "Food & Beverage",
-            "confidence": 0.95
+            "confidence": 0.95,
+            "unitCost": 20.0,
+            "sellingPrice": 30.0,
+            "expiryDate": "2026-09-01",
+            "sku": null,
+            "barcode": null,
+            "minQuantity": null,
+            "notes": null
           }
         ]
 
         Rules:
-        - "name" must be a clean product name (e.g. "Flour", not "5 kg of flour")
+        - "name" must be a clean product name (strip quantities/units/filler, e.g. "Flour", not "5 kg of flour")
+        - KEEP "name" in the SAME language and script the user spoke it in. Do NOT translate or transliterate the product name into English — if the user said a Tamil name, return it in Tamil script; Hindi → Devanagari, etc. The product name is the user's data, not something to localise.
+        - EXCEPTION: if a spoken item clearly matches one already in the user's inventory list above, return that existing item's EXACT stored name (even if it's in another language) so it updates that item instead of creating a duplicate.
         - "quantity" is a number, null if not mentioned
         - "unit" use standard abbreviations: pcs, kg, g, L, mL, m, cm. null if unclear
         - "category" must be one of: Food & Beverage, Cleaning & Hygiene, Packaging & Supplies, Electronics & Equipment, Clothing & Apparel, Health & Beauty, Pharmaceutical, Raw Materials, Spare Parts, Stationery & Office, Uncategorised
         - "confidence" 0.0-1.0 how confident you are this is a real inventory item
         - Skip filler words and conversation
         - Return [] if nothing recognisable was said
+        \(Self.optionalItemFieldsPrompt)
+        \(Self.machineFieldsEnglishRule)
         \(quantityHints)
         """
+
+        var prompt = promptBody
+        if let lang = appLanguageCode, lang != "en", !lang.isEmpty {
+            prompt += "\n\n\(Self.appLanguageNameRule(for: lang))"
+        }
 
         return try await callClaude(textPrompt: prompt, imageData: nil)
     }
@@ -140,15 +200,17 @@ final class AIInventoryService {
 
     /// Takes a photo of a product or shelf and returns the identified product
     /// WITH a counted quantity based on what is visible in the frame.
-    func identifyProduct(imageData: Data, fluidMode: Bool = false) async throws -> [ParsedInventoryItem] {
+    func identifyProduct(imageData: Data, fluidMode: Bool = false, appLanguageCode: String? = nil) async throws -> [ParsedInventoryItem] {
         var prompt = """
+        \(Self.expiryDateAnchorPrompt)
+
         You are an inventory counting assistant. Analyse the image and identify ALL distinct products visible.
         For each product:
         - Count the number of physically separate units visible (e.g. 6 cans = quantity 6, not 1).
         - If units are partially hidden or stacked, estimate the total visible count.
         - If the product is a liquid/fluid in a container AND the fill level is visible, estimate the fill percentage (e.g. 65%) and, if the label shows total volume (e.g. 500ml), calculate the remaining volume (e.g. ~325ml).
         - If this is a single liquid container and fluid mode is active, prioritise fill-level estimation over unit count.
-        Return JSON array: [{"name", "quantity", "unit", "fillPercent" (if liquid), "remainingVolume" (if calculable), "category", "confidence"}]
+        Return JSON array: [{"name", "quantity", "unit", "fillPercent" (if liquid), "remainingVolume" (if calculable), "category", "confidence", "unitCost", "sellingPrice", "expiryDate", "sku", "barcode", "minQuantity", "notes"}]
 
         Counting rules:
         - Count every individual unit you can see (bottles, boxes, cans, bags, etc.)
@@ -160,7 +222,7 @@ final class AIInventoryService {
         - Never leave quantity null — always give your best estimate.
 
         Rules:
-        - "name": brand + type where visible (e.g. "Heinz Tomato Ketchup 500ml")
+        - "name": for BRANDED/packaged goods, use the name printed on the label/packaging EXACTLY as shown (e.g. "Heinz Tomato Ketchup 500ml") — never translate a brand or on-label text
         - "quantity": counted or estimated number of units — never null
         - "unit": infer from product type (bottles/cans/boxes → "pcs", loose flour → "kg", liquids → "L" or "mL")
         - "fillPercent": 0–100 for liquids when fill level is visible, null otherwise
@@ -170,7 +232,13 @@ final class AIInventoryService {
           Raw Materials, Spare Parts, Stationery & Office, Uncategorised
         - "confidence": 0.0–1.0 — lower when counting is uncertain due to occlusion or blur
         - Return [] only if the image is completely unidentifiable
+        \(Self.optionalItemFieldsPrompt)
+        \(Self.machineFieldsEnglishRule)
         """
+
+        if let lang = appLanguageCode, lang != "en", !lang.isEmpty {
+            prompt += "\n\n\(Self.appLanguageNameRule(for: lang))"
+        }
 
         if fluidMode {
             prompt += "\n\nFLUID MODE: The captured image contains a liquid container. Prioritise estimating fill percentage and remaining volume over counting units."
@@ -274,9 +342,20 @@ final class AIInventoryService {
 
     /// Takes a photo of a handwritten or printed inventory sheet and extracts
     /// every row as a structured item.
-    func parseInventorySheet(imageData: Data) async throws -> [ParsedInventoryItem] {
-        let prompt = """
-        You are an inventory assistant. This is a photo of a physical inventory sheet (handwritten or printed).
+    func parseInventorySheet(
+        imageData: Data,
+        inventoryHints: [String] = [],
+        appLanguageCode: String? = nil
+    ) async throws -> [ParsedInventoryItem] {
+        let inventoryHint = inventoryHints.prefix(50).joined(separator: ", ")
+        let contextPrefix = inventoryHint.isEmpty
+            ? ""
+            : "The user's inventory includes: \(inventoryHint). If a row clearly matches one of these, return that existing item's EXACT stored name.\n\n"
+
+        var prompt = """
+        \(Self.expiryDateAnchorPrompt)
+
+        \(contextPrefix)You are an inventory assistant. This is a photo of a physical inventory sheet (handwritten or printed).
 
         Extract every row you can read. Return a JSON array only, no explanation.
 
@@ -287,13 +366,22 @@ final class AIInventoryService {
             "quantity": 4.0,
             "unit": "btl",
             "category": "Food & Beverage",
-            "confidence": 0.90
+            "confidence": 0.90,
+            "unitCost": null,
+            "sellingPrice": null,
+            "expiryDate": null,
+            "sku": null,
+            "barcode": null,
+            "minQuantity": null,
+            "notes": null
           }
         ]
 
         Rules:
         - Extract ALL rows visible in the sheet, even partially legible ones
-        - "name": the product name as written — clean up obvious abbreviations (e.g. "OlvOil" → "Olive Oil", "Chckn stk" → "Chicken Stock")
+        - "name": for PRINTED or branded names, keep the text EXACTLY as written on the sheet — do NOT translate brands or label text
+        - "name": for handwritten generic items with no brand, keep the name in the language/script it was written in; do NOT translate to English
+        - EXCEPTION: if a row clearly matches one already in the user's inventory list above, return that existing item's EXACT stored name (even if written in another language) so it updates that item instead of creating a duplicate
         - "quantity": the number written next to the item, null if missing or illegible
         - "unit": READ the unit directly from the sheet's unit column when one is present.
           If the sheet has no unit column, INFER the unit from the item name:
@@ -310,7 +398,13 @@ final class AIInventoryService {
         - "confidence": lower (0.5–0.7) for hard-to-read handwriting or unclear items
         - Include all rows — the user will review and remove incorrect ones
         - Return [] only if the image contains no inventory data at all
+        \(Self.optionalItemFieldsPrompt)
+        \(Self.machineFieldsEnglishRule)
         """
+
+        if let lang = appLanguageCode, lang != "en", !lang.isEmpty {
+            prompt += "\n\n\(Self.appLanguageNameRule(for: lang))"
+        }
 
         return try await callClaude(textPrompt: prompt, imageData: imageData)
     }
@@ -421,9 +515,40 @@ final class AIInventoryService {
                 notes: dict["notes"] as? String,
                 confidence: confidence,
                 fillPercent: fillPercent,
-                remainingVolume: remainingVolume
+                remainingVolume: remainingVolume,
+                unitCost: Self.parseDouble(dict["unitCost"]),
+                sellingPrice: Self.parseDouble(dict["sellingPrice"]),
+                expiryDate: Self.parseExpiryDate(dict["expiryDate"]),
+                sku: dict["sku"] as? String,
+                barcode: dict["barcode"] as? String,
+                minQuantity: Self.parseDouble(dict["minQuantity"])
             )
         }
+    }
+
+    private static func parseDouble(_ value: Any?) -> Double? {
+        if let d = value as? Double { return d }
+        if let i = value as? Int { return Double(i) }
+        return nil
+    }
+
+    private static func parseExpiryDate(_ value: Any?) -> Date? {
+        guard let raw = value as? String else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withFullDate]
+        if let date = iso.date(from: trimmed) { return date }
+
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.timeZone = TimeZone(secondsFromGMT: 0)
+        for format in ["yyyy-MM-dd", "yyyy/MM/dd", "dd-MM-yyyy", "dd/MM/yyyy"] {
+            df.dateFormat = format
+            if let date = df.date(from: trimmed) { return date }
+        }
+        return nil
     }
 
     // MARK: - Smart Sales Entry
@@ -432,6 +557,11 @@ final class AIInventoryService {
     You are a sales log parser for an inventory management app. Extract sale items from the input. \
     Return ONLY a valid JSON array. Each object: {"itemName": string, "quantitySold": number, \
     "pricePerUnit": number (0 if unknown), "notes": string}. No markdown, no explanation — just the JSON array.
+
+    Item-name rules:
+    - KEEP "itemName" in the SAME language/script the user spoke or wrote it — do NOT translate product names into English.
+    - If an inventory list is provided and the item clearly matches one, use that inventory item's EXACT stored name.
+    - Only use the spoken/written name for items that do not match the inventory list.
     """
 
     private static let purchaseSystemPrompt = """
@@ -439,6 +569,11 @@ final class AIInventoryService {
     and unit cost/price. Return ONLY a valid JSON array. Each object: {"itemName": string, \
     "quantityReceived": number, "costPerUnit": number (0 if unknown), "notes": string}. \
     No markdown, no explanation — just the JSON array.
+
+    Item-name rules:
+    - KEEP "itemName" as printed/written on the invoice — do NOT translate product names into English.
+    - If an inventory list is provided and the line clearly matches one, use that inventory item's EXACT stored name.
+    - Keep brand names and printed label text EXACTLY as shown on the invoice.
     """
 
     func parseSalesTranscript(transcript: String, knownItemNames: [String] = []) async throws -> [ParsedSaleRow] {
@@ -484,30 +619,35 @@ final class AIInventoryService {
         guard !knownItemNames.isEmpty else { return "" }
         return """
         Inventory items available: \(knownItemNames.joined(separator: ", ")).
-        Use the EXACT inventory name (case-sensitive) when the item mentioned matches one of these. Only fall back to the spoken/written name if no inventory item matches.
+        Use the EXACT inventory name when the item mentioned or shown clearly matches one of these (even if spoken/written in another language).
+        Only use the spoken/written name for NEW items that do not match the inventory list.
+        Do NOT translate product names into English — keep the original language unless returning an exact inventory match.
 
         """
     }
 
-    func parsePurchaseInvoiceImage(imageData: Data) async throws -> [ParsedPurchaseRow] {
+    func parsePurchaseInvoiceImage(imageData: Data, knownItemNames: [String] = []) async throws -> [ParsedPurchaseRow] {
         let prompt = """
-        Extract all purchase line items from this supplier invoice image: item name, quantity received, unit cost.
-        If cost not visible, use 0.
+        \(Self.inventoryContext(for: knownItemNames))Extract all purchase line items from this supplier invoice image: item name, quantity received, unit cost.
+        Keep each item name as printed on the invoice. If price not visible, use 0.
         """
         return try await callClaudeForPurchase(textPrompt: prompt, imageDataList: [imageData])
     }
 
-    func parsePurchaseInvoicePDF(pages: [UIImage]) async throws -> [ParsedPurchaseRow] {
+    func parsePurchaseInvoicePDF(pages: [UIImage], knownItemNames: [String] = []) async throws -> [ParsedPurchaseRow] {
         let imageDataList = pages.compactMap { $0.jpegData(compressionQuality: 0.85) }
         guard !imageDataList.isEmpty else { throw AIInventoryError.noItemsFound }
-        let prompt = "Extract all purchase line items from these invoice PDF pages."
+        let prompt = """
+        \(Self.inventoryContext(for: knownItemNames))Extract all purchase line items from these invoice PDF pages.
+        Keep each item name as printed on the invoice. If cost not visible, use 0.
+        """
         return try await callClaudeForPurchase(textPrompt: prompt, imageDataList: imageDataList)
     }
 
-    func parsePurchaseInvoiceCSV(text: String) async throws -> [ParsedPurchaseRow] {
+    func parsePurchaseInvoiceCSV(text: String, knownItemNames: [String] = []) async throws -> [ParsedPurchaseRow] {
         let prompt = """
-        Parse this supplier delivery note / invoice spreadsheet text. Extract item name, quantity received, unit cost.
-        If cost not visible, use 0.
+        \(Self.inventoryContext(for: knownItemNames))Parse this supplier delivery note / invoice spreadsheet text. Extract item name, quantity received, unit cost.
+        Keep each item name as written in the source. If cost not visible, use 0.
 
         \(text)
         """

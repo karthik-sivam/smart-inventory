@@ -33,6 +33,9 @@ struct SmartCountView: View {
     @State private var showingCSV   = false
     @State private var showingPaywall = false
     @AppStorage("stoqly_hasSeenSmartCountTip") private var hasSeenTip = false
+    @State private var lastSelectedMode: String?
+    @State private var didCompleteSmartCount = false
+    @State private var pendingCompletionCount: Int? = nil
 
     private var isStorageSelected: Bool {
         selectedStorage != nil && !storages.isEmpty
@@ -119,6 +122,7 @@ struct SmartCountView: View {
                         description: "Say item names and quantities naturally. \"5 kg of flour, 3 bottles of olive oil…\"",
                         featureType: .voice,
                         action: {
+                            lastSelectedMode = "voice"
                             AnalyticsManager.shared.track(.smartCountModeSelected(mode: "voice"))
                             showingVoice = true
                         }
@@ -131,6 +135,7 @@ struct SmartCountView: View {
                         description: "Point your camera at any product. AI identifies it and lets you log the count.",
                         featureType: .image,
                         action: {
+                            lastSelectedMode = "photo"
                             AnalyticsManager.shared.track(.smartCountModeSelected(mode: "photo"))
                             showingImage = true
                         }
@@ -143,6 +148,7 @@ struct SmartCountView: View {
                         description: "Photograph a handwritten or printed inventory list. AI extracts all rows for you to review.",
                         featureType: .paper,
                         action: {
+                            lastSelectedMode = "sheet"
                             AnalyticsManager.shared.track(.smartCountModeSelected(mode: "sheet"))
                             showingPaper = true
                         }
@@ -155,6 +161,7 @@ struct SmartCountView: View {
                         description: "Upload a spreadsheet with item names and quantities. AI maps columns — you review before saving.",
                         featureType: .paper,
                         action: {
+                            lastSelectedMode = "csv"
                             AnalyticsManager.shared.track(.smartCountModeSelected(mode: "csv"))
                             showingCSV = true
                         }
@@ -191,7 +198,12 @@ struct SmartCountView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button("Done") {
+                        if !didCompleteSmartCount {
+                            AnalyticsManager.shared.track(.smartCountCancelled(mode: lastSelectedMode))
+                        }
+                        dismiss()
+                    }
                 }
             }
             .onAppear {
@@ -201,38 +213,42 @@ struct SmartCountView: View {
                 AnalyticsManager.shared.track(.smartCountOpened)
             }
         }
-        .sheet(isPresented: $showingVoice) {
+        .sheet(isPresented: $showingVoice, onDismiss: { finishSmartCountIfNeeded() }) {
             VoiceInventoryView(
                 preselectedStorage: selectedStorage,
                 onComplete: { count in
-                    onComplete?(count)
+                    didCompleteSmartCount = true
+                    pendingCompletionCount = count
                 }
             )
             .sheetStyle()
         }
-        .sheet(isPresented: $showingImage) {
+        .sheet(isPresented: $showingImage, onDismiss: { finishSmartCountIfNeeded() }) {
             ImageInventoryView(
                 preselectedStorage: selectedStorage,
                 onComplete: { count in
-                    onComplete?(count)
+                    didCompleteSmartCount = true
+                    pendingCompletionCount = count
                 }
             )
             .sheetStyle()
         }
-        .sheet(isPresented: $showingPaper) {
+        .sheet(isPresented: $showingPaper, onDismiss: { finishSmartCountIfNeeded() }) {
             PaperInventoryView(
                 preselectedStorage: selectedStorage,
                 onComplete: { count in
-                    onComplete?(count)
+                    didCompleteSmartCount = true
+                    pendingCompletionCount = count
                 }
             )
             .sheetStyle()
         }
-        .sheet(isPresented: $showingCSV) {
+        .sheet(isPresented: $showingCSV, onDismiss: { finishSmartCountIfNeeded() }) {
             SmartCountCSVView(
                 storage: selectedStorage,
                 onComplete: { count in
-                    onComplete?(count)
+                    didCompleteSmartCount = true
+                    pendingCompletionCount = count
                 }
             )
             .sheetStyle()
@@ -240,6 +256,13 @@ struct SmartCountView: View {
         .sheet(isPresented: $showingPaywall) {
             PaywallView(source: "ai_limit").sheetStyle()
         }
+    }
+
+    private func finishSmartCountIfNeeded() {
+        guard let count = pendingCompletionCount else { return }
+        pendingCompletionCount = nil
+        onComplete?(count)
+        dismiss()
     }
 
     // MARK: - Mode card
@@ -257,7 +280,15 @@ struct SmartCountView: View {
         let canUse = usageManager.canUse(featureType, isPro: isPro)
         let isEnabled = isStorageSelected && canUse
 
-        return Button(action: action) {
+        return Button(action: {
+            guard isStorageSelected else { return }
+            if !canUse && !isPro {
+                AnalyticsManager.shared.track(.proLockTapped(feature: "smart_count_ai"))
+                showingPaywall = true
+                return
+            }
+            action()
+        }) {
             HStack(spacing: 16) {
                 // Icon bubble
                 ZStack {
@@ -287,16 +318,10 @@ struct SmartCountView: View {
                             Text(
                                 canUse
                                     ? String(
-                                        format: String(
-                                            localized: "%lld use(s) remaining",
-                                            defaultValue: "%lld use(s) remaining"
-                                        ),
+                                        format: L("%lld use(s) remaining", "%lld use(s) remaining"),
                                         remaining
                                     )
-                                    : String(
-                                        localized: "Limit reached — upgrade to Pro",
-                                        defaultValue: "Limit reached — upgrade to Pro"
-                                    )
+                                    : L("Limit reached — upgrade to Pro", "Limit reached — upgrade to Pro")
                             )
                                 .font(.caption2)
                                 .foregroundColor(canUse ? .stoqlySuccess : .stoqlyDanger)
@@ -317,7 +342,7 @@ struct SmartCountView: View {
             .opacity(isEnabled ? 1 : 0.55)
         }
         .buttonStyle(PlainButtonStyle())
-        .disabled(!isEnabled)
+        .disabled(!isStorageSelected)
     }
 }
 
@@ -712,7 +737,7 @@ struct SmartCountCSVView: View {
         }
 
         modelContext.safeSave(context: "SmartCountCSVImport")
-        AnalyticsManager.shared.track(.smartCountCompleted(mode: "csv", itemCount: savedCount))
+        AnalyticsManager.shared.track(.smartCountCompleted(mode: "csv", itemCount: savedCount, capturedExtraFields: nil))
 
         isSaving = false
         onComplete?(savedCount)

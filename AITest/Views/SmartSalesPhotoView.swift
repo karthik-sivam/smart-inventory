@@ -112,7 +112,7 @@ struct SmartSalesPhotoView: View {
         step = .analyzing
         capturedImage = image
         guard let data = image.jpegData(compressionQuality: 0.85) else {
-            errorMessage = String(localized: "ai.image.processFailed", defaultValue: "Could not process image.")
+            errorMessage = L("ai.image.processFailed", "Could not process image.")
             step = .capture
             return
         }

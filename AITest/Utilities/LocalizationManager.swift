@@ -57,6 +57,7 @@ final class LocalizationManager: ObservableObject {
 
     private static let overrideKey = "appLanguageOverride"
     private static let appleLanguagesKey = "AppleLanguages"
+    static let hasChosenLanguageKey = "hasChosenLanguage"
 
     @AppStorage(overrideKey) private var storedCode: String = ""
     @Published var refreshID = UUID()
@@ -74,6 +75,7 @@ final class LocalizationManager: ObservableObject {
     }
 
     func setLanguage(_ code: String?) {
+        let previous = currentCode
         if let code, !code.isEmpty {
             storedCode = code
             UserDefaults.standard.set([code], forKey: Self.appleLanguagesKey)
@@ -83,8 +85,13 @@ final class LocalizationManager: ObservableObject {
             UserDefaults.standard.removeObject(forKey: Self.appleLanguagesKey)
             Bundle.setLanguage(nil)
         }
+        UserDefaults.standard.synchronize()
         refreshID = UUID()
-        AppWindowCoordinator.reRootWindow()
+
+        let newLanguage = code ?? Locale.current.language.languageCode?.identifier ?? "system"
+        if previous != currentCode {
+            AnalyticsManager.shared.track(.languageChanged(toLanguage: newLanguage))
+        }
     }
 
     func effectiveLocale() -> Locale {
@@ -105,6 +112,14 @@ final class LocalizationManager: ObservableObject {
 
     var systemDefaultOption: LanguageOption { catalog.systemDefault }
     var languageOptions: [LanguageOption] { catalog.languages }
+
+    var currentBundle: Bundle {
+        guard let code = currentCode,
+              let bundle = Bundle.resolvedLprojBundle(for: code) else {
+            return .main
+        }
+        return bundle
+    }
 
     func isSelected(_ option: LanguageOption) -> Bool {
         if option.code == nil {

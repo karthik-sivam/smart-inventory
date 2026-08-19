@@ -116,6 +116,8 @@ struct AIHelpChatView: View {
         let trimmed = aiQuestion.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
+        AnalyticsManager.shared.track(.aiHelpQuestionAsked(question: trimmed))
+
         guard AIUsageManager.shared.canUse(.helpChat, isPro: subscriptionManager.isPro) else {
             showPaywall = true
             return

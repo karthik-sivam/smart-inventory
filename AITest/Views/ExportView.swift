@@ -166,8 +166,8 @@ struct ExportView: View {
                 ShareSheet(items: [url])
             }
         }
-        .alert(String(localized: "export.failed.title", defaultValue: "Export Failed"), isPresented: $showingAlert) {
-            Button(String(localized: "OK", defaultValue: "OK"), role: .cancel) {}
+        .alert(L("export.failed.title", "Export Failed"), isPresented: $showingAlert) {
+            Button(L("OK", "OK"), role: .cancel) {}
         } message: {
             Text(alertMessage)
         }
@@ -191,7 +191,7 @@ struct ExportView: View {
                 }
             } else {
                 await MainActor.run {
-                    alertMessage = String(localized: "export.failed.message", defaultValue: "Failed to export data. Please try again.")
+                    alertMessage = L("export.failed.message", "Failed to export data. Please try again.")
                     showingAlert = true
                 }
             }
@@ -325,15 +325,15 @@ struct ExportPreviewCard: View {
                 PreviewRow(
                     label: "File size",
                     value: String(
-                        format: String(localized: "~%@", defaultValue: "~%@"),
+                        format: L("~%@", "~%@"),
                         estimatedFileSize
                     )
                 )
                 PreviewRow(
                     label: "Format",
                     value: format == .csv
-                        ? String(localized: "Excel compatible", defaultValue: "Excel compatible")
-                        : String(localized: "Professional report", defaultValue: "Professional report")
+                        ? L("Excel compatible", "Excel compatible")
+                        : L("Professional report", "Professional report")
                 )
             }
         }
@@ -345,11 +345,11 @@ struct ExportPreviewCard: View {
     private var previewTitle: String {
         switch exportType {
         case .inventorySummary:
-            return String(localized: "Complete Inventory", defaultValue: "Complete Inventory")
+            return L("Complete Inventory", "Complete Inventory")
         case .lowStockList:
-            return String(localized: "Low Stock Items", defaultValue: "Low Stock Items")
+            return L("Low Stock Items", "Low Stock Items")
         case .reorderList:
-            return String(localized: "Reorder List", defaultValue: "Reorder List")
+            return L("Reorder List", "Reorder List")
         }
     }
     

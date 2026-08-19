@@ -30,11 +30,21 @@ struct PurchaseReviewView: View {
 
     var body: some View {
         reviewContent
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Review Invoice")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { onCancel() }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
                 }
             }
             .sheet(isPresented: Binding(

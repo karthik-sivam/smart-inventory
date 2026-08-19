@@ -20,6 +20,8 @@ struct InventoryAppView: View {
 
     // Post-login guided onboarding (shown once after first sign-in when storages.isEmpty).
     @State private var showPostLoginOnboarding = false
+    @AppStorage(LocalizationManager.hasChosenLanguageKey) private var hasChosenLanguage = false
+    @State private var showLanguageOnboarding = false
     private static let postLoginOnboardingKey = "postLoginOnboardingShown"
 
     // Paywall
@@ -66,6 +68,10 @@ struct InventoryAppView: View {
         .fullScreenCover(isPresented: $showPostLoginOnboarding) {
             PostLoginOnboardingView(isPresented: $showPostLoginOnboarding)
         }
+        .fullScreenCover(isPresented: $showLanguageOnboarding) {
+            OnboardingLanguageStepView(isPresented: $showLanguageOnboarding)
+                .environmentObject(LocalizationManager.shared)
+        }
         // Paywall sheet
         .sheet(isPresented: $showPaywall) {
             PaywallView(source: "unknown")
@@ -83,6 +89,7 @@ struct InventoryAppView: View {
                 // which hid the dashboard until the user tapped Dashboard manually (Maestro: 04_signin).
                 selectedTab = 0
                 runStartupSync()
+                maybeShowLanguageOnboardingIfNeeded()
                 maybeShowPostLoginOnboarding()
                 Task { await checkPendingInvites() }
             } else {
@@ -126,7 +133,7 @@ struct InventoryAppView: View {
             // during the sign-out → sign-in transition — and must never attempt a
             // Firestore pull when the auth state is ambiguous.
             guard authManager.isAuthenticated else { return }
-            NotificationManager.shared.checkAndNotifyLowStock(items: items)
+            NotificationManager.shared.refreshLocalDigestSchedule(items: items)
             Task {
                 await subscriptionManager.refreshPurchaseStatus()
                 let throttleInterval: TimeInterval = 15 * 60
@@ -164,6 +171,7 @@ struct InventoryAppView: View {
             }
             if authManager.isAuthenticated {
                 runStartupSync()
+                maybeShowLanguageOnboardingIfNeeded()
                 maybeShowPostLoginOnboarding()
                 Task { await checkPendingInvites() }
             }
@@ -181,6 +189,11 @@ struct InventoryAppView: View {
             pendingInvites = invites
             showingInviteAlert = true
         }
+    }
+
+    private func maybeShowLanguageOnboardingIfNeeded() {
+        guard authManager.isAuthenticated, !hasChosenLanguage else { return }
+        showLanguageOnboarding = true
     }
 
     // MARK: - Post-login onboarding
@@ -272,6 +285,13 @@ struct InventoryAppView: View {
                 let freshItems = (try? modelContext.fetch(FetchDescriptor<InventoryItem>())) ?? []
                 await firestoreManager.pushAllToCloud(storages: freshStorages, items: freshItems)
             }
+
+            if let remotePrefs = await firestoreManager.fetchNotificationPrefs() {
+                NotificationPrefsManager.shared.replace(with: remotePrefs)
+            }
+
+            let freshItems = (try? modelContext.fetch(FetchDescriptor<InventoryItem>())) ?? []
+            NotificationManager.shared.refreshLocalDigestSchedule(items: freshItems)
         }
     }
 }
@@ -366,6 +386,7 @@ struct MainAppContent: View {
                     )
                     .onTapGesture {
                         guard !isDraggingBubble else { return }
+                        AnalyticsManager.shared.track(.floatingAIButtonTapped)
                         showingAIHelp = true
                     }
                     .accessibilityLabel("Ask AI")
@@ -387,6 +408,31 @@ struct MainAppContent: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("stoqly.switchToStoragesTab"))) { _ in
             selectedTab = 1
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NotificationRoute.notificationName)) { notification in
+            guard let route = notification.userInfo?["route"] as? String else { return }
+            switch route {
+            case NotificationRoute.count.rawValue:
+                selectedTab = 4
+            default:
+                break
+            }
+        }
+        .onChange(of: selectedTab) { _, tab in
+            let screen: String? = switch tab {
+            case 0: "dashboard"
+            case 1: "storages"
+            case 2: "items"
+            case 3: "sales"
+            case 4: "count"
+            default: nil
+            }
+            if let screen {
+                AnalyticsManager.shared.track(.screenViewed(name: screen, referrer: "tab_bar"))
+            }
+        }
+        .onAppear {
+            AnalyticsManager.shared.track(.screenViewed(name: "dashboard", referrer: nil))
         }
         .animation(.easeInOut(duration: 0.3), value: firestoreManager.syncState)
     }
@@ -428,7 +474,7 @@ struct CountView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         FilterChip(
-                            title: String(localized: "All Storages", defaultValue: "All Storages"),
+                            title: L("All Storages", "All Storages"),
                             isSelected: viewModel.selectedStorage == nil,
                             color: .stoqlyPrimary
                         ) {
@@ -452,17 +498,21 @@ struct CountView: View {
                 // Status filter chips
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        FilterChip(title: String(localized: "Due", defaultValue: "Due"), isSelected: viewModel.statusFilter == .due, color: .stoqlyPrimary) {
+                        FilterChip(title: L("Due", "Due"), isSelected: viewModel.statusFilter == .due, color: .stoqlyPrimary) {
                             viewModel.setStatusFilter(.due)
+                            AnalyticsManager.shared.track(.filterApplied(screen: "count", filter: "due"))
                         }
-                        FilterChip(title: String(localized: "Uncounted", defaultValue: "Uncounted"), isSelected: viewModel.statusFilter == .uncounted, color: .orange) {
+                        FilterChip(title: L("Uncounted", "Uncounted"), isSelected: viewModel.statusFilter == .uncounted, color: .orange) {
                             viewModel.setStatusFilter(.uncounted)
+                            AnalyticsManager.shared.track(.filterApplied(screen: "count", filter: "uncounted"))
                         }
-                        FilterChip(title: String(localized: "Low Stock", defaultValue: "Low Stock"), isSelected: viewModel.statusFilter == .lowStock, color: .red) {
+                        FilterChip(title: L("Low Stock", "Low Stock"), isSelected: viewModel.statusFilter == .lowStock, color: .red) {
                             viewModel.setStatusFilter(.lowStock)
+                            AnalyticsManager.shared.track(.filterApplied(screen: "count", filter: "low_stock"))
                         }
-                        FilterChip(title: String(localized: "All", defaultValue: "All"), isSelected: viewModel.statusFilter == .all, color: .gray) {
+                        FilterChip(title: L("All", "All"), isSelected: viewModel.statusFilter == .all, color: .gray) {
                             viewModel.setStatusFilter(.all)
+                            AnalyticsManager.shared.track(.filterApplied(screen: "count", filter: "all"))
                         }
                     }
                     .padding(.horizontal)
@@ -649,20 +699,17 @@ struct CountItemCard: View {
 
     private func lastCountedText(for item: InventoryItem) -> String {
         guard let latest = item.countHistory.sorted(by: { $0.countDate > $1.countDate }).first else {
-            return String(localized: "Never counted", defaultValue: "Never counted")
+            return L("Never counted", "Never counted")
         }
         let days = Calendar.current.dateComponents([.day], from: latest.countDate, to: Date()).day ?? 0
         if days == 0 {
-            return String(localized: "Counted today", defaultValue: "Counted today")
+            return L("Counted today", "Counted today")
         }
         if days == 1 {
-            return String(localized: "Counted yesterday", defaultValue: "Counted yesterday")
+            return L("Counted yesterday", "Counted yesterday")
         }
         return String(
-            format: String(
-                localized: "Counted %lld days ago",
-                defaultValue: "Counted %lld days ago"
-            ),
+            format: L("Counted %lld days ago", "Counted %lld days ago"),
             days
         )
     }
@@ -717,6 +764,9 @@ struct EmptyCountState: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
+        .onAppear {
+            AnalyticsManager.shared.track(.emptyStateShown(screen: "count"))
+        }
     }
 }
 

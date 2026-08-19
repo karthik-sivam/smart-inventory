@@ -13,15 +13,15 @@ enum MovementTypeIn: String, CaseIterable, Codable {
     var localizedTitle: String {
         switch self {
         case .purchase:
-            return String(localized: "movement.in.purchase", defaultValue: "Purchase")
+            return L("movement.in.purchase", "Purchase")
         case .transferIn:
-            return String(localized: "movement.in.transferIn", defaultValue: "Transfer In")
+            return L("movement.in.transferIn", "Transfer In")
         case .returnFromCustomer:
-            return String(localized: "movement.in.returnFromCustomer", defaultValue: "Return from Customer")
+            return L("movement.in.returnFromCustomer", "Return from Customer")
         case .adjustmentUp:
-            return String(localized: "movement.in.adjustmentUp", defaultValue: "Adjustment (Up)")
+            return L("movement.in.adjustmentUp", "Adjustment (Up)")
         case .openingStock:
-            return String(localized: "movement.in.openingStock", defaultValue: "Opening Stock")
+            return L("movement.in.openingStock", "Opening Stock")
         }
     }
 
@@ -48,15 +48,15 @@ enum MovementTypeOut: String, CaseIterable, Codable {
     var localizedTitle: String {
         switch self {
         case .saleOut:
-            return String(localized: "movement.out.sale", defaultValue: "Sale")
+            return L("movement.out.sale", "Sale")
         case .waste:
-            return String(localized: "movement.out.waste", defaultValue: "Waste / Spoilage")
+            return L("movement.out.waste", "Waste / Spoilage")
         case .returnToSupplier:
-            return String(localized: "movement.out.returnToSupplier", defaultValue: "Return to Supplier")
+            return L("movement.out.returnToSupplier", "Return to Supplier")
         case .transferOut:
-            return String(localized: "movement.out.transferOut", defaultValue: "Transfer Out")
+            return L("movement.out.transferOut", "Transfer Out")
         case .adjustmentDown:
-            return String(localized: "movement.out.adjustmentDown", defaultValue: "Adjustment (Down)")
+            return L("movement.out.adjustmentDown", "Adjustment (Down)")
         }
     }
 

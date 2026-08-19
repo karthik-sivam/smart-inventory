@@ -15,6 +15,9 @@ struct SalesView: View {
     @State private var preselectedItem: InventoryItem?
     @State private var savedSaleCount = 0
     @State private var showSavedToast = false
+    @State private var reverseToastMessage: String?
+    @State private var salePendingReverse: SaleEvent?
+    @State private var showSwipeReverseConfirm = false
 
     var body: some View {
         NavigationStack {
@@ -79,6 +82,22 @@ struct SalesView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 showingItemPicker = true
             }
+        }
+        .toast(message: $reverseToastMessage)
+        .alert(
+            L("sale.reverse.confirm.title", "Reverse this sale?"),
+            isPresented: $showSwipeReverseConfirm,
+            presenting: salePendingReverse
+        ) { sale in
+            Button(L("Cancel", "Cancel"), role: .cancel) {
+                salePendingReverse = nil
+            }
+            Button(L("Delete / Reverse", "Delete / Reverse"), role: .destructive) {
+                performReverse(sale)
+                salePendingReverse = nil
+            }
+        } message: { _ in
+            Text(L("sale.reverse.confirm.message", "The stock will be added back to inventory."))
         }
     }
 
@@ -151,7 +170,27 @@ struct SalesView: View {
             ForEach(groupedSales, id: \.title) { group in
                 Section(group.title) {
                     ForEach(group.sales, id: \.id) { sale in
-                        SaleEventRow(sale: sale)
+                        NavigationLink {
+                            SaleDetailView(sale: sale) {
+                                reverseToastMessage = L("sale.reversed.toast", "Sale reversed")
+                            }
+                            .environmentObject(currencyManager)
+                        } label: {
+                            SaleEventRow(sale: sale)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            if EditPolicy.isWithinEditWindow(createdAt: sale.createdAt) {
+                                Button(role: .destructive) {
+                                    salePendingReverse = sale
+                                    showSwipeReverseConfirm = true
+                                } label: {
+                                    Label(
+                                        L("Delete / Reverse", "Delete / Reverse"),
+                                        systemImage: "arrow.uturn.backward.circle"
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -182,6 +221,12 @@ struct SalesView: View {
             return a > b
         }
         return sorted.map { (title: $0, sales: buckets[$0]!) }
+    }
+
+    private func performReverse(_ sale: SaleEvent) {
+        let result = SaleHelpers.reverseSale(sale, modelContext: modelContext)
+        guard result == .success else { return }
+        reverseToastMessage = L("sale.reversed.toast", "Sale reversed")
     }
 }
 

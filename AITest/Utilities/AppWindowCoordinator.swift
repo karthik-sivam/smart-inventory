@@ -12,6 +12,17 @@ enum AppWindowCoordinator {
     static func register(modelContainer: ModelContainer, currencyManager: CurrencyManager) {
         self.modelContainer = modelContainer
         self.currencyManager = currencyManager
+        applySemanticDirection(to: keyWindow)
+    }
+
+    /// Forces UIKit RTL/LTR so in-app language switches (device stays LTR) still flip layout.
+    static func applySemanticDirection(to window: UIWindow? = nil) {
+        let isRTL = LocalizationManager.shared.layoutDirection == .rightToLeft
+        let attribute: UISemanticContentAttribute = isRTL ? .forceRightToLeft : .forceLeftToRight
+        UIView.appearance().semanticContentAttribute = attribute
+        if let window {
+            window.semanticContentAttribute = attribute
+        }
     }
 
     static func reRootWindow(animated: Bool = true) {
@@ -22,6 +33,10 @@ enum AppWindowCoordinator {
         else { return }
 
         let localizationManager = LocalizationManager.shared
+        let isRTL = localizationManager.layoutDirection == .rightToLeft
+        let attribute: UISemanticContentAttribute = isRTL ? .forceRightToLeft : .forceLeftToRight
+        applySemanticDirection(to: window)
+
         let rootView = ContentView()
             .environmentObject(AuthManager.shared)
             .environmentObject(currencyManager)
@@ -37,6 +52,8 @@ enum AppWindowCoordinator {
 
         let hosting = UIHostingController(rootView: AnyView(rootView))
         hosting.view.backgroundColor = .systemBackground
+        hosting.view.semanticContentAttribute = attribute
+        window.semanticContentAttribute = attribute
 
         let applyRoot = {
             window.rootViewController = hosting

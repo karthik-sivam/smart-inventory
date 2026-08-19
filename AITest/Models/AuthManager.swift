@@ -72,6 +72,7 @@ class AuthManager: ObservableObject {
             // Analytics
             AnalyticsManager.shared.track(.userSignedUp(method: "email"))
             AnalyticsManager.shared.identify(userId: result.user.uid, email: result.user.email, isPro: false, signupMethod: "email")
+            MetaAppEvents.logCompletedRegistration()
 
             print("User signed up successfully: \(result.user.email ?? "")")
         } catch {
@@ -130,8 +131,14 @@ class AuthManager: ObservableObject {
             Task { await SubscriptionManager.shared.applyManualProGrantIfNeeded() }
 
             // Analytics
-            AnalyticsManager.shared.track(.userSignedIn(method: "google"))
-            AnalyticsManager.shared.identify(userId: authResult.user.uid, email: authResult.user.email, isPro: false, signupMethod: "google")
+            if authResult.additionalUserInfo?.isNewUser == true {
+                AnalyticsManager.shared.track(.userSignedUp(method: "google"))
+                AnalyticsManager.shared.identify(userId: authResult.user.uid, email: authResult.user.email, isPro: false, signupMethod: "google")
+                MetaAppEvents.logCompletedRegistration()
+            } else {
+                AnalyticsManager.shared.track(.userSignedIn(method: "google"))
+                AnalyticsManager.shared.identify(userId: authResult.user.uid, email: authResult.user.email, isPro: false, signupMethod: "google")
+            }
 
             print("User signed in with Google successfully: \(authResult.user.email ?? "")")
         } catch {
@@ -188,8 +195,14 @@ class AuthManager: ObservableObject {
             Task { await SubscriptionManager.shared.applyManualProGrantIfNeeded() }
 
             // Analytics
-            AnalyticsManager.shared.track(.userSignedIn(method: "apple"))
-            AnalyticsManager.shared.identify(userId: result.user.uid, email: result.user.email, isPro: false, signupMethod: "apple")
+            if result.additionalUserInfo?.isNewUser == true {
+                AnalyticsManager.shared.track(.userSignedUp(method: "apple"))
+                AnalyticsManager.shared.identify(userId: result.user.uid, email: result.user.email, isPro: false, signupMethod: "apple")
+                MetaAppEvents.logCompletedRegistration()
+            } else {
+                AnalyticsManager.shared.track(.userSignedIn(method: "apple"))
+                AnalyticsManager.shared.identify(userId: result.user.uid, email: result.user.email, isPro: false, signupMethod: "apple")
+            }
         } catch {
             handleAuthError(error)
         }
@@ -233,6 +246,7 @@ class AuthManager: ObservableObject {
             currentUser = nil
             isAuthenticated = false
             TeamManager.shared.reset()
+            FCMTopicManager.syncGuestTopicIfNeeded()
 
             // Analytics — reset before clearing userId so the event is attributed correctly
             AnalyticsManager.shared.track(.userSignedOut)

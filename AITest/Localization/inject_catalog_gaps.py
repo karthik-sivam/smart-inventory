@@ -30,6 +30,9 @@ CASE_LIT = re.compile(r'case\s+\.[\w]+:\s*"((?:[^"\\]|\\.)*)"')
 LOCALIZED_CALL = re.compile(
     r'String\(\s*localized:\s*"((?:[^"\\]|\\.)*)"(?:\s*,\s*defaultValue:\s*"((?:[^"\\]|\\.)*)")?\s*\)'
 )
+L_HELPER_CALL = re.compile(
+    r'\bL\(\s*"((?:[^"\\]|\\.)*)"\s*,\s*"((?:[^"\\]|\\.)*)"\s*\)'
+)
 
 SKIP_LITERALS = {"Sample description"}
 
@@ -84,6 +87,12 @@ def collect_from_sources(root: str, keys: set[str]) -> tuple[set[str], dict[str,
                 explicit[k] = default.strip()
             elif k not in keys:
                 explicit[k] = k
+
+        for key, default in L_HELPER_CALL.findall(src):
+            k = key.strip()
+            if not k or not re.search(r"[A-Za-z]", k):
+                continue
+            explicit[k] = default.strip() if default else k
 
     literals -= keys
     explicit = {k: v for k, v in explicit.items() if k not in keys}

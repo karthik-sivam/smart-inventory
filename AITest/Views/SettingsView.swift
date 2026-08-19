@@ -6,19 +6,11 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var currencyManager: CurrencyManager
     @EnvironmentObject private var firestoreManager: FirestoreManager
-    @Query private var items: [InventoryItem]
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @StateObject private var teamManager = TeamManager.shared
     @StateObject private var adManager = AdManager.shared
     @StateObject private var trackingManager = TrackingPermissionManager.shared
     @EnvironmentObject private var localizationManager: LocalizationManager
-
-    @AppStorage(NotificationManager.dailySummaryEnabledKey) private var dailySummaryEnabled = false
-    @AppStorage(NotificationManager.dailySummaryHourKey) private var dailySummaryHour = 18
-    @AppStorage(NotificationManager.dailySummaryMinuteKey) private var dailySummaryMinute = 0
-    @State private var dailySummaryTime = Calendar.current.date(
-        from: DateComponents(hour: 18, minute: 0)
-    ) ?? Date()
 
     @State private var showPaywall = false
     @State private var showLanguagePicker = false
@@ -148,28 +140,11 @@ struct SettingsView: View {
                     }
                 }
 
-                Section(header: Text("Daily Summary")) {
-                    Toggle("End-of-day stock summary", isOn: $dailySummaryEnabled)
-                        .onChange(of: dailySummaryEnabled) { _, enabled in
-                            if enabled {
-                                rescheduleDailySummary()
-                            } else {
-                                NotificationManager.shared.cancelDailySummary()
-                            }
-                        }
-                    if dailySummaryEnabled {
-                        DatePicker(
-                            "Notify at",
-                            selection: $dailySummaryTime,
-                            displayedComponents: .hourAndMinute
-                        )
-                        .onChange(of: dailySummaryTime) { _, newTime in
-                            let parts = Calendar.current.dateComponents([.hour, .minute], from: newTime)
-                            dailySummaryHour = parts.hour ?? 18
-                            dailySummaryMinute = parts.minute ?? 0
-                            rescheduleDailySummary()
-                        }
+                Section(header: Text(L("notifications.title", "Notifications"))) {
+                    NavigationLink(destination: NotificationSettingsView()) {
+                        Label(L("notifications.title", "Notifications"), systemImage: "bell.badge")
                     }
+                    .accessibilityIdentifier("notificationSettingsRow")
                 }
 
                 // MARK: - Currency
@@ -188,12 +163,12 @@ struct SettingsView: View {
                     }
                 }
 
-                Section(header: Text(String(localized: "Language", defaultValue: "Language"))) {
+                Section(header: Text(L("Language", "Language"))) {
                     Button {
                         showLanguagePicker = true
                     } label: {
                         HStack {
-                            Label(String(localized: "Language", defaultValue: "Language"), systemImage: "globe")
+                            Label(L("Language", "Language"), systemImage: "globe")
                             Spacer()
                             Text(localizationManager.currentDisplayName())
                                 .foregroundColor(.secondary)
@@ -312,6 +287,13 @@ struct SettingsView: View {
                     } label: {
                         Label("Reload Products", systemImage: "arrow.clockwise")
                     }
+                    Button {
+                        FeedbackPromptManager.debugForceEligible()
+                        dismiss()
+                    } label: {
+                        Label("Preview feedback prompt", systemImage: "text.bubble")
+                    }
+                    .accessibilityIdentifier("debugPreviewFeedbackPrompt")
                 }
                 #endif
 
@@ -323,18 +305,11 @@ struct SettingsView: View {
                 }
 
                 // MARK: - About
-                Section(header: Text("Support")) {
-                    NavigationLink(destination: HelpCentreView()) {
-                        Label("Help & FAQ", systemImage: "questionmark.circle")
-                    }
-                    .accessibilityIdentifier("helpCentreRow")
-                }
-
                 Section(header: Text("About")) {
                     HStack {
                         Label("Version", systemImage: "info.circle")
                         Spacer()
-                        Text("1.0.0")
+                        Text(Bundle.main.appVersionString)
                             .foregroundColor(.secondary)
                     }
                     HStack {
@@ -376,25 +351,6 @@ struct SettingsView: View {
         .task {
             await subscriptionManager.loadProducts()
         }
-        .onAppear {
-            dailySummaryTime = Calendar.current.date(
-                from: DateComponents(hour: dailySummaryHour, minute: dailySummaryMinute)
-            ) ?? dailySummaryTime
-            if dailySummaryEnabled {
-                rescheduleDailySummary()
-            }
-        }
-    }
-
-    private func rescheduleDailySummary() {
-        let lowStockCount = items.filter { $0.isLowStock || $0.isOutOfStock }.count
-        let expiringCount = items.filter { $0.isExpiringSoon || $0.isExpired }.count
-        NotificationManager.shared.scheduleDailySummary(
-            hour: dailySummaryHour,
-            minute: dailySummaryMinute,
-            lowStockCount: lowStockCount,
-            expiringCount: expiringCount
-        )
     }
 }
 

@@ -9,9 +9,19 @@ import SwiftUI
 struct OnboardingView: View {
 
     @Binding var isPresented: Bool
+    @AppStorage(LocalizationManager.hasChosenLanguageKey) private var hasChosenLanguage = false
 
     @State private var currentPage = 0
     @State private var animateContent = false
+    @State private var didTrackOnboardingStarted = false
+    @State private var showLanguageStep = false
+
+    private let stepNames = [
+        "know_what_you_have",
+        "organise_by_location",
+        "never_run_out",
+        "data_everywhere"
+    ]
 
     private let pages: [OnboardingPage] = [
         OnboardingPage(
@@ -45,6 +55,35 @@ struct OnboardingView: View {
     ]
 
     var body: some View {
+        Group {
+            if showLanguageStep {
+                OnboardingLanguageStepView(isPresented: $showLanguageStep) {
+                    showLanguageStep = false
+                }
+                .environmentObject(LocalizationManager.shared)
+            } else {
+                onboardingPages
+            }
+        }
+        .onAppear {
+            showLanguageStep = !hasChosenLanguage
+            guard !didTrackOnboardingStarted, !showLanguageStep else { return }
+            didTrackOnboardingStarted = true
+            AnalyticsManager.shared.track(.onboardingStarted)
+            trackStepViewed(currentPage)
+        }
+        .onChange(of: showLanguageStep) { _, showingLanguage in
+            guard !showingLanguage, !didTrackOnboardingStarted else { return }
+            didTrackOnboardingStarted = true
+            AnalyticsManager.shared.track(.onboardingStarted)
+            trackStepViewed(currentPage)
+        }
+        .onChange(of: currentPage) { _, newPage in
+            trackStepViewed(newPage)
+        }
+    }
+
+    private var onboardingPages: some View {
         ZStack {
             // Background gradient tied to current page colour
             LinearGradient(
@@ -63,7 +102,7 @@ struct OnboardingView: View {
                 HStack {
                     Spacer()
                     if currentPage < pages.count - 1 {
-                        Button("Skip") { finishOnboarding() }
+                        Button("Skip") { skipOnboarding() }
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .padding()
@@ -122,14 +161,25 @@ struct OnboardingView: View {
 
     // MARK: - Actions
 
+    private func trackStepViewed(_ step: Int) {
+        guard step >= 0, step < stepNames.count else { return }
+        AnalyticsManager.shared.track(.onboardingStepViewed(step: step, name: stepNames[step]))
+    }
+
     private func handlePrimaryAction() {
         if currentPage < pages.count - 1 {
             withAnimation(.spring(response: 0.4)) {
                 currentPage += 1
             }
         } else {
+            AnalyticsManager.shared.track(.onboardingCompleted)
             finishOnboarding()
         }
+    }
+
+    private func skipOnboarding() {
+        AnalyticsManager.shared.track(.onboardingSkipped(step: currentPage))
+        finishOnboarding()
     }
 
     private func finishOnboarding() {

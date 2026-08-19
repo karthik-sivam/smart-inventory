@@ -141,7 +141,7 @@ struct StorageDetailView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         FilterChip(
-                            title: String(localized: "All", defaultValue: "All"),
+                            title: L("All", "All"),
                             isSelected: selectedCategory == nil,
                             color: .stoqlyPrimary,
                             action: {
@@ -174,10 +174,7 @@ struct StorageDetailView: View {
                             .foregroundStyle(Color.stoqlyPrimary.opacity(0.7))
                         Text(
                             String(
-                                format: String(
-                                    localized: "storage.emptyMessage",
-                                    defaultValue: "%@ is empty"
-                                ),
+                                format: L("storage.emptyMessage", "%@ is empty"),
                                 storage.name
                             )
                         )
@@ -228,6 +225,7 @@ struct StorageDetailView: View {
                                 .accessibilityIdentifier("swipeCountAction")
 
                                 Button {
+                                    AnalyticsManager.shared.track(.swipeActionUsed(screen: "storage_detail", action: "sale"))
                                     showingQuickSaleItem = item
                                 } label: {
                                     Label("Sale", systemImage: "cart.fill")
@@ -238,6 +236,7 @@ struct StorageDetailView: View {
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             if teamManager.canDeleteItem {
                                 Button(role: .destructive) {
+                                    AnalyticsManager.shared.track(.swipeActionUsed(screen: "storage_detail", action: "delete"))
                                     showingDeleteAlert = item
                                 } label: {
                                     Label("Delete", systemImage: "trash")
@@ -245,6 +244,7 @@ struct StorageDetailView: View {
                             }
                             if teamManager.canEdit {
                                 Button {
+                                    AnalyticsManager.shared.track(.swipeActionUsed(screen: "storage_detail", action: "edit"))
                                     showingEditItem = item
                                 } label: {
                                     Label("Edit", systemImage: "pencil")
@@ -285,10 +285,7 @@ struct StorageDetailView: View {
                 onComplete: { savedCount in
                     showingSmartCount = false
                     toastMessage = String(
-                        format: String(
-                            localized: "toast.itemsUpdated",
-                            defaultValue: "%1$d item%2$@ updated"
-                        ),
+                        format: L("toast.itemsUpdated", "%1$d item%2$@ updated"),
                         savedCount,
                         savedCount == 1 ? "" : "s"
                     )
@@ -341,7 +338,7 @@ struct StorageDetailView: View {
                     modelContext.safeSave(context: "storageDetail delete item")
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
                     toastMessage = String(
-                        format: String(localized: "toast.itemDeleted", defaultValue: "\"%@\" deleted"),
+                        format: L("toast.itemDeleted", "\"%@\" deleted"),
                         name
                     )
                 }
@@ -351,10 +348,7 @@ struct StorageDetailView: View {
             if let item = showingDeleteAlert {
                 Text(
                     String(
-                        format: String(
-                            localized: "storage.deleteItemConfirm",
-                            defaultValue: "Are you sure you want to delete '%@'? This action cannot be undone."
-                        ),
+                        format: L("storage.deleteItemConfirm", "Are you sure you want to delete '%@'? This action cannot be undone."),
                         item.name
                     )
                 )
@@ -376,10 +370,7 @@ struct StorageDetailView: View {
                     Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
                     Text(
                         String(
-                            format: String(
-                                localized: "storage.purchaseReceived",
-                                defaultValue: "%1$d item%2$@ received into stock"
-                            ),
+                            format: L("storage.purchaseReceived", "%1$d item%2$@ received into stock"),
                             savedPurchaseCount,
                             savedPurchaseCount == 1 ? "" : "s"
                         )
@@ -455,7 +446,7 @@ struct ItemCard: View {
                     .foregroundColor(.primary)
                 
                 HStack {
-                    Text(String(format: String(localized: "item.sku.label", defaultValue: "SKU: %@"), item.sku))
+                    Text(String(format: L("item.sku.label", "SKU: %@"), item.sku))
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
@@ -535,6 +526,11 @@ struct AddItemView: View {
     @State private var pendingScannedBarcode: String?
     @State private var isEnriching = false
     @State private var sourceTemplateId: UUID? = nil
+    @State private var didTrackAddItemStarted = false
+    @State private var addItemOpenedAt = Date()
+    @State private var didSaveAddItem = false
+    @State private var didEmitAddItemClose = false
+    @State private var showingItemLimitPaywall = false
 
     enum Field: Hashable {
         case name, description, sku, barcode
@@ -689,12 +685,14 @@ struct AddItemView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Add Item")
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
+                        emitAddItemCancelledIfNeeded()
                         dismiss()
                     }
                 }
@@ -731,7 +729,16 @@ struct AddItemView: View {
             }
             .sheetStyle()
         }
+        .sheet(isPresented: $showingItemLimitPaywall) {
+            PaywallView(source: "item_limit", trigger: "item_cap")
+                .sheetStyle()
+        }
         .onAppear {
+            addItemOpenedAt = Date()
+            if !didTrackAddItemStarted {
+                didTrackAddItemStarted = true
+                AnalyticsManager.shared.track(.addItemStarted(source: "storage_detail"))
+            }
             if uoms.isEmpty {
                 for standardUOM in UOM.standardUOMs {
                     modelContext.insert(standardUOM)
@@ -746,6 +753,9 @@ struct AddItemView: View {
             if selectedUOM == nil, let defaultUOM = uoms.first(where: { $0.isDefault }) {
                 selectedUOM = defaultUOM
             }
+        }
+        .onDisappear {
+            emitAddItemCancelledIfNeeded()
         }
         // NOTE: must be `.fullScreenCover`, not `.sheet`. Presenting a camera
         // host as a sheet-inside-a-sheet wedges the AVFoundation capture XPC
@@ -818,10 +828,28 @@ struct AddItemView: View {
         return refetched.first(where: { $0.isDefault }) ?? refetched.first
     }
 
+    private func emitAddItemCancelledIfNeeded() {
+        guard !didSaveAddItem, !didEmitAddItemClose else { return }
+        didEmitAddItemClose = true
+        let seconds = Int(Date().timeIntervalSince(addItemOpenedAt))
+        AnalyticsManager.shared.track(.addItemCancelled(source: "storage_detail", seconds: seconds))
+    }
+
     private func saveItem() {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else { return }
-        guard let uom = resolveUOM() else { return }
+        guard !trimmedName.isEmpty else {
+            AnalyticsManager.shared.track(.formSubmitAttempted(form: "add_item", valid: false, reason: "empty_name"))
+            return
+        }
+        guard let uom = resolveUOM() else {
+            AnalyticsManager.shared.track(.formSubmitAttempted(form: "add_item", valid: false, reason: "no_unit"))
+            return
+        }
+        if SubscriptionManager.shared.freeItemCapReached(storage: storage, context: modelContext) {
+            showingItemLimitPaywall = true
+            return
+        }
+        AnalyticsManager.shared.track(.formSubmitAttempted(form: "add_item", valid: true, reason: nil))
 
         let item = InventoryItem(
             name: trimmedName,
@@ -859,7 +887,9 @@ struct AddItemView: View {
         AnalyticsManager.shared.track(.itemAdded(
             category: item.category,
             hasBarcode: !item.barcode.isEmpty,
-            hasPhoto: item.photoURL != nil
+            hasPhoto: item.photoURL != nil,
+            source: "storage_detail",
+            inputMethod: "manual"
         ))
 
         let event = ActivityEvent(
@@ -889,6 +919,7 @@ struct AddItemView: View {
         FirestoreManager.shared.syncItem(item)
         AdManager.shared.recordCompletion(event: .itemAdded)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
+        didSaveAddItem = true
         dismiss()
     }
 }
@@ -1030,12 +1061,9 @@ struct ItemDetailView: View {
                                         if let qty = batchItem.quantity {
                                             Text(
                                                 String(
-                                                    format: String(
-                                                        localized: "item.qtyWithUnit",
-                                                        defaultValue: "%1$@ %2$@"
-                                                    ),
+                                                    format: L("item.qtyWithUnit", "%1$@ %2$@"),
                                                     qty.smartFormatted,
-                                                    item.uom?.symbol ?? String(localized: "units", defaultValue: "units")
+                                                    item.uom?.symbol ?? L("units", "units")
                                                 )
                                             )
                                                 .font(.subheadline).fontWeight(.semibold)
@@ -1126,10 +1154,7 @@ struct ItemDetailView: View {
                         DetailRow(
                             label: "Reorder Threshold",
                             value: String(
-                                format: String(
-                                    localized: "item.reorderThresholdValue",
-                                    defaultValue: "%1$d%% of max (%2$@)"
-                                ),
+                                format: L("item.reorderThresholdValue", "%1$d%% of max (%2$@)"),
                                 Int(item.reorderPercentage),
                                 item.effectiveMinQuantity.smartFormatted
                             )
@@ -1152,10 +1177,7 @@ struct ItemDetailView: View {
                             if variance > 0 {
                                 Label(
                                     String(
-                                        format: String(
-                                            localized: "item.priceUpVsCost",
-                                            defaultValue: "Price up %1$@%% vs unit cost"
-                                        ),
+                                        format: L("item.priceUpVsCost", "Price up %1$@%% vs unit cost"),
                                         String(format: "%.1f", pct)
                                     ),
                                     systemImage: "arrow.up.circle"
@@ -1166,10 +1188,7 @@ struct ItemDetailView: View {
                             } else if variance < 0 {
                                 Label(
                                     String(
-                                        format: String(
-                                            localized: "item.priceDownVsCost",
-                                            defaultValue: "Price down %1$@%% vs unit cost"
-                                        ),
+                                        format: L("item.priceDownVsCost", "Price down %1$@%% vs unit cost"),
                                         String(format: "%.1f", abs(pct))
                                     ),
                                     systemImage: "arrow.down.circle"
@@ -1209,10 +1228,7 @@ struct ItemDetailView: View {
                         if sortedHistory.count > 5 {
                             Text(
                                 String(
-                                    format: String(
-                                        localized: "item.olderCountsHidden",
-                                        defaultValue: "%1$d older count%2$@ not shown"
-                                    ),
+                                    format: L("item.olderCountsHidden", "%1$d older count%2$@ not shown"),
                                     sortedHistory.count - 5,
                                     sortedHistory.count - 5 == 1 ? "" : "s"
                                 )
@@ -1304,10 +1320,7 @@ struct ItemDetailView: View {
         } message: {
             Text(
                 String(
-                    format: String(
-                        localized: "storage.deleteItemConfirm",
-                        defaultValue: "Are you sure you want to delete '%@'? This action cannot be undone."
-                    ),
+                    format: L("storage.deleteItemConfirm", "Are you sure you want to delete '%@'? This action cannot be undone."),
                     item.name
                 )
             )
@@ -1447,10 +1460,7 @@ struct ItemDetailView: View {
             if item.unitCost > 0 {
                 Text(
                     String(
-                        format: String(
-                            localized: "item.totalValue",
-                            defaultValue: "Total value: %@"
-                        ),
+                        format: L("item.totalValue", "Total value: %@"),
                         currencyManager.formatPrice(item.totalValue)
                     )
                 )
@@ -1500,7 +1510,7 @@ struct ItemDetailView: View {
                 if item.minQuantity > 0 {
                     Text(
                         String(
-                            format: String(localized: "item.minLabel", defaultValue: "Min %@"),
+                            format: L("item.minLabel", "Min %@"),
                             item.minQuantity.smartFormatted
                         )
                     )
@@ -1509,7 +1519,7 @@ struct ItemDetailView: View {
                 Spacer()
                 Text(
                     String(
-                        format: String(localized: "item.maxLabel", defaultValue: "Max %@"),
+                        format: L("item.maxLabel", "Max %@"),
                         item.maxQuantity.smartFormatted
                     )
                 )
@@ -1591,10 +1601,7 @@ private struct CountHistoryRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(
                     String(
-                        format: String(
-                            localized: "countHistory.transition",
-                            defaultValue: "%1$@ → %2$@ %3$@"
-                        ),
+                        format: L("countHistory.transition", "%1$@ → %2$@ %3$@"),
                         count.previousQuantity.smartFormatted,
                         count.countedQuantity.smartFormatted,
                         uomSymbol
@@ -1644,10 +1651,7 @@ struct CountItemView: View {
                         Spacer()
                         Text(
                             String(
-                                format: String(
-                                    localized: "item.qtyWithUnit",
-                                    defaultValue: "%1$@ %2$@"
-                                ),
+                                format: L("item.qtyWithUnit", "%1$@ %2$@"),
                                 item.currentQuantity.smartFormatted,
                                 item.uom?.symbol ?? ""
                             )
@@ -1697,10 +1701,7 @@ struct CountItemView: View {
                             Spacer()
                             Text(
                                 String(
-                                    format: String(
-                                        localized: "item.qtyWithUnit",
-                                        defaultValue: "%1$@ %2$@"
-                                    ),
+                                    format: L("item.qtyWithUnit", "%1$@ %2$@"),
                                     newQuantity.smartFormatted,
                                     item.uom?.symbol ?? ""
                                 )
@@ -1831,12 +1832,9 @@ struct QuickCountView: View {
                                 .frame(width: 8, height: 8)
                         Text(
                             String(
-                                format: String(
-                                    localized: "quickCount.currentQty",
-                                    defaultValue: "Current: %1$@ %2$@"
-                                ),
+                                format: L("quickCount.currentQty", "Current: %1$@ %2$@"),
                                 item.currentQuantity.smartFormatted,
-                                item.uom?.symbol ?? String(localized: "units", defaultValue: "units")
+                                item.uom?.symbol ?? L("units", "units")
                             )
                         )
                                 .font(.subheadline)
@@ -1951,12 +1949,9 @@ struct QuickCountView: View {
                                     // Shows delta from current
                                     Text(
                                         v == 0
-                                            ? String(localized: "quickCount.noChange", defaultValue: "No change")
+                                            ? L("quickCount.noChange", "No change")
                                             : String(
-                                                format: String(
-                                                    localized: "quickCount.deltaFromCurrent",
-                                                    defaultValue: "%1$@%2$@ from current"
-                                                ),
+                                                format: L("quickCount.deltaFromCurrent", "%1$@%2$@ from current"),
                                                 v > 0 ? "+" : "",
                                                 v.smartFormatted
                                             )
@@ -1967,17 +1962,11 @@ struct QuickCountView: View {
                                         Text(
                                             v == 0
                                                 ? String(
-                                                    format: String(
-                                                        localized: "quickCount.noChangeStays",
-                                                        defaultValue: "No change (stays %@)"
-                                                    ),
+                                                    format: L("quickCount.noChangeStays", "No change (stays %@)"),
                                                     item.currentQuantity.smartFormatted
                                                 )
                                                 : String(
-                                                    format: String(
-                                                        localized: "quickCount.quantityTransition",
-                                                        defaultValue: "%1$@ → %2$@ %3$@"
-                                                    ),
+                                                    format: L("quickCount.quantityTransition", "%1$@ → %2$@ %3$@"),
                                                     item.currentQuantity.smartFormatted,
                                                     result.smartFormatted,
                                                     item.uom?.symbol ?? ""
@@ -2119,10 +2108,7 @@ struct QuickCountView: View {
                 let uom = item.uom?.symbol ?? "units"
                 Text(
                     String(
-                        format: String(
-                            localized: "quickCount.largeChangeConfirm",
-                            defaultValue: "Changing %1$@ from %2$@ to %3$@ %4$@. Double-check before saving."
-                        ),
+                        format: L("quickCount.largeChangeConfirm", "Changing %1$@ from %2$@ to %3$@ %4$@. Double-check before saving."),
                         item.name,
                         current,
                         entered,

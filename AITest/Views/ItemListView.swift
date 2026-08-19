@@ -150,7 +150,7 @@ struct ItemListView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 FilterChip(
-                                    title: String(localized: "All", defaultValue: "All"),
+                                    title: L("All", "All"),
                                     isSelected: viewModel.selectedCategory == nil,
                                     color: .blue,
                                     action: {
@@ -359,7 +359,7 @@ struct ItemListView: View {
                     viewModel.deleteItem(item)
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
                     toastMessage = String(
-                        format: String(localized: "toast.itemDeleted", defaultValue: "\"%@\" deleted"),
+                        format: L("toast.itemDeleted", "\"%@\" deleted"),
                         name
                     )
                 }
@@ -531,6 +531,7 @@ struct AddItemToStorageView: View {
     /// pass that toggles `showingBarcodeScanner` (which causes SwiftUI to
     /// drop the value or cascade-dismiss the parent sheet).
     @State private var pendingScannedBarcode: String?
+    @State private var didTrackAddItemStarted = false
 
     init(initialBarcode: String = "") {
         self.initialBarcode = initialBarcode
@@ -649,6 +650,7 @@ struct AddItemToStorageView: View {
                         .keyboardType(.decimalPad)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             // IMPORTANT: the scanner's `.fullScreenCover` MUST be attached
             // INSIDE the NavigationStack (here, on the Form), not as a sibling
             // of `.sheet(isPresented: $showingItemLimitPaywall)` below. With
@@ -705,13 +707,28 @@ struct AddItemToStorageView: View {
                         dismiss()
                     }
                 }
-                
+
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
+                }
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         if SubscriptionManager.shared.canAddItem(currentItemCount: selectedStorageItemCount) {
-                            formVM.saveNew()
-                            UINotificationFeedbackGenerator().notificationOccurred(.success)
-                            dismiss()
+                            formVM.analyticsSource = initialBarcode.isEmpty ? "fab" : "barcode"
+                            formVM.analyticsInputMethod = initialBarcode.isEmpty ? "manual" : "barcode"
+                            if formVM.saveNew() {
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                                dismiss()
+                            } else {
+                                showingItemLimitPaywall = true
+                            }
                         } else {
                             showingItemLimitPaywall = true
                         }
@@ -737,10 +754,15 @@ struct AddItemToStorageView: View {
             .sheetStyle()
         }
         .sheet(isPresented: $showingItemLimitPaywall) {
-            PaywallView(source: "item_limit")
+            PaywallView(source: "item_limit", trigger: "item_cap")
                 .sheetStyle()
         }
         .onAppear {
+            if !didTrackAddItemStarted {
+                didTrackAddItemStarted = true
+                let source = initialBarcode.isEmpty ? "fab" : "barcode_scan"
+                AnalyticsManager.shared.track(.addItemStarted(source: source))
+            }
             formVM.bind(modelContext: modelContext)
             if uoms.isEmpty {
                 for standardUOM in UOM.standardUOMs {

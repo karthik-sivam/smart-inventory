@@ -214,8 +214,9 @@ struct StorageListView: View {
         }
         .sheet(isPresented: $showingPaywall) {
             PaywallView(
-                featureContext: String(localized: "paywall.feature.unlimitedStorages", defaultValue: "Unlimited Storages"),
-                source: "storage_limit"
+                featureContext: L("paywall.feature.unlimitedStorages", "Unlimited Storages"),
+                source: "storage_limit",
+                trigger: "storage_cap"
             )
                 .sheetStyle()
         }
@@ -231,7 +232,7 @@ struct StorageListView: View {
                     let name = storage.name
                     viewModel.deleteStorage(storage)
                     toastMessage = String(
-                        format: String(localized: "toast.itemDeleted", defaultValue: "\"%@\" deleted"),
+                        format: L("toast.itemDeleted", "\"%@\" deleted"),
                         name
                     )
                 }

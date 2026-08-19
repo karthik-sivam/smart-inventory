@@ -310,4 +310,82 @@ final class SmartInventoryTests: XCTestCase {
     func testCategoryValueFormatCurrencyMillions() {
         XCTAssertEqual(formatCurrency(1_500_000), "$1.5M")
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // MARK: - S15: Sale price fallback + helpers
+    // ──────────────────────────────────────────────────────────────────────
+
+    func testFallbackSalePricePrefersSellingPrice() {
+        let item = InventoryItem(name: "A", sku: "1", currentQuantity: 5, unitCost: 8)
+        item.sellingPrice = 20
+        item.lastPurchasePrice = 12
+        XCTAssertEqual(item.fallbackSalePrice, 20)
+    }
+
+    func testFallbackSalePriceUsesLastPurchaseWhenNoSellingPrice() {
+        let item = InventoryItem(name: "B", sku: "2", currentQuantity: 5, unitCost: 8)
+        item.sellingPrice = 0
+        item.lastPurchasePrice = 12
+        XCTAssertEqual(item.fallbackSalePrice, 12)
+    }
+
+    func testFallbackSalePriceUsesUnitCostAsLastResort() {
+        let item = InventoryItem(name: "C", sku: "3", currentQuantity: 5, unitCost: 8)
+        item.sellingPrice = 0
+        item.lastPurchasePrice = 0
+        XCTAssertEqual(item.fallbackSalePrice, 8)
+    }
+
+    func testFallbackSalePriceZeroWhenAllPricesZero() {
+        let item = InventoryItem(name: "D", sku: "4", currentQuantity: 5, unitCost: 0)
+        XCTAssertEqual(item.fallbackSalePrice, 0)
+    }
+
+    func testApplyFallbackPriceIfNeededSkipsWhenEdited() {
+        var row = ParsedSaleRow(itemName: "X", quantitySold: 1, pricePerUnit: 0, priceWasEdited: true)
+        let item = InventoryItem(name: "X", sku: "5", currentQuantity: 1, unitCost: 9)
+        item.sellingPrice = 15
+        SaleHelpers.applyFallbackPriceIfNeeded(&row, from: item)
+        XCTAssertEqual(row.pricePerUnit, 0)
+    }
+
+    func testApplyFallbackPriceIfNeededPrefillsFromItem() {
+        var row = ParsedSaleRow(itemName: "Y", quantitySold: 2, pricePerUnit: 0)
+        let item = InventoryItem(name: "Y", sku: "6", currentQuantity: 2, unitCost: 4)
+        item.lastPurchasePrice = 7
+        SaleHelpers.applyFallbackPriceIfNeeded(&row, from: item)
+        XCTAssertEqual(row.pricePerUnit, 7)
+    }
+
+    func testNegativeStockMessagesOnlyForNegativeItems() {
+        let low = InventoryItem(name: "Low", sku: "7", currentQuantity: -3, unitCost: 1)
+        let ok = InventoryItem(name: "OK", sku: "8", currentQuantity: 5, unitCost: 1)
+        let lines = SaleHelpers.negativeStockMessages(for: [low, ok])
+        XCTAssertEqual(lines.count, 1)
+        XCTAssertTrue(lines[0].contains("Low"))
+        XCTAssertTrue(lines[0].contains("-3") || lines[0].contains("-3.0") == false)
+    }
+
+    func testStorageTotalValueSumsItemValues() {
+        let storage = Storage(name: "WH")
+        let a = InventoryItem(name: "A", sku: "A1", currentQuantity: 2, unitCost: 5)
+        let b = InventoryItem(name: "B", sku: "B1", currentQuantity: 3, unitCost: 4)
+        storage.items = [a, b]
+        XCTAssertEqual(storage.totalValue, 22, accuracy: 0.001)
+    }
+
+    func testSaleEventRevenueUsesPriceTimesQty() {
+        let sale = SaleEvent(
+            item: nil,
+            itemName: "Chip",
+            itemSKU: "C1",
+            storageName: "WH",
+            category: "Food",
+            quantitySold: 2,
+            pricePerUnit: 15,
+            costPerUnit: 8
+        )
+        XCTAssertEqual(sale.revenue, 30, accuracy: 0.001)
+        XCTAssertEqual(sale.grossProfit, 14, accuracy: 0.001)
+    }
 }

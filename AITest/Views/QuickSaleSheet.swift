@@ -54,11 +54,21 @@ struct QuickSaleSheet: View {
                 .padding(.horizontal)
                 .padding(.bottom, 24)
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Record Sale")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
                 }
                 if isSaving {
                     ToolbarItem(placement: .confirmationAction) {
@@ -68,6 +78,7 @@ struct QuickSaleSheet: View {
             }
         }
         .onAppear {
+            AnalyticsManager.shared.track(.saleEntryStarted(mode: "manual"))
             if item.sellingPrice > 0 {
                 sellingPriceText = String(format: "%.2f", item.sellingPrice)
             } else if item.fallbackSalePrice > 0 {
@@ -75,10 +86,10 @@ struct QuickSaleSheet: View {
             }
         }
         .alert(
-            String(localized: "sale.negativeStock.title", defaultValue: "Negative Stock"),
+            L("sale.negativeStock.title", "Negative Stock"),
             isPresented: $showNegativeStockAlert
         ) {
-            Button(String(localized: "OK", defaultValue: "OK"), role: .cancel) {
+            Button(L("OK", "OK"), role: .cancel) {
                 dismiss()
             }
         } message: {
@@ -140,7 +151,7 @@ struct QuickSaleSheet: View {
 
     private var sellingPriceSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(String(localized: "sale.pricePerUnit.label", defaultValue: "Price/unit").uppercased())
+            Text(L("sale.pricePerUnit.label", "Price/unit").uppercased())
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundColor(.secondary)
@@ -168,10 +179,7 @@ struct QuickSaleSheet: View {
                 .font(.caption)
             }
             if item.sellingPrice == 0 {
-                Text(String(
-                    localized: "sale.noSellingPrice.warning",
-                    defaultValue: "Selling price not set. Set selling price for better profit insights."
-                ))
+                Text(L("sale.noSellingPrice.warning", "Selling price not set. Set selling price for better profit insights."))
                 .font(.caption)
                 .foregroundColor(.orange)
             }
@@ -185,7 +193,7 @@ struct QuickSaleSheet: View {
 
     private var saleTotalSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(String(localized: "sale.total.label", defaultValue: "Sale Total"))
+            Text(L("sale.total.label", "Sale Total"))
                 .font(.caption)
                 .foregroundColor(.secondary)
             Text(currencyManager.formatPrice(revenue))
@@ -329,7 +337,8 @@ struct QuickSaleSheet: View {
             sellingPrice: resolvedPrice,
             costPrice: unitCost,
             profit: (resolvedPrice - unitCost) * soldQty,
-            storageId: item.storage?.id.uuidString ?? ""
+            storageId: item.storage?.id.uuidString ?? "",
+            mode: "manual"
         ))
 
         isSaving = false

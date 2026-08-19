@@ -34,10 +34,11 @@ class TrackingPermissionManager: ObservableObject {
     func requestPermissionIfNeeded() async {
         let currentStatus = ATTrackingManager.trackingAuthorizationStatus
 
-        // Already decided by the user previously — just init AdMob.
+        // Already decided by the user previously — sync Meta ATT + init AdMob.
         if currentStatus != .notDetermined {
             authorizationStatus = currentStatus
             hasResolved = true
+            MetaAppEvents.setAdvertiserTrackingEnabled(currentStatus == .authorized)
             AdManager.shared.initializeAfterTrackingDecision()
             return
         }
@@ -48,6 +49,8 @@ class TrackingPermissionManager: ObservableObject {
         let status = await ATTrackingManager.requestTrackingAuthorization()
         authorizationStatus = status
         hasResolved = true
+
+        MetaAppEvents.setAdvertiserTrackingEnabled(status == .authorized)
 
         // Always initialize AdMob — it works with or without tracking permission.
         // With permission: personalized ads (higher CPM).
@@ -78,15 +81,15 @@ class TrackingPermissionManager: ObservableObject {
     var statusDescription: String {
         switch authorizationStatus {
         case .authorized:
-            return String(localized: "tracking.status.authorized", defaultValue: "Personalized ads enabled")
+            return L("tracking.status.authorized", "Personalized ads enabled")
         case .denied:
-            return String(localized: "tracking.status.denied", defaultValue: "Non-personalized ads only")
+            return L("tracking.status.denied", "Non-personalized ads only")
         case .restricted:
-            return String(localized: "tracking.status.restricted", defaultValue: "Restricted by device policy")
+            return L("tracking.status.restricted", "Restricted by device policy")
         case .notDetermined:
-            return String(localized: "tracking.status.notDetermined", defaultValue: "Not yet requested")
+            return L("tracking.status.notDetermined", "Not yet requested")
         @unknown default:
-            return String(localized: "tracking.status.unknown", defaultValue: "Unknown")
+            return L("tracking.status.unknown", "Unknown")
         }
     }
 }

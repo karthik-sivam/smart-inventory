@@ -207,7 +207,7 @@ struct AuthView: View {
         } message: {
             Text(
                 successMessage.isEmpty
-                    ? String(localized: "auth.success.generic", defaultValue: "Success!")
+                    ? L("auth.success.generic", "Success!")
                     : successMessage
             )
         }
@@ -354,7 +354,7 @@ struct ForgotPasswordView: View {
                 dismiss()
             }
         } message: {
-            Text(String(localized: "auth.passwordResetSent", defaultValue: "Password reset email sent! Please check your inbox."))
+            Text(L("auth.passwordResetSent", "Password reset email sent! Please check your inbox."))
         }
     }
     

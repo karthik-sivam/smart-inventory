@@ -31,7 +31,7 @@ extension Bundle {
             return
         }
 
-        let bundle = localizedBundle(for: language) ?? Bundle.main
+        let bundle = Bundle.resolvedLprojBundle(for: language) ?? Bundle.main
         objc_setAssociatedObject(
             Bundle.main,
             &associatedLanguageBundleKey,
@@ -40,7 +40,7 @@ extension Bundle {
         )
     }
 
-    private static func localizedBundle(for language: String) -> Bundle? {
+    static func resolvedLprojBundle(for language: String) -> Bundle? {
         if let path = Bundle.main.path(forResource: language, ofType: "lproj"),
            let bundle = Bundle(path: path) {
             return bundle

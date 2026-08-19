@@ -100,7 +100,7 @@ enum StoqlyEvent {
     case storageViewed
 
     // ── Items ────────────────────────────────────────────────────────────────────
-    case itemAdded(category: String, hasBarcode: Bool, hasPhoto: Bool)
+    case itemAdded(category: String, hasBarcode: Bool, hasPhoto: Bool, source: String, inputMethod: String)
     case itemUpdated
     case itemDeleted(category: String)
     case itemCounted(storageName: String)
@@ -112,7 +112,7 @@ enum StoqlyEvent {
     // ── Smart Count / AI ─────────────────────────────────────────────────────────
     case smartCountOpened
     case smartCountModeSelected(mode: String)              // "voice" | "photo" | "sheet"
-    case smartCountCompleted(mode: String, itemCount: Int)
+    case smartCountCompleted(mode: String, itemCount: Int, capturedExtraFields: [String]?)
     case smartCountFailed(mode: String, reason: String)
 
     // ── Bulk Import ──────────────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ enum StoqlyEvent {
     case bulkImportFailed(reason: String)
 
     // ── Monetisation ─────────────────────────────────────────────────────────────
-    case paywallShown(source: String)                      // source: "storage_limit" | "item_limit" | "pro_feature" | "ai_limit"
+    case paywallShown(source: String, trigger: String?)              // source: limit/feature; trigger: optional detail
     case subscriptionStarted(plan: String)                 // plan: "monthly" | "annual"
     case subscriptionCancelled
     case removeAdsPurchased
@@ -135,8 +135,10 @@ enum StoqlyEvent {
     case exportCompleted(format: String)                   // "csv" | "pdf"
 
     // ── Sales & Movements (Phase 7A) ─────────────────────────────────────────────
-    case saleRecorded(itemId: String, qty: Double, sellingPrice: Double, costPrice: Double, profit: Double, storageId: String)
+    case saleRecorded(itemId: String, qty: Double, sellingPrice: Double, costPrice: Double, profit: Double, storageId: String, mode: String)
     case movementLogged(itemId: String, movementType: String, qty: Double, pricePerUnit: Double)
+    case saleReversed(itemId: String, quantity: Double)
+    case movementReversed(itemId: String, movementType: String)
     case reportViewed(period: String)
 
     // ── Smart Sales Entry (Phase 7B-B) ───────────────────────────────────────────
@@ -147,6 +149,64 @@ enum StoqlyEvent {
     // ── Errors / Crashes (non-fatal, for awareness) ───────────────────────────────
     case syncFailed(reason: String)
     case barcodeEnrichmentFailed
+
+    // ── Journey backbone (S24) ───────────────────────────────────────────────────
+    case screenViewed(name: String, referrer: String?)
+
+    // ── Dashboard taps (S24) ────────────────────────────────────────────────────
+    case dashboardCardTapped(card: String)
+    case dashboardInsightTapped(insight: String)
+    case dashboardTipTapped(tip: String)
+    case dashboardPeriodChanged(period: String)
+    case viewFullReportTapped
+    case floatingAIButtonTapped
+
+    // ── Upgrade / paywall interaction (S24) ──────────────────────────────────────
+    case upgradeCtaTapped(source: String)
+    case paywallCtaTapped(plan: String)
+    case paywallDismissed
+
+    // ── Flow START events (S24) ──────────────────────────────────────────────────
+    case addItemStarted(source: String)
+    case saleEntryStarted(mode: String)
+    case purchaseEntryStarted(mode: String)
+
+    // ── Onboarding funnel (S24) ──────────────────────────────────────────────────
+    case onboardingStarted
+    case onboardingStepViewed(step: Int, name: String)
+    case onboardingCompleted
+    case onboardingSkipped(step: Int)
+
+    // ── Blockers (S24) ───────────────────────────────────────────────────────────
+    case permissionResult(type: String, granted: Bool)
+    case aiRequestFailed(feature: String, reason: String)
+    case emptyStateShown(screen: String)
+
+    // ── Engagement depth (S24) ───────────────────────────────────────────────────
+    case searchPerformed(scope: String, resultCount: Int)
+    case filterApplied(screen: String, filter: String)
+    case languageChanged(toLanguage: String)
+    case aiHelpQuestionAsked(question: String)
+    case reorderEmailSent(supplierCount: Int, itemCount: Int)
+    case voiceEngineUsed(engine: String, language: String)
+    case languageChosenAtOnboarding(language: String)
+    case feedbackSubmitted(type: String)
+    case feedbackPromptShown
+    case feedbackPromptTapped
+    case feedbackPromptDismissed
+
+    // ── S37: Symmetric open/close + intent events ────────────────────────────────
+    case sheetOpened(sheet: String, source: String?)
+    case sheetClosed(sheet: String, outcome: String, seconds: Int?)
+    case proLockTapped(feature: String)
+    case formSubmitAttempted(form: String, valid: Bool, reason: String?)
+    case addItemCancelled(source: String, seconds: Int)
+    case smartCountCancelled(mode: String?)
+    case smartSalesCancelled(mode: String?)
+    case saleEntryCancelled(mode: String)
+    case purchaseEntryCancelled(mode: String)
+    case swipeActionUsed(screen: String, action: String)
+    case buttonTapped(screen: String, control: String)
 
     // MARK: Event name + properties
 
@@ -191,6 +251,8 @@ enum StoqlyEvent {
 
         case .saleRecorded:              return "sale_recorded"
         case .movementLogged:            return "movement_logged"
+        case .saleReversed:              return "sale_reversed"
+        case .movementReversed:          return "movement_reversed"
         case .reportViewed:              return "report_viewed"
 
         case .smartSalesOpened:          return "smart_sales_opened"
@@ -199,6 +261,55 @@ enum StoqlyEvent {
 
         case .syncFailed:                return "sync_failed"
         case .barcodeEnrichmentFailed:   return "barcode_enrichment_failed"
+
+        case .screenViewed:              return "screen_viewed"
+
+        case .dashboardCardTapped:       return "dashboard_card_tapped"
+        case .dashboardInsightTapped:    return "dashboard_insight_tapped"
+        case .dashboardTipTapped:        return "dashboard_tip_tapped"
+        case .dashboardPeriodChanged:    return "dashboard_period_changed"
+        case .viewFullReportTapped:      return "view_full_report_tapped"
+        case .floatingAIButtonTapped:    return "floating_ai_button_tapped"
+
+        case .upgradeCtaTapped:          return "upgrade_cta_tapped"
+        case .paywallCtaTapped:          return "paywall_cta_tapped"
+        case .paywallDismissed:          return "paywall_dismissed"
+
+        case .addItemStarted:            return "add_item_started"
+        case .saleEntryStarted:          return "sale_entry_started"
+        case .purchaseEntryStarted:      return "purchase_entry_started"
+
+        case .onboardingStarted:         return "onboarding_started"
+        case .onboardingStepViewed:       return "onboarding_step_viewed"
+        case .onboardingCompleted:       return "onboarding_completed"
+        case .onboardingSkipped:         return "onboarding_skipped"
+
+        case .permissionResult:          return "permission_result"
+        case .aiRequestFailed:            return "ai_request_failed"
+        case .emptyStateShown:           return "empty_state_shown"
+
+        case .searchPerformed:           return "search_performed"
+        case .filterApplied:             return "filter_applied"
+        case .languageChanged:           return "language_changed"
+        case .languageChosenAtOnboarding: return "language_chosen_at_onboarding"
+        case .aiHelpQuestionAsked:        return "ai_help_question_asked"
+        case .reorderEmailSent:           return "reorder_email_sent"
+        case .voiceEngineUsed:            return "voice_engine_used"
+        case .feedbackSubmitted:          return "feedback_submitted"
+        case .feedbackPromptShown:        return "feedback_prompt_shown"
+        case .feedbackPromptTapped:       return "feedback_prompt_tapped"
+        case .feedbackPromptDismissed:    return "feedback_prompt_dismissed"
+        case .sheetOpened:                return "sheet_opened"
+        case .sheetClosed:                return "sheet_closed"
+        case .proLockTapped:              return "pro_lock_tapped"
+        case .formSubmitAttempted:        return "form_submit_attempted"
+        case .addItemCancelled:           return "add_item_cancelled"
+        case .smartCountCancelled:        return "smart_count_cancelled"
+        case .smartSalesCancelled:        return "smart_sales_cancelled"
+        case .saleEntryCancelled:         return "sale_entry_cancelled"
+        case .purchaseEntryCancelled:     return "purchase_entry_cancelled"
+        case .swipeActionUsed:            return "swipe_action_used"
+        case .buttonTapped:               return "button_tapped"
         }
     }
 
@@ -212,8 +323,8 @@ enum StoqlyEvent {
         case .storageDeleted:                 return [:]
         case .storageViewed:                  return [:]
 
-        case .itemAdded(let cat, let bar, let photo):
-            return ["category": cat, "has_barcode": bar, "has_photo": photo]
+        case .itemAdded(let cat, let bar, let photo, let source, let inputMethod):
+            return ["category": cat, "has_barcode": bar, "has_photo": photo, "source": source, "input_method": inputMethod]
         case .itemUpdated:                    return [:]
         case .itemDeleted(let cat):           return ["category": cat]
         case .itemCounted(let s):             return ["storage_name": s]
@@ -223,15 +334,22 @@ enum StoqlyEvent {
 
         case .smartCountOpened:               return [:]
         case .smartCountModeSelected(let m):  return ["mode": m]
-        case .smartCountCompleted(let m, let n):
-            return ["mode": m, "item_count": n]
+        case .smartCountCompleted(let m, let n, let fields):
+            var props: [String: Any] = ["mode": m, "item_count": n]
+            if let fields, !fields.isEmpty {
+                props["captured_extra_fields"] = fields
+            }
+            return props
         case .smartCountFailed(let m, let r): return ["mode": m, "reason": r]
 
         case .bulkImportCompleted(let n, let fmt):
             return ["item_count": n, "format": fmt]
         case .bulkImportFailed(let r):        return ["reason": r]
 
-        case .paywallShown(let src):          return ["source": src]
+        case .paywallShown(let src, let trigger):
+            var props: [String: Any] = ["source": src]
+            if let trigger, !trigger.isEmpty { props["trigger"] = trigger }
+            return props
         case .subscriptionStarted(let plan):  return ["plan": plan]
         case .subscriptionCancelled:          return [:]
         case .removeAdsPurchased:             return [:]
@@ -244,17 +362,22 @@ enum StoqlyEvent {
         case .settingsViewed:                 return [:]
         case .exportCompleted(let fmt):       return ["format": fmt]
 
-        case .saleRecorded(let itemId, let qty, let sp, let cp, let profit, let storageId):
+        case .saleRecorded(let itemId, let qty, let sp, let cp, let profit, let storageId, let mode):
             return [
                 "item_id": itemId,
                 "qty": qty,
                 "selling_price": sp,
                 "cost_price": cp,
                 "profit": profit,
-                "storage_id": storageId
+                "storage_id": storageId,
+                "mode": mode
             ]
         case .movementLogged(let itemId, let type, let qty, let price):
             return ["item_id": itemId, "movement_type": type, "qty": qty, "price_per_unit": price]
+        case .saleReversed(let itemId, let quantity):
+            return ["item_id": itemId, "quantity": quantity]
+        case .movementReversed(let itemId, let movementType):
+            return ["item_id": itemId, "movement_type": movementType]
         case .reportViewed(let period):       return ["period": period]
 
         case .smartSalesOpened:               return [:]
@@ -264,6 +387,90 @@ enum StoqlyEvent {
 
         case .syncFailed(let r):              return ["reason": r]
         case .barcodeEnrichmentFailed:        return [:]
+
+        case .screenViewed(let name, let referrer):
+            var props: [String: Any] = ["screen": name]
+            if let referrer, !referrer.isEmpty { props["referrer"] = referrer }
+            return props
+
+        case .dashboardCardTapped(let card):  return ["card": card]
+        case .dashboardInsightTapped(let insight): return ["insight": insight]
+        case .dashboardTipTapped(let tip):    return ["tip": tip]
+        case .dashboardPeriodChanged(let period): return ["period": period]
+        case .viewFullReportTapped:           return [:]
+        case .floatingAIButtonTapped:         return [:]
+
+        case .upgradeCtaTapped(let source):  return ["source": source]
+        case .paywallCtaTapped(let plan):      return ["plan": plan]
+        case .paywallDismissed:               return [:]
+
+        case .addItemStarted(let source):     return ["source": source]
+        case .saleEntryStarted(let mode):     return ["mode": mode]
+        case .purchaseEntryStarted(let mode): return ["mode": mode]
+
+        case .onboardingStarted:              return [:]
+        case .onboardingStepViewed(let step, let name):
+            return ["step": step, "step_name": name]
+        case .onboardingCompleted:             return [:]
+        case .onboardingSkipped(let step):     return ["step": step]
+
+        case .permissionResult(let type, let granted):
+            return ["type": type, "granted": granted]
+        case .aiRequestFailed(let feature, let reason):
+            return ["feature": feature, "reason": reason]
+        case .emptyStateShown(let screen):    return ["screen": screen]
+
+        case .searchPerformed(let scope, let resultCount):
+            return ["scope": scope, "result_count": resultCount]
+        case .filterApplied(let screen, let filter):
+            return ["screen": screen, "filter": filter]
+        case .languageChanged(let toLanguage):
+            return ["to_language": toLanguage]
+        case .aiHelpQuestionAsked(let q):
+            let text = q.trimmingCharacters(in: .whitespacesAndNewlines)
+            return ["question": String(text.prefix(500)), "question_length": text.count]
+        case .reorderEmailSent(let supplierCount, let itemCount):
+            return ["supplier_count": supplierCount, "item_count": itemCount]
+        case .voiceEngineUsed(let engine, let language):
+            return ["engine": engine, "language": language]
+        case .languageChosenAtOnboarding(let language):
+            return ["language": language]
+        case .feedbackSubmitted(let type):
+            return ["type": type]
+        case .feedbackPromptShown, .feedbackPromptTapped, .feedbackPromptDismissed:
+            return [:]
+        case .sheetOpened(let sheet, let source):
+            var props: [String: Any] = ["sheet": sheet]
+            if let source, !source.isEmpty { props["source"] = source }
+            return props
+        case .sheetClosed(let sheet, let outcome, let seconds):
+            var props: [String: Any] = ["sheet": sheet, "outcome": outcome]
+            if let seconds { props["seconds"] = seconds }
+            return props
+        case .proLockTapped(let feature):
+            return ["feature": feature]
+        case .formSubmitAttempted(let form, let valid, let reason):
+            var props: [String: Any] = ["form": form, "valid": valid]
+            if let reason, !reason.isEmpty { props["reason"] = reason }
+            return props
+        case .addItemCancelled(let source, let seconds):
+            return ["source": source, "seconds": seconds]
+        case .smartCountCancelled(let mode):
+            var props: [String: Any] = [:]
+            if let mode, !mode.isEmpty { props["mode"] = mode }
+            return props
+        case .smartSalesCancelled(let mode):
+            var props: [String: Any] = [:]
+            if let mode, !mode.isEmpty { props["mode"] = mode }
+            return props
+        case .saleEntryCancelled(let mode):
+            return ["mode": mode]
+        case .purchaseEntryCancelled(let mode):
+            return ["mode": mode]
+        case .swipeActionUsed(let screen, let action):
+            return ["screen": screen, "action": action]
+        case .buttonTapped(let screen, let control):
+            return ["screen": screen, "control": control]
         }
     }
 }

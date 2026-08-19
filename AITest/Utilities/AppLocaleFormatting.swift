@@ -36,10 +36,10 @@ enum AppLocaleFormatting {
     static func sectionDayTitle(for date: Date) -> String {
         let cal = Calendar.current
         if cal.isDateInToday(date) {
-            return String(localized: "Today", defaultValue: "Today")
+            return L("Today", "Today")
         }
         if cal.isDateInYesterday(date) {
-            return String(localized: "Yesterday", defaultValue: "Yesterday")
+            return L("Yesterday", "Yesterday")
         }
         return abbreviatedDate(date)
     }

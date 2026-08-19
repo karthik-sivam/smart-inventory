@@ -1,8 +1,14 @@
 import SwiftUI
+import SwiftData
 
 struct MovementsListView: View {
     let movements: [InventoryMovement]
+    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var currencyManager: CurrencyManager
+
+    @State private var reverseToastMessage: String?
+    @State private var movementPendingReverse: InventoryMovement?
+    @State private var showSwipeReverseConfirm = false
 
     private var grouped: [(Date, [InventoryMovement])] {
         let cal = Calendar.current
@@ -18,12 +24,36 @@ struct MovementsListView: View {
                 } description: {
                     Text("Movements recorded from Item Detail will appear here.")
                 }
+                .onAppear {
+                    AnalyticsManager.shared.track(.emptyStateShown(screen: "movements"))
+                }
             } else {
                 List {
                     ForEach(grouped, id: \.0) { day, dayMovements in
                         Section(header: Text(sectionTitle(for: day))) {
                             ForEach(dayMovements, id: \.id) { movement in
-                                movementRow(movement)
+                                NavigationLink {
+                                    MovementDetailView(movement: movement) {
+                                        reverseToastMessage = L("movement.reversed.toast", "Movement reversed")
+                                    }
+                                    .environmentObject(currencyManager)
+                                } label: {
+                                    movementRow(movement)
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    if movement.linkedSaleEventId == nil,
+                                       EditPolicy.isWithinEditWindow(createdAt: movement.createdAt) {
+                                        Button(role: .destructive) {
+                                            movementPendingReverse = movement
+                                            showSwipeReverseConfirm = true
+                                        } label: {
+                                            Label(
+                                                L("Delete / Reverse", "Delete / Reverse"),
+                                                systemImage: "arrow.uturn.backward.circle"
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -32,6 +62,22 @@ struct MovementsListView: View {
             }
         }
         .navigationTitle("Movements")
+        .toast(message: $reverseToastMessage)
+        .alert(
+            L("movement.reverse.confirm.title", "Reverse this movement?"),
+            isPresented: $showSwipeReverseConfirm,
+            presenting: movementPendingReverse
+        ) { movement in
+            Button(L("Cancel", "Cancel"), role: .cancel) {
+                movementPendingReverse = nil
+            }
+            Button(L("Delete / Reverse", "Delete / Reverse"), role: .destructive) {
+                performReverse(movement)
+                movementPendingReverse = nil
+            }
+        } message: { _ in
+            Text(L("movement.reverse.confirm.message", "Stock will be adjusted to undo this movement."))
+        }
     }
 
     private func sectionTitle(for date: Date) -> String {
@@ -45,10 +91,7 @@ struct MovementsListView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(
                     String(
-                        format: String(
-                            localized: "%@ · %@",
-                            defaultValue: "%@ · %@"
-                        ),
+                        format: L("%@ · %@", "%@ · %@"),
                         movement.localizedMovementTypeLabel,
                         movement.quantity.smartFormatted
                     )
@@ -57,10 +100,7 @@ struct MovementsListView: View {
                     .fontWeight(.medium)
                 Text(
                     String(
-                        format: String(
-                            localized: "%@ · %@",
-                            defaultValue: "%@ · %@"
-                        ),
+                        format: L("%@ · %@", "%@ · %@"),
                         movement.itemName,
                         AppLocaleFormatting.abbreviatedDateTime(movement.occurredAt)
                     )
@@ -73,6 +113,17 @@ struct MovementsListView: View {
                 Text(currencyManager.formatPrice(movement.totalValue))
                     .font(.subheadline)
             }
+            if movement.linkedSaleEventId != nil {
+                Image(systemName: "link")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
         }
+    }
+
+    private func performReverse(_ movement: InventoryMovement) {
+        let result = SaleHelpers.reverseMovement(movement, modelContext: modelContext)
+        guard result == .success else { return }
+        reverseToastMessage = L("movement.reversed.toast", "Movement reversed")
     }
 }

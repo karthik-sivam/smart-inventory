@@ -241,4 +241,286 @@
 \bullet updateEntitlements: on revoked/expired transaction call refreshPurchaseStatus(); only grant + writeProStatus for still-valid Pro entitlements\par
 \bullet Also sync proSubscriptionExpirationDate / isOnProTrial on valid Pro grant\par
 \bullet Files: AITest/Models/SubscriptionManager.swift\par
+\par
+{\b S13 \emdash In-App Language Picker}\par
+[COMPLETED]\par
+\bullet S13-1: 15 locales in knownRegions — en, Base, hi, ta, te, kn, ml, ar, es, pt-BR, fr, zh-Hans, id, de, ru, ja\par
+\bullet S13-2: LocalizationManager.swift — @AppStorage appLanguageOverride, refreshID, setLanguage(), effectiveLocale(), re-applies Bundle override on launch\par
+\bullet S13-3: Bundle+Localization.swift runtime override via LocalizedBundle + object_setClass; app root gets .environment(\\.locale), .environment(\\.layoutDirection), .id(refreshID)\par
+\bullet S13-4: Settings Language row (globe, languageSettingsRow) + LanguagePickerView (languagePicker) with System Default + 15 native names\par
+\bullet S13-5: RTL via layoutDirection when Arabic selected; live-switch updates tab bar + Settings; some cached sheets may need relaunch\par
+\bullet RTL follow-up: floating AI bubble absolute position, Dashboard KPI cards, chart axis labels, SheetStyle custom headers\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S14 \emdash Full Translation + Voice Localization}\par
+[COMPLETED]\par
+\bullet S14-A1: translate_catalog.py complete — 14 languages filled in Localizable.xcstrings (705 keys; ~683 strings per language, state=needs_review). Minor gaps: de 678+/683, zh-Hans 653+/683 (failed JSON batches — re-run --langs de,zh-Hans --batch-size 5 to fill)\par
+\bullet S14-A2: Catalog imported; build green after full translation run\par
+\bullet S14-A3: Spot-check via Settings > Language recommended (Hindi, Tamil, Arabic, Spanish, Japanese)\par
+\bullet S14-B1: SpeechTranscriber protocol + AppleSpeechTranscriber + SarvamSpeechTranscriber (AITest/Services/SpeechTranscription/)\par
+\bullet S14-B2: SpeechEnginePicker — maps LocalizationManager language to Apple vs Sarvam vs unavailable\par
+\bullet S14-B3: Sarvam POST api.sarvam.ai/speech-to-text; SARVAM_API_KEY in SecretsManager (Cloud Function proxy flagged as follow-up)\par
+\bullet S14-B4: VoiceInventoryView — engine routing, cloud indicator, locale pills, fallback UX\par
+\bullet S14-B5: Sarvam voice uses same AIUsageManager.voice gate (3/month free)\par
+\bullet S14-B6: parseVoiceTranscript per-language quantity hints\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S15 \emdash Sales Polish + Storage Value + Remote Announcements}\par
+[COMPLETED]\par
+\bullet S15-1: InventoryItem.fallbackSalePrice (selling -> lastPurchase -> unitCost -> 0); SaleHelpers.applyFallbackPriceIfNeeded; priceWasEdited on ParsedSaleRow; prefill + orange warning in SaleEntryReviewView + QuickSaleSheet; CSV/voice/photo/text paths funnel through SaleEntryReviewView\par
+\bullet S15-2: Price/unit caption + small line value (= formatted); prominent Sale Total footer (title3, bold, stoqlyPrimary) in SaleEntryReviewView + QuickSaleSheet\par
+\bullet S15-3: SaleHelpers.negativeStockMessages; non-blocking alert after save in SaleEntryReviewView.saveAllSales + QuickSaleSheet.saveSale (CSV covered via review view)\par
+\bullet S15-4: EditStorageView + StorageListView StorageCard show Total Value via currencyManager.formatPrice(storage.totalValue); StorageDetailView/Dashboard already used totalValue\par
+\bullet S15-5: FirestoreManager.writeFCMToken; FCMTopicManager (all_users + pro/free topics); token sync on MessagingDelegate + AuthManager sign-in; SubscriptionManager refreshPurchaseStatus; AnnouncementPopupView + ContentView sheet on .stoqlyAnnouncement; AppDelegate willPresent + didReceive tap handling\par
+\bullet Push delivery on device: not verified in automation (requires APNs Auth Key uploaded to Firebase + physical device)\par
+\bullet S15-6: FirebaseInAppMessaging-Beta linked in project.pbxproj; import in AITestApp.swift (auto-init after FirebaseApp.configure())\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b Test Coverage Expansion \emdash Maestro S15 flows + unit tests}\par
+[COMPLETED]\par
+\bullet Maestro flows 93-102 + seed_sale_test_item helper: quick sale record, negative stock alert, storage Total Value (edit + card), language picker, sales reports, smart sales text/CSV UI, sale price fallback, sale total hierarchy\par
+\bullet Accessibility IDs added for QuickSaleSheet, EditStorageView, EditItemView pricing fields, LanguagePickerView, SmartSalesTextView, SaleEntryReviewView, ReportsView, StorageCard total value\par
+\bullet Unit tests (+9): InventoryItem.fallbackSalePrice chain, SaleHelpers, Storage.totalValue, SaleEvent revenue/profit (45 unit test methods total)\par
+\bullet run_all.yaml now 103 sequential flows; static feature coverage ~major tabs + S15 sales/storage/i18n paths\par
+\bullet Xcode line coverage target 35-40% requires one xcodebuild test run with -enableCodeCoverage YES (estimated ~15-25% from unit tests alone; Maestro E2E adds runtime path coverage not in xccov)\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S16 \emdash Voice MIME Fix + Localization Correctness Sweep}\par
+[COMPLETED]\par
+\bullet S16-1: SarvamSpeechTranscriber Content-Type audio/m4a -> audio/x-m4a\par
+\bullet S16-2: DashboardCard title LocalizedStringKey; Smart Insights titles/subtitles via String(localized:); sales period pills localized; ActivityEvent displayDescription localized; health badges LocalizedStringKey; ReportsView ReportPeriod localized\par
+\bullet S16-3: New catalog keys externalized (insight.*, activity.*, dashboard.salesPerformance.*, proUpgrade.strip.*, export.failed.*, Good/Fair/Needs Attention, etc.)\par
+\bullet S16-4: translate_catalog.py --revalidate --langs hi,ta,te,kn,ml --model claude-sonnet-5 — cleared contamination ta:53 ml:4 kn:5 te:11; wrote 128 Indic translations; full catalog fill wrote 99 more (ar/es/pt-BR/fr/zh-Hans/id/de/ru/ja x11 each); second --revalidate pass: none cleared; API key from AITest/Secrets.plist\par
+\bullet S16-5: Sweep on Dashboard, Reports, ActivityEvent, ProUpgradeStrip; predefined categories left as data per spec\par
+\bullet S16-6: ExportManager CSV UTF-8 BOM + RFC-4180 always-quoted fields; summary rows quoted\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S17 \emdash Export Fixes (PDF + Share Sheet)}\par
+[COMPLETED]\par
+\bullet S17-1: convertHTMLToPDF retains WKWebView locally + PDFNavigationHandler didFinish + US Letter frame (612x792)\par
+\bullet S17-2: createSimplePDF strips style/script blocks; NSAttributedString HTML fallback before tag-strip\par
+\bullet S17-3: ExportView presents share sheet directly on success; success alert removed; failure-only alert kept\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S18 \emdash Reliable Language Switch + Full Localization Coverage}\par
+[COMPLETED]\par
+\bullet S18-1: AppWindowCoordinator.swift — full window re-root on setLanguage(); registers modelContainer + currencyManager from AITestApp; cross-dissolve transition\par
+\bullet S18-2: ~90 label/interpolation fixes across 30+ files (StorageDetailView, FilteredItemListView, ReportsView, ReorderListView, HelpCentre, TrackingPermissionManager, etc.); Dashboard TipCard/period, ExportView cards, OnboardingPage, SmartCount/SmartSales mode cards, stockStatus, FilterChip labels\par
+\bullet S18-3: PaywallView headline/subtitle/priceHint/features/ProductCard periods + annual savings fully localized; StoreKit displayName/displayPrice unchanged\par
+\bullet S18-4: translate_catalog.py — 658 new translations (235 Indic revalidate + 423 all langs x47); second revalidate: 0 contamination; catalog 764 strings\par
+\bullet S18-5: localization_audit.py updated (data + localized-at-source filters); audit 46 variable refs remain — reviewed: LocalizedStringKey props, FAQ keys, toast messages, AI chat answers (all localized at source or data)\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S19 \emdash Fix 105 Untranslated UI Strings}\par
+[COMPLETED]\par
+\bullet S19-1: AuthTextField.placeholder, OnboardingHintRow.text, SearchBar.placeholder -> LocalizedStringKey; PaywallFeatureRow/ExportTypeCard/FormatCard already LocalizedStringKey; ProductCard.badge kept String? for dynamic StoreKit savings text\par
+\bullet S19-2: inject_catalog_gaps.py added 113 missing init literals to Localizable.xcstrings; catalog_gap_check.py GATE PASS (0 missing); preview blocks + Sample description excluded\par
+\bullet S19-3: translate_catalog.py — 560 Indic + 1008 other langs (112 keys x 14 langs); revalidate 0 contamination; catalog 877 strings\par
+\bullet S19-4: catalog_gap_check = 0 missing; localization_audit 46 refs (localized-at-source/data only); build exit 0 BUILD SUCCEEDED\par
+\par
+{\b S20 \emdash Sarvam Voice Finalize-Before-Read Fix}\par
+[COMPLETED]\par
+\bullet S20-1: SarvamSpeechTranscriber.transcribe() stops recorder + deactivates session before reading .m4a; empty-file guard; defer only deletes temp file (moov atom fix for \u201cFailed to read the file\u201d); BUILD SUCCEEDED\par
+\par
+{\b S21 \emdash Enum Labels + Feature-Name Re-translation + Locale Dates}\par
+[COMPLETED]\par
+\bullet S21-1: MovementTypeIn/Out.localizedLabel (LocalizedStringKey) + localizedMovementTypeLabel; MovementSheet/MovementsListView use localized labels; rawValues untouched\par
+\bullet S21-2: inject_catalog_gaps.py extended (enum labels + String(localized:) keys); --clear-english on translate_catalog; 15 new keys + 1339 translations; catalog 1041 strings\par
+\bullet S21-3: catalog_gap_check GATE PASS (0); localization_audit 46 refs (data/localized-at-source); translation==English 10 (PRO/CSV instructions only)\par
+\bullet S21-4: AppLocaleFormatting.swift — locale-aware relative/abbreviated dates; ActivityEventRow, MovementsListView, ProfileView sync time\par
+\bullet S21-5: dashboard.priceCreep.banner localized; insight subtitles already String(localized:) keys\par
+\bullet S21-6: Cost of Goods Sold (was COGS); activity \u201cby %@\u201d localized; period pills unchanged (already localizedTitleString)\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S22 \emdash Tamil Register + Gap Fill}\par
+[COMPLETED]\par
+\bullet S22-1: translate_catalog.py run (hi,ta,te,kn,ml + all langs); prior S21 gaps already filled — only 2 new language-restart alert keys needed translation (28 total across 14 langs)\par
+\bullet S22-2: catalog 1044 strings; catalog_gap_check GATE PASS (0 missing)\par
+\bullet S22-3: Tamil glossary + register rule 4b in translate_catalog.py unchanged; no --regenerate needed\par
+\par
+{\b S23 \emdash Xcode Cloud CI + Trial Wording Fix}\par
+[COMPLETED]\par
+\bullet S23-1: ci_scripts/ci_post_clone.sh + ci_pre_xcodebuild.sh present (isPro guard, no user-facing trial, catalog_gap_check=0)\par
+\bullet S23-2: DashboardView Pro-access banner uses String(localized:) — never \u201ctrial\u201d; SubscriptionManager comment updated\par
+\bullet S23-3: Pro-access expiry keys translated via S22 gap-fill run\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S24 \emdash Analytics Expansion}\par
+[COMPLETED]\par
+\bullet S24-1: StoqlyEvent expanded in AnalyticsManager.swift (screenViewed, dashboardCard/Insight/Tip/Period, viewFullReport, floatingAI, upgrade/paywall CTAs, flow starts, onboarding funnel, blockers, search/filter, languageChanged, voiceEngineUsed, etc.)\par
+\bullet S24-2: DashboardView — KPI cards, inventory health, insights (analyticsKey), tips, period pills, view full report, Go Pro strip\par
+\bullet S24-3: InventoryAppView — floatingAIButtonTapped + screenViewed on tab change (dashboard/storages/items/sales/count)\par
+\bullet S24-4: Event firing in 15+ files (OnboardingView, PaywallView, EditItemView, GlobalSearchView, VoiceInventoryView, AIHelpChatView, ReorderListView, NotificationManager, etc.)\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S25 \emdash Reliable Language Switch (Relaunch)}\par
+[COMPLETED]\par
+\bullet S25-1: LocalizationManager.setLanguage sets AppleLanguages + synchronize(); fires languageChanged analytics; AppWindowCoordinator re-root removed from setLanguage\par
+\bullet S25-2: LanguagePickerView shows restart alert (language.restart.title/message) after selection; OK dismisses\par
+\bullet S25-3: 2 alert keys injected + translated across 14 langs; swizzle/re-root kept for pre-restart preview (harmless)\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\bullet Manual QA pending: device EN \u2192 Tamil \u2192 reopen \u2192 full String(localized:) coverage\par
+\par
+{\b S26 \emdash Preserve Item-Name Language in AI Extraction}\par
+[COMPLETED]\par
+\bullet S26-1: parseInventorySheet — inventoryHints + appLanguageCode; printed/brand names kept verbatim; handwritten generic items follow app language; inventory match returns exact stored name\par
+\bullet S26-2: Sales parsers (transcript/text/image/PDF) — salesSystemPrompt + inventoryContext hardened: keep spoken/written language; prefer exact inventory match\par
+\bullet S26-3: Purchase parsers (image/PDF/CSV) — purchaseSystemPrompt + knownItemNames param; keep invoice text verbatim; prefer inventory match\par
+\bullet S26-4: identifyProduct + parseVoiceTranscript already had language rules (verify-only); PaperInventoryView passes hints + currentCode; PurchaseInvoice photo/PDF pass knownItemNames\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\bullet Manual QA pending: Tamil voice new item keeps Tamil name; existing English item resolves without duplicate\par
+\par
+{\b S27 \emdash Edit/Delete Sales & Movements (7-Day Window)}\par
+[COMPLETED]\par
+\bullet S27-1: EditPolicy.windowDays=7 in Constants.swift; SaleHelpers.reverseSale/reverseMovement with stock reversal + ActivityEvent before delete\par
+\bullet S27-2: FirestoreManager.deleteSaleEvent/deleteInventoryMovement; ActivityEvent SaleReversed/MovementReversed display; analytics saleReversed/movementReversed\par
+\bullet S27-3: SaleDetailView + MovementDetailView; SalesView tap/swipe delete; MovementsListView tap/swipe (blocks linked-to-sale); toast on success\par
+\bullet S27-4: Phase 1 delete/reverse only — Phase 2 in-place edit deferred per spec\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED\par
+\par
+{\b S29 \emdash Meta SKAdNetwork IDs + Facebook SDK Integration}\par
+[COMPLETED]\par
+\bullet S29 SKAdNetwork: added 14 missing Meta IDs to Info.plist (prcb7njmu6, m8dbwejr1n, 7rz58n8ntl, 5lm9lj6jb7, ejvt5xe6j7, a8cz6cu7e5, dzg6xy7pwj, nu4557a4je, 6xzpu9s2p8, f73kdq92p3, zmvfpc5aq8, 24t9a8vmlk, gvmwg8q7h5, 424m5254lk)\par
+\bullet S29 SDK: FacebookCore via SPM (facebook-ios-sdk 17+); MetaAppEvents.swift wrapper\par
+\bullet S29 Info.plist: FacebookAppID, FacebookClientToken, FacebookDisplayName, fb1402336171794871 URL scheme, LSApplicationQueriesSchemes\par
+\bullet S29 Init: AppDelegate ApplicationDelegate + openURL; activateApp on didBecomeActive; ATT -> Settings.isAdvertiserTrackingEnabled in TrackingPermissionManager\par
+\bullet S29 Events: completedRegistration on email/Google/Apple sign-up; logPurchase on Pro/remove-ads purchase\par
+\bullet S29 Privacy: AITest/PrivacyInfo.xcprivacy (NSPrivacyTracking=true, collected data types, UserDefaults API reason)\par
+\bullet xmllint Info.plist — valid; build exit 0 BUILD SUCCEEDED\par
+\bullet Manual QA pending: Meta Events Manager activate/install, registration, purchase on TestFlight device\par
+\par
+{\b S28 \emdash Fluid Mode Under Non-English App Language}\par
+[COMPLETED]\par
+\bullet S28-1: AIInventoryService — machineFieldsEnglishRule + appLanguageNameRule shared across parseVoiceTranscript, identifyProduct, parseInventorySheet; unit/category/symbols stay English\par
+\bullet S28-2: ImageInventoryView isLiquidUnit hardening for Tamil mL/L glyphs (\u0bae\u0bbf\u0bb2, \u0bb2\u0bbf)\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \u2014 exit 0, BUILD SUCCEEDED\par
+\par
+{\b S30 \emdash ai_help_question_asked Captures Question Text}\par
+[COMPLETED]\par
+\bullet Verify-only: AnalyticsManager.aiHelpQuestionAsked(question:) with question + question_length; fired from AIHelpChatView + HelpCentreView\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b S31 \emdash Capture ALL Optional Item Fields from AI Input}\par
+[COMPLETED]\par
+\bullet S31-1: ParsedInventoryItem extended (unitCost, sellingPrice, expiryDate, sku, barcode, minQuantity); prompts updated in voice/photo/sheet parsers\par
+\bullet S31-2: EditableItem + InventoryItem.applyCapturedFields; Voice/Image/Paper save paths persist optional fields\par
+\bullet S31-3: smartCountCompleted adds captured_extra_fields analytics param; all call sites updated\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b S32 \emdash In-App Feedback Form}\par
+[COMPLETED]\par
+\bullet S32-1: FeedbackView (type picker, message, optional email, read-only diagnostics)\par
+\bullet S32-2: FirestoreManager.submitFeedback \u2192 feedback/\{autoId\} with serverTimestamp\par
+\bullet S32-3: Help Centre + Settings Support rows; mailto email support kept as secondary\par
+\bullet S32-4: feedbackSubmitted(type:) analytics; 26 keys injected + 363 translations\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b S36 \emdash FCM Guest Topic for Unsigned Users}\par
+[COMPLETED]\par
+\bullet S36-1: FCMTopicManager.subscribeGuest/unsubscribeGuest/syncGuestTopicIfNeeded\par
+\bullet S36-2: App launch + MessagingDelegate token callback + sign-out resubscribe; sign-in unsubscribes via syncRegistrationIfSignedIn\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\bullet Manual QA pending: fresh install without login subscribes to guest topic; sign-in unsubscribes\par
+\par
+{\b S33 \emdash Scheduled Aggregated Notifications (Phase 1)}\par
+[COMPLETED]\par
+\bullet S33-1: NotificationPrefs model + NotificationPrefsManager; Firestore sync/fetch at users/\{uid\}/notificationPrefs/default\par
+\bullet S33-2: NotificationSettingsView (master, low-stock/expiry daily, time picker, announcements); replaces legacy Daily Summary section in Settings\par
+\bullet S33-3: NotificationManager aggregated local daily digest with deep-link userInfo (route: reorder/expiry)\par
+\bullet S33-4: AppDelegate tap routing via NotificationRoute; Dashboard opens reorder/expiry/reports sheets; Audit tab for count\par
+\bullet S33-5: Per-item scheduleLowStockAlert deprecated/no-op; foreground refresh uses aggregated digest\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b S34 \emdash Language Picker at First Login}\par
+[COMPLETED]\par
+\bullet S34-1: OnboardingLanguageStepView — 15 languages by native name, device locale pre-selected\par
+\bullet S34-2: Shown first in OnboardingView when !hasChosenLanguage; also after sign-in via InventoryAppView fullScreenCover\par
+\bullet S34-3: hasChosenLanguage AppStorage flag; languageChosenAtOnboarding analytics\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b S35 \emdash Richer Analytics Context}\par
+[COMPLETED]\par
+\bullet S35-1: itemAdded adds source + input_method (manual/voice/photo/sheet/barcode + fab/storage_detail/ai)\par
+\bullet S35-2: saleRecorded adds mode; smartSalesCompleted already had mode\par
+\bullet S35-3: screenViewed adds optional referrer (tab_bar on tab changes)\par
+\bullet S35-4: paywallShown adds optional trigger (storage_cap, item_cap)\par
+\bullet S35-5: smartCountCompleted captured_extra_fields already shipped in S31\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b S37 \emdash Full User-Action Instrumentation}\par
+[COMPLETED WITH ISSUES]\par
+\bullet S37-A: 11 new StoqlyEvent cases + SheetAnalyticsTracker helper\par
+\bullet S37-B: PaywallView didTrackShown guard (fixes double paywall_shown)\par
+\bullet S37-C: AddItem cancel/submit; SmartCount cancel; storage_detail swipe edit/delete/sale\par
+\bullet S37-D: FeedbackView sheet lifecycle; other listed sheets can adopt SheetAnalyticsTracker incrementally\par
+\bullet S37-E: proLockTapped on item_photo + smart_count_ai\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b S38 \emdash Voice Expiry Date Fix}\par
+[COMPLETED]\par
+\bullet S38-1: todayISO + expiryDateAnchorPrompt in parseVoiceTranscript, identifyProduct, parseInventorySheet\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b S39 \emdash Live Language Switch (L() helper)}\par
+[COMPLETED]\par
+\bullet S39-1: L() helper + Bundle.resolvedLprojBundle; 332 call sites migrated across 45 files\par
+\bullet S39-2: LanguagePickerView live switch via reRootWindow (restart alert removed)\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\bullet Manual QA pending: Tamil Dashboard labels; voice relative expiry on device\par
+\par
+{\b S40 \emdash Soften Add Item Photo Pro lock}\par
+[COMPLETED]\par
+\bullet S40-1: ItemPhotoSection free row tap expands inline Pro hint (no modal); Upgrade to Pro opens paywall source=item_photo\par
+\bullet S40-2: pro_lock_tapped stays on row tap; upgrade_cta_tapped(source:item_photo) on explicit CTA\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b S41 \emdash Arabic live RTL + Gross Profit date range at 0}\par
+[COMPLETED]\par
+\bullet S41-1: AppWindowCoordinator.applySemanticDirection + reRootWindow set UIView.appearance / window / hosting semanticContentAttribute; applied on register (cold start)\par
+\bullet S41-2: Dashboard Gross Profit badge always shows period via dashboardProfitBadgeText; margin appended when revenue > 0\par
+\bullet dashboard.marginBadge injected + translated; inject_catalog_gaps.py now scans L() keys\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b S42 \emdash Help & Feedback on Profile + Dashboard prompt}\par
+[COMPLETED]\par
+\bullet S42-1: Profile Support section now Help & FAQ, Send Feedback, Email Support; FeedbackView sheet\par
+\bullet S42-2: FeedbackPromptManager (7-day install + 1 item + 60-day interval); dismissible Dashboard card above Smart Insights\par
+\bullet S42-3: feedback_prompt_shown / tapped / dismissed analytics\par
+\bullet 5 keys injected + translated; build exit 0 BUILD SUCCEEDED\par
+\par
+{\b S43 \emdash Pre-submission fixes}\par
+[COMPLETED]\par
+\bullet S43-1: LanguagePicker shows reopen alert only when crossing LTR/RTL; same-direction switches stay live\par
+\bullet S43-2: SmartCount stashes completion count; child onDismiss then toasts + dismisses parent (fixes Voice/Photo/Sheet/CSV race)\par
+\bullet S43-3: DEBUG Preview feedback prompt backdates install + resets lastShown; Dashboard listens for preview notification\par
+\bullet S43-4: Settings Support section removed; Help/Feedback stay on Profile\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b S44 \emdash Fix free item-cap leak (50 items/storage)}\par
+[COMPLETED]\par
+\bullet S44-1: SubscriptionManager.itemCount / freeItemCapReached / canInsertNewItem use fetchCount (not stale storage.items)\par
+\bullet S44-2: saveNew() returns Bool; AddItemView.saveItem() and ItemListView Save re-check at write and present item_limit paywall\par
+\bullet S44-3: Voice/Photo/Paper/Bulk insert new items only up to 50; existing updates unlimited; leftover rows skipped + item_limit paywall\par
+\bullet Existing over-limit data left untouched; freeItemLimit stays 50; Pro remains unlimited\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b S45 \emdash AI/bulk overflow: user chooses which new items to keep}\par
+[COMPLETED]\par
+\bullet S45: Replaced S44 silent skip with review-screen selection (Voice/Photo/Paper/Bulk)\par
+\bullet NEW rows get toggles; first remainingSlots preselected; UPDATES always apply and are not deselectable\par
+\bullet Overflow / at-limit banner + Upgrade (item_cap_bulk); live selectedNew/remainingSlots counter; Save disabled when over cap\par
+\bullet At 50 items: NEW rows greyed/unselectable; updates still save; Pro has no banner and unlimited select\par
+\bullet 9 keys injected + translated (14 langs); catalog gate 0 gaps\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b S46 \emdash Fix ITMS-91064 privacy manifest + anomaly audit}\par
+[COMPLETED]\par
+\bullet App PrivacyInfo.xcprivacy: NSPrivacyTracking=true + domains app-measurement.com (Firebase Analytics) and googleads.g.doubleclick.net (AdMob). No facebook.com / ep1.facebook.com (FBSDK already declares those).\par
+\bullet Amplitude api2.amplitude.com NOT listed (first-party product analytics; ATT-gating it would drop events when tracking is denied).\par
+\bullet Collected-data Tracking=true for Device ID / Product Interaction / Purchase History is correct (ATT + AdMob + Meta + GA). Do not flip to tracking=false.\par
+\bullet Bundling: file is in the synchronized AITest folder (only Info.plist is excepted). Built SmartInventory.app has exactly one app-root PrivacyInfo.xcprivacy (2026 bytes).\par
+\bullet Required-reason APIs: UserDefaults CA92.1 is sufficient at app level. No File timestamp / boot time / disk space / keyboard APIs in app code.\par
+\bullet Facebook SDK: Package.resolved still 17.4.0 because SPM rule is upToNextMajor from 17.0.0 (18.x will not apply). Leave pinned; updating does not fix ITMS-91064.\par
+\bullet Build number bumped to 8 (MARKETING_VERSION stays 1.4).\par
+\bullet Build: exit 0, BUILD SUCCEEDED\par
 }

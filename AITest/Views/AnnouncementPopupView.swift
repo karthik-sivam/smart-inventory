@@ -43,14 +43,14 @@ struct AnnouncementPopupView: View {
             .frame(maxHeight: 260)
 
             if let url = announcement.url {
-                Button(String(localized: "announcement.learnMore", defaultValue: "Learn more")) {
+                Button(L("announcement.learnMore", "Learn more")) {
                     openURL(url)
                 }
                 .font(.subheadline)
                 .foregroundColor(.stoqlyPrimary)
             }
 
-            Button(String(localized: "announcement.dismiss", defaultValue: "Dismiss")) {
+            Button(L("announcement.dismiss", "Dismiss")) {
                 onDismiss()
             }
             .buttonStyle(.borderedProminent)

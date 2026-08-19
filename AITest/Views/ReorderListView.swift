@@ -61,12 +61,21 @@ struct ReorderListView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding()
+                    .onAppear {
+                        AnalyticsManager.shared.track(.emptyStateShown(screen: "reorder_list"))
+                    }
                 } else {
                     ScrollView {
                         VStack(spacing: 0) {
                             ForEach(storageGroups, id: \.storage.id) { group in
                                 if let url = buildMailtoURL(storage: group.storage, items: group.items) {
                                     Button {
+                                        let supplierCount = storageGroups.count
+                                        let itemCount = storageGroups.reduce(0) { $0 + $1.items.count }
+                                        AnalyticsManager.shared.track(.reorderEmailSent(
+                                            supplierCount: supplierCount,
+                                            itemCount: itemCount
+                                        ))
                                         UIApplication.shared.open(url)
                                     } label: {
                                         Label("Email \(group.storage.name) Supplier", systemImage: "envelope")
@@ -81,10 +90,7 @@ struct ReorderListView: View {
                             HStack {
                                 Text(
                                     String(
-                                        format: String(
-                                            localized: "%lld item(s) to restock",
-                                            defaultValue: "%lld item(s) to restock"
-                                        ),
+                                        format: L("%lld item(s) to restock", "%lld item(s) to restock"),
                                         sortedItems.count
                                     )
                                 )
@@ -179,10 +185,7 @@ struct ReorderRowView: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(
                         String(
-                            format: String(
-                                localized: "Need %@%@",
-                                defaultValue: "Need %@%@"
-                            ),
+                            format: L("Need %@%@", "Need %@%@"),
                             deficit.smartFormatted,
                             item.uom.map { " \($0.symbol)" } ?? ""
                         )
@@ -191,10 +194,7 @@ struct ReorderRowView: View {
                         .foregroundColor(.primary)
                     Text(
                         String(
-                            format: String(
-                                localized: "Have: %@ / Min: %@",
-                                defaultValue: "Have: %@ / Min: %@"
-                            ),
+                            format: L("Have: %@ / Min: %@", "Have: %@ / Min: %@"),
                             item.currentQuantity.smartFormatted,
                             item.effectiveMinQuantity.smartFormatted
                         )

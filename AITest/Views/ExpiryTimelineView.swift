@@ -177,22 +177,22 @@ private struct ExpiryItemRow: View {
         if expiry < Date() {
             let days = Calendar.current.dateComponents([.day], from: expiry, to: Date()).day ?? 0
             if days == 0 {
-                return String(localized: "Expired today", defaultValue: "Expired today")
+                return L("Expired today", "Expired today")
             }
             return String(
-                format: String(localized: "Expired %lldd ago", defaultValue: "Expired %lldd ago"),
+                format: L("Expired %lldd ago", "Expired %lldd ago"),
                 days
             )
         }
         let days = Calendar.current.dateComponents([.day], from: Date(), to: expiry).day ?? 0
         if days == 0 {
-            return String(localized: "Expires today", defaultValue: "Expires today")
+            return L("Expires today", "Expires today")
         }
         if days == 1 {
-            return String(localized: "1 day left", defaultValue: "1 day left")
+            return L("1 day left", "1 day left")
         }
         return String(
-            format: String(localized: "%lld days left", defaultValue: "%lld days left"),
+            format: L("%lld days left", "%lld days left"),
             days
         )
     }
