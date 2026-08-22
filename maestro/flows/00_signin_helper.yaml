@@ -6,10 +6,17 @@ env:
   TEST_PASSWORD: Test@1234
 ---
 - launchApp
+- tapOn:
+    text: "Dismiss"
+    optional: true
 - extendedWaitUntil:
     visible: "Total Storages"
     timeout: 12000
     optional: true
+- runFlow:
+    when:
+      visible: "Choose your language"
+    file: signin_onboarding_dismiss.yaml
 - runFlow:
     when:
       visible:

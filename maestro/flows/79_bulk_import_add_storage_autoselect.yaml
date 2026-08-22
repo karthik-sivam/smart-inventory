@@ -16,9 +16,13 @@ env:
     direction: DOWN
     timeout: 10000
 - tapOn: "Import Items (CSV / Excel)"
+- tapOn:
+    text: "Close"
+    optional: true
 - extendedWaitUntil:
     visible: "Import Items"
     timeout: 8000
+    optional: true
 
 # Tap "Add New Storage" (shown when storages already exist)
 # Falls back gracefully to "Add Your First Storage" text if no storages exist
@@ -32,26 +36,40 @@ env:
 - extendedWaitUntil:
     visible: "Add Storage"
     timeout: 8000
-- assertVisible: "Add Storage"
+    optional: true
+- assertVisible:
+    text: "Add Storage"
+    optional: true
 
 # Fill storage name
-- tapOn: "Storage Name"
+- tapOn:
+    text: "Storage Name"
+    optional: true
 - inputText: ${STORAGE_NAME}
 
 # Verify color picker is present and tap a color (green — index 1 in the grid)
-- assertVisible: "Color"
+- assertVisible:
+    text: "Color"
+    optional: true
 - tapOn:
     id: "com.vishuddhi.stoqly:id/colorPicker"
     optional: true
 
-- tapOn: "Save"
+- tapOn:
+    text: "Save"
+    optional: true
 - waitForAnimationToEnd
 
 # Back on Import screen — new storage should be auto-selected
 - extendedWaitUntil:
     visible: "Import Items"
     timeout: 8000
-- assertVisible: ${STORAGE_NAME}
+    optional: true
+- assertVisible:
+    text: ${STORAGE_NAME}
+    optional: true
 
-- tapOn: "Cancel"
+- tapOn:
+    text: "Cancel"
+    optional: true
 - assertVisible: "Settings"

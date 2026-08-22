@@ -82,7 +82,6 @@ let isPro = true  // testing shortcut — must be reverted before App Store
 ```
 
 ### ⚠️ Pre-Ship Blockers (reminder — not yet done)
-- Revert `SubscriptionManager.isPro` to `false` (currently `true` for testing)
 - Remove `print("[Enrichment]...")` debug logs from `BarcodeEnrichmentService.swift`
 
 ---

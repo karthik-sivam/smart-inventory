@@ -13,7 +13,8 @@ appId: com.vishuddhi.stoqly
 - tapOn:
     id: "smartSalesMode_csv_/_excel"
     optional: true
-- tapOn: "CSV / Excel"
+- tapOn:
+    text: "CSV / Excel"
     optional: true
 - assertVisible: "Import Sales File"
 - assertVisible: "Choose CSV or Excel File"

@@ -1137,7 +1137,7 @@ extension Array where Element == EditableItem {
 struct EditableItemRow: View {
     @Binding var item: EditableItem
     var selectedStorage: Storage?
-    var isPro: Bool = true
+    var isPro: Bool = false
     var remainingSlots: Int = Int.max
 
     var body: some View {

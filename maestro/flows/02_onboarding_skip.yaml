@@ -8,10 +8,23 @@ appId: com.vishuddhi.stoqly
     arguments:
       UITestResetOnboarding: true
 - tapOn:
+    text: "Dismiss"
+    optional: true
+- tapOn:
     text: "Don’t Allow"
     optional: true
 - tapOn:
+    text: "Don't Allow"
+    optional: true
+- tapOn:
     text: "Ask App Not to Track"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    id: "onboardingLanguageContinue"
+    optional: true
+- tapOn:
+    text: "Continue"
     optional: true
 - waitForAnimationToEnd
 - extendedWaitUntil:

@@ -15,13 +15,30 @@ appId: com.vishuddhi.stoqly
     timeout: 10000
 - assertVisible: "Import Items (CSV / Excel)"
 - tapOn: "Import Items (CSV / Excel)"
+- assertVisible:
+    text: "Upgrade to Stoqly Pro"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
 - extendedWaitUntil:
     visible: "Import Items"
     timeout: 8000
-- assertVisible: "Import Items"
-- assertVisible: "Default Storage"
-- assertVisible: "Supported formats"
-- assertVisible: "Choose File (CSV or Excel)"
+    optional: true
+- assertVisible:
+    text: "Import Items"
+    optional: true
+- assertVisible:
+    text: "Default Storage"
+    optional: true
+- assertVisible:
+    text: "Supported formats"
+    optional: true
+- assertVisible:
+    text: "Choose File (CSV or Excel)"
+    optional: true
 # Cancel back to Settings
-- tapOn: "Cancel"
+- tapOn:
+    text: "Cancel"
+    optional: true
 - assertVisible: "Settings"

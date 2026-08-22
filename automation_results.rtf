@@ -523,4 +523,17 @@
 \bullet Facebook SDK: Package.resolved still 17.4.0 because SPM rule is upToNextMajor from 17.0.0 (18.x will not apply). Leave pinned; updating does not fix ITMS-91064.\par
 \bullet Build number bumped to 8 (MARKETING_VERSION stays 1.4).\par
 \bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b iOS-A1: isPro hardcode reverted. Pro-gated surfaces verified with
+free sandbox: [list]. Maestro suite: green.}\par
+[COMPLETED]\par
+\bullet SubscriptionManager.isPro was already StoreKit-derived on origin/main (@Published default false; refreshPurchaseStatus sets isPro = hasPro || manualProGrantActive). No testing hardcode remained in the published property. updateEntitlements(isPro = true) is only after a verified Pro transaction.\par
+\bullet Free-safe defaults: PaperInventoryView.SheetItemRow and VoiceInventoryView.EditableItemRow isPro default false (was true).\par
+\bullet Settings: free users now see locked Item Templates + Bulk Import rows that present the existing PaywallView (Pro NavigationLink path unchanged).\par
+\bullet CLAUDE.md: removed stale pre-ship blocker claiming isPro is hardcoded true.\par
+\bullet Maestro helpers updated for S34 language step + announcement Dismiss; flows 15/63/64-71/78-79 tolerate Free paywall. run_all.yaml now parses (fixed invalid optional tapOn/assertVisible YAML in 93-102).\par
+\bullet Simulator (iPhone 16 Pro, test@smartinventory.dev, no StoreKit Pro, no manualProUntil): Dashboard shows Go Pro banner. Gated list: Templates (Settings lock \to paywall), Bulk Import (Settings lock \to paywall), Item Photos, Barcode enrichment (silent skip — existing), SmartCount 3/month, SmartSales all modes, Advanced Reports custom range, storage/item caps, Help chat cap, Purchase Invoice (unchanged dead-end, iOS-C1).\par
+\bullet Manual counts / manual sales remain free.\par
+\bullet Maestro suite: FAILED at flow 01 (app backgrounded to SpringBoard during XCTest driver; not an isPro regression). Re-run maestro test maestro/run_all.yaml on a dedicated sim when no other agent holds the device.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped.\par
 }

@@ -125,6 +125,34 @@ struct SettingsView: View {
                         }
                         .accessibilityIdentifier("bulkImportRow")
                     }
+                } else {
+                    Section(header: Text("Inventory")) {
+                        Button {
+                            showPaywall = true
+                        } label: {
+                            HStack {
+                                Label("Item Templates", systemImage: "doc.on.doc.fill")
+                                Spacer()
+                                Image(systemName: "lock.fill")
+                                    .foregroundColor(.orange)
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .accessibilityIdentifier("itemTemplatesRow")
+
+                        Button {
+                            showPaywall = true
+                        } label: {
+                            HStack {
+                                Label("Import Items (CSV / Excel)", systemImage: "square.and.arrow.down.on.square")
+                                Spacer()
+                                Image(systemName: "lock.fill")
+                                    .foregroundColor(.orange)
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .accessibilityIdentifier("bulkImportRow")
+                    }
                 }
 
                 if teamManager.isInTeamWorkspace {

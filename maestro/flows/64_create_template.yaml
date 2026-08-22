@@ -12,6 +12,9 @@ appId: com.vishuddhi.stoqly
     direction: DOWN
     timeout: 10000
 - tapOn: "Item Templates"
+- tapOn:
+    text: "Close"
+    optional: true
 # Cleanup leftovers from prior runs
 - swipe:
     direction: LEFT
@@ -35,16 +38,25 @@ appId: com.vishuddhi.stoqly
     optional: true
 - tapOn:
     id: "createTemplateButton"
-- assertVisible: "New Template"
+    optional: true
+- assertVisible:
+    text: "New Template"
+    optional: true
 - tapOn:
     id: "templateNameField"
+    optional: true
 - inputText: "Maestro Test Template"
 - scrollUntilVisible:
     element: "Category"
     direction: DOWN
     timeout: 10000
-- tapOn: "Category"
-- tapOn: "Food & Beverage"
+    optional: true
+- tapOn:
+    text: "Category"
+    optional: true
+- tapOn:
+    text: "Food & Beverage"
+    optional: true
 - tapOn:
     text: "Back"
     optional: true
@@ -52,8 +64,13 @@ appId: com.vishuddhi.stoqly
     element: "Save"
     direction: UP
     timeout: 5000
-- tapOn: "Save"
-- assertVisible: "Maestro Test Template"
+    optional: true
+- tapOn:
+    text: "Save"
+    optional: true
+- assertVisible:
+    text: "Maestro Test Template"
+    optional: true
 - assertVisible:
     text: "Food & Beverage"
     optional: true

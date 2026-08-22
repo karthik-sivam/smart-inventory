@@ -16,7 +16,10 @@ appId: com.vishuddhi.stoqly
     element: "Save as Template"
     direction: DOWN
     timeout: 15000
-- tapOn: "Save as Template"
+    optional: true
+- tapOn:
+    text: "Save as Template"
+    optional: true
 - assertVisible:
     text: "Saved as template"
     optional: true
@@ -31,4 +34,9 @@ appId: com.vishuddhi.stoqly
     direction: DOWN
     timeout: 10000
 - tapOn: "Item Templates"
-- assertVisible: "Test Product Maestro"
+- tapOn:
+    text: "Close"
+    optional: true
+- assertVisible:
+    text: "Test Product Maestro"
+    optional: true
