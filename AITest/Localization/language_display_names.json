@@ -1,0 +1,21 @@
+{
+  "_comment": "Display names for the in-app Language picker (S13). 'systemDefault' is the top option (follow iPhone language). Each entry: locale code, English name, native name (shown to the user in its own script). Cursor: render nativeName as the primary label, englishName as the secondary/subtitle. Order as listed (System Default first, then English, then India languages, then international).",
+  "systemDefault": { "code": null, "englishName": "System Default", "nativeName": "System Default", "note": "Follow the iPhone language" },
+  "languages": [
+    { "code": "en",      "englishName": "English",              "nativeName": "English" },
+    { "code": "hi",      "englishName": "Hindi",                "nativeName": "हिन्दी" },
+    { "code": "ta",      "englishName": "Tamil",                "nativeName": "தமிழ்" },
+    { "code": "te",      "englishName": "Telugu",               "nativeName": "తెలుగు" },
+    { "code": "kn",      "englishName": "Kannada",              "nativeName": "ಕನ್ನಡ" },
+    { "code": "ml",      "englishName": "Malayalam",            "nativeName": "മലയാളം" },
+    { "code": "ar",      "englishName": "Arabic",               "nativeName": "العربية", "rtl": true },
+    { "code": "es",      "englishName": "Spanish",              "nativeName": "Español" },
+    { "code": "pt-BR",   "englishName": "Portuguese (Brazil)",  "nativeName": "Português (Brasil)" },
+    { "code": "fr",      "englishName": "French",               "nativeName": "Français" },
+    { "code": "zh-Hans", "englishName": "Chinese (Simplified)", "nativeName": "简体中文" },
+    { "code": "id",      "englishName": "Indonesian",           "nativeName": "Bahasa Indonesia" },
+    { "code": "de",      "englishName": "German",               "nativeName": "Deutsch" },
+    { "code": "ru",      "englishName": "Russian",              "nativeName": "Русский" },
+    { "code": "ja",      "englishName": "Japanese",             "nativeName": "日本語" }
+  ]
+}

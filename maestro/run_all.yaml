@@ -115,6 +115,18 @@ env:
 - runFlow: flows/91_smart_insights_data_health.yaml
 - runFlow: flows/92_global_invoice_import_entry.yaml
 
+# ── S15 + QA expansion (93–102) ─────────────────
+- runFlow: flows/93_quick_sale_record.yaml
+- runFlow: flows/94_quick_sale_negative_stock.yaml
+- runFlow: flows/95_storage_total_value_edit.yaml
+- runFlow: flows/96_language_picker.yaml
+- runFlow: flows/97_sales_reports.yaml
+- runFlow: flows/98_smart_sales_text_ui.yaml
+- runFlow: flows/99_sale_price_fallback.yaml
+- runFlow: flows/100_storage_card_total_value.yaml
+- runFlow: flows/101_smart_sales_csv_mapping.yaml
+- runFlow: flows/102_sale_total_hierarchy.yaml
+
 # ── Paywall flows (manual — need seeded data) ────
 # - runFlow: flows/17_paywall_storage_limit.yaml
 # - runFlow: flows/18_paywall_item_limit.yaml

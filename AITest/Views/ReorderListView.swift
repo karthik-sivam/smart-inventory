@@ -61,12 +61,21 @@ struct ReorderListView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding()
+                    .onAppear {
+                        AnalyticsManager.shared.track(.emptyStateShown(screen: "reorder_list"))
+                    }
                 } else {
                     ScrollView {
                         VStack(spacing: 0) {
                             ForEach(storageGroups, id: \.storage.id) { group in
                                 if let url = buildMailtoURL(storage: group.storage, items: group.items) {
                                     Button {
+                                        let supplierCount = storageGroups.count
+                                        let itemCount = storageGroups.reduce(0) { $0 + $1.items.count }
+                                        AnalyticsManager.shared.track(.reorderEmailSent(
+                                            supplierCount: supplierCount,
+                                            itemCount: itemCount
+                                        ))
                                         UIApplication.shared.open(url)
                                     } label: {
                                         Label("Email \(group.storage.name) Supplier", systemImage: "envelope")
@@ -79,7 +88,12 @@ struct ReorderListView: View {
                             }
 
                             HStack {
-                                Text("\(sortedItems.count) item\(sortedItems.count == 1 ? "" : "s") to restock")
+                                Text(
+                                    String(
+                                        format: L("%lld item(s) to restock", "%lld item(s) to restock"),
+                                        sortedItems.count
+                                    )
+                                )
                                     .font(.subheadline).foregroundColor(.secondary)
                                 Spacer()
                             }
@@ -169,10 +183,22 @@ struct ReorderRowView: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("Need \(deficit.smartFormatted)\(item.uom.map { " \($0.symbol)" } ?? "")")
+                    Text(
+                        String(
+                            format: L("Need %@%@", "Need %@%@"),
+                            deficit.smartFormatted,
+                            item.uom.map { " \($0.symbol)" } ?? ""
+                        )
+                    )
                         .font(.subheadline).fontWeight(.bold)
                         .foregroundColor(.primary)
-                    Text("Have: \(item.currentQuantity.smartFormatted) / Min: \(item.effectiveMinQuantity.smartFormatted)")
+                    Text(
+                        String(
+                            format: L("Have: %@ / Min: %@", "Have: %@ / Min: %@"),
+                            item.currentQuantity.smartFormatted,
+                            item.effectiveMinQuantity.smartFormatted
+                        )
+                    )
                         .font(.caption2).foregroundColor(.secondary)
                 }
             }

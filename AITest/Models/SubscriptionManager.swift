@@ -1,6 +1,7 @@
 import Foundation
 import StoreKit
 import SwiftUI
+import SwiftData
 
 // MARK: - SubscriptionManager
 //
@@ -15,7 +16,7 @@ import SwiftUI
 // │  • PDF export                                                   │
 // │  • Push notifications (low stock alerts)                        │
 // ├─────────────────────────────────────────────────────────────────┤
-// │  PRO  $2.99/month · $22.99/year (7-day free trial)              │
+// │  PRO  $2.99/month · $22.99/year (no free trial)                 │
 // │  Everything in Free, plus:                                      │
 // │  • Unlimited storage areas                                      │
 // │  • Unlimited items per storage                                  │
@@ -157,6 +158,7 @@ class SubscriptionManager: ObservableObject {
                 switch product.id {
                 case ProductID.removeAds.rawValue:
                     AnalyticsManager.shared.track(.removeAdsPurchased)
+                    logMetaPurchase(for: product)
                 case ProductID.proMonthly.rawValue, ProductID.proAnnual.rawValue:
                     let plan = product.id.contains("annual") ? "annual" : "monthly"
                     AnalyticsManager.shared.track(.subscriptionStarted(plan: plan))
@@ -166,6 +168,7 @@ class SubscriptionManager: ObservableObject {
                         isPro: true,
                         signupMethod: UserDefaults.standard.string(forKey: "signupMethod") ?? "unknown"
                     )
+                    logMetaPurchase(for: product)
                 default:
                     break
                 }
@@ -254,6 +257,7 @@ class SubscriptionManager: ObservableObject {
 
         // Mirror the resolved entitlement (StoreKit and/or manual grant), not StoreKit alone.
         FirestoreManager.shared.writeProStatus(isPro)
+        FCMTopicManager.syncProTopics(isPro: isPro)
 
         if hasRemovedAds {
             AdManager.shared.disableAds()
@@ -284,6 +288,12 @@ class SubscriptionManager: ObservableObject {
     }
 
     // MARK: - Helpers
+
+    private func logMetaPurchase(for product: Product) {
+        let amount = NSDecimalNumber(decimal: product.price).doubleValue
+        let currency = Locale.current.currency?.identifier ?? "USD"
+        MetaAppEvents.logPurchase(amount: amount, currency: currency)
+    }
 
     nonisolated private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
         switch result {
@@ -318,6 +328,7 @@ class SubscriptionManager: ObservableObject {
             AdManager.shared.disableAds()
             // Mirror immediately — do not wait for a later refreshPurchaseStatus().
             FirestoreManager.shared.writeProStatus(isPro)
+            FCMTopicManager.syncProTopics(isPro: isPro)
         case ProductID.removeAds.rawValue:
             hasRemovedAds = true
             AdManager.shared.disableAds()
@@ -339,6 +350,41 @@ class SubscriptionManager: ObservableObject {
     /// Free: up to 50 items per storage. Pro: unlimited.
     func canAddItem(currentItemCount: Int) -> Bool {
         isPro || currentItemCount < Self.freeItemLimit
+    }
+
+    /// Authoritative per-storage count (S44). Uses fetchCount so it does not lag like `storage.items`.
+    func itemCount(in storage: Storage, context: ModelContext) -> Int {
+        let sid = storage.persistentModelID
+        let descriptor = FetchDescriptor<InventoryItem>(
+            predicate: #Predicate<InventoryItem> { item in
+                item.storage?.persistentModelID == sid
+            }
+        )
+        return (try? context.fetchCount(descriptor)) ?? storage.items.count
+    }
+
+    /// Write-time cap check. True when a free user is already at or over the 50-item limit.
+    func freeItemCapReached(storage: Storage, context: ModelContext) -> Bool {
+        guard !isPro else { return false }
+        return itemCount(in: storage, context: context) >= Self.freeItemLimit
+    }
+
+    /// Slots left under the free 50-item cap. Pro returns `Int.max`.
+    func remainingFreeItemSlots(storage: Storage?, context: ModelContext) -> Int {
+        guard !isPro else { return Int.max }
+        guard let storage else { return 0 }
+        return max(0, Self.freeItemLimit - itemCount(in: storage, context: context))
+    }
+
+    /// Advances `runningCount` when a new item may be inserted. Returns false at the free cap.
+    func canInsertNewItem(runningCount: inout Int) -> Bool {
+        if isPro {
+            runningCount += 1
+            return true
+        }
+        guard runningCount < Self.freeItemLimit else { return false }
+        runningCount += 1
+        return true
     }
 
     /// Free: last 30 days. Pro: full history + trend charts.
@@ -388,27 +434,38 @@ class SubscriptionManager: ObservableObject {
               let annual  = proAnnualProduct,
               monthly.price > 0 else { return "" }
         let savings = ((monthly.price * 12 - annual.price) / (monthly.price * 12)) * 100
-        return String(format: "Save %.0f%%", NSDecimalNumber(decimal: savings).doubleValue)
+        return String(
+            format: L("Save %.0f%%", "Save %.0f%%"),
+            NSDecimalNumber(decimal: savings).doubleValue
+        )
     }
 }
 
 // MARK: - Paywall View
 
 struct PaywallView: View {
+    /// Pre-localized feature name shown in the unlock headline (e.g. unlimited storages).
     var featureContext: String? = nil
     var source: String = "unknown"
+    var trigger: String? = nil
 
     @StateObject private var sub = SubscriptionManager.shared
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: PaywallTab = .pro
+    @State private var didTrackShown = false
 
     enum PaywallTab { case pro, removeAds }
 
     private var paywallHeadline: String {
         if let featureContext, selectedTab == .pro {
-            return "Unlock \(featureContext)"
+            return String(
+                format: L("Unlock %@", "Unlock %@"),
+                featureContext
+            )
         }
-        return selectedTab == .pro ? "Upgrade to Stoqly Pro" : "Remove Ads"
+        return selectedTab == .pro
+            ? L("Upgrade to Stoqly Pro", "Upgrade to Stoqly Pro")
+            : L("Remove Ads", "Remove Ads")
     }
 
     /// Price hint shown in the header — derives from live StoreKit prices
@@ -417,15 +474,31 @@ struct PaywallView: View {
         switch selectedTab {
         case .pro:
             if let monthly = sub.proMonthlyProduct {
-                return "From \(monthly.displayPrice) / month"
+                return String(
+                    format: L("From %@ / month", "From %@ / month"),
+                    monthly.displayPrice
+                )
             }
-            return sub.isLoading ? "Loading pricing…" : "Monthly & annual plans available"
+            return sub.isLoading
+                ? L("Loading pricing…", "Loading pricing…")
+                : L("Monthly & annual plans available", "Monthly & annual plans available")
         case .removeAds:
             if let removeAds = sub.removeAdsProduct {
-                return "\(removeAds.displayPrice) · one-time"
+                return String(
+                    format: L("%@ · one-time", "%@ · one-time"),
+                    removeAds.displayPrice
+                )
             }
-            return sub.isLoading ? "Loading pricing…" : "One-time purchase"
+            return sub.isLoading
+                ? L("Loading pricing…", "Loading pricing…")
+                : L("One-time purchase", "One-time purchase")
         }
+    }
+
+    private var paywallSubtitle: String {
+        selectedTab == .pro
+            ? L("For businesses that are growing", "For businesses that are growing")
+            : L("Support the app · Enjoy ad-free", "Support the app · Enjoy ad-free")
     }
 
     var body: some View {
@@ -447,9 +520,7 @@ struct PaywallView: View {
 
                         Text(paywallHeadline)
                             .font(.title2).fontWeight(.bold)
-                        Text(selectedTab == .pro
-                             ? "For businesses that are growing"
-                             : "Support the app · Enjoy ad-free")
+                        Text(paywallSubtitle)
                             .font(.subheadline).foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
 
@@ -511,7 +582,10 @@ struct PaywallView: View {
                                 }
                             } else {
                                 if let removeAds = sub.removeAdsProduct {
-                                    ProductCard(product: removeAds, badge: "One-time purchase")
+                                    ProductCard(
+                                        product: removeAds,
+                                        badge: L("One-time purchase", "One-time purchase")
+                                    )
                                 }
                             }
                         }
@@ -559,7 +633,10 @@ struct PaywallView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") { dismiss() }
+                    Button("Close") {
+                        AnalyticsManager.shared.track(.paywallDismissed)
+                        dismiss()
+                    }
                 }
             }
             .onChange(of: sub.purchaseState) { _, state in
@@ -568,7 +645,9 @@ struct PaywallView: View {
         }
         .task { await sub.loadProducts() }
         .onAppear {
-            AnalyticsManager.shared.track(.paywallShown(source: source))
+            guard !didTrackShown else { return }
+            didTrackShown = true
+            AnalyticsManager.shared.track(.paywallShown(source: source, trigger: trigger))
         }
     }
 }
@@ -650,7 +729,7 @@ private struct FreeIncludedBanner: View {
 // MARK: - Supporting Views
 
 private struct PaywallSectionHeader: View {
-    let title: String
+    let title: LocalizedStringKey
     var body: some View {
         Text(title)
             .font(.caption)
@@ -664,8 +743,8 @@ private struct PaywallSectionHeader: View {
 struct PaywallFeatureRow: View {
     let icon: String
     let color: Color
-    let text: String
-    var note: String? = nil
+    let text: LocalizedStringKey
+    var note: LocalizedStringKey? = nil
     var isFree: Bool = false
 
     var body: some View {
@@ -718,13 +797,23 @@ struct ProductCard: View {
             let savingPct = (Double(truncating: annualisedMonthly - product.price as NSDecimalNumber)
                             / Double(truncating: annualisedMonthly as NSDecimalNumber)) * 100
             let saving = Int(savingPct.rounded())
-            return "Billed annually · save \(saving)% vs monthly"
+            return String(
+                format: L("Billed annually · save %lld%% vs monthly", "Billed annually · save %lld%% vs monthly"),
+                saving
+            )
         }
         return product.description
     }
 
+    private var analyticsPlan: String {
+        if product.subscription?.subscriptionPeriod.unit == .month { return "monthly" }
+        if product.subscription?.subscriptionPeriod.unit == .year { return "annual" }
+        return "remove_ads"
+    }
+
     var body: some View {
         Button {
+            AnalyticsManager.shared.track(.paywallCtaTapped(plan: analyticsPlan))
             Task { await sub.purchase(product) }
         } label: {
             HStack(spacing: 16) {
@@ -764,15 +853,15 @@ struct ProductCard: View {
                             .font(.title3).fontWeight(.bold)
 
                         if product.subscription?.subscriptionPeriod.unit == .month {
-                            Text("/ month")
+                            Text("/ month", comment: "Subscription period suffix on paywall price")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         } else if product.subscription?.subscriptionPeriod.unit == .year {
-                            Text("/ year")
+                            Text("/ year", comment: "Subscription period suffix on paywall price")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         } else {
-                            Text("one-time")
+                            Text("one-time", comment: "One-time purchase suffix on paywall price")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
@@ -821,7 +910,12 @@ struct ProLockOverlay: View {
         Button(action: onTap) {
             HStack(spacing: 6) {
                 Image(systemName: "lock.fill")
-                Text("Pro: \(featureName)")
+                Text(
+                    String(
+                        format: L("Pro: %@", "Pro: %@"),
+                        featureName
+                    )
+                )
             }
             .font(.caption).fontWeight(.medium)
             .foregroundColor(.white)

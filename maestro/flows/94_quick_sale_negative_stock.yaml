@@ -1,0 +1,32 @@
+# Flow 94 — Quick Sale: oversell triggers non-blocking negative-stock alert
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: seed_sale_test_item.yaml
+- tapOn: "Sales"
+- tapOn:
+    id: "salesAddButton"
+    optional: true
+- tapOn:
+    id: "salesEmptyRecordButton"
+    optional: true
+- tapOn: "Record a Sale"
+    optional: true
+- assertVisible: "Select Item"
+- tapOn: "Sale Test Item"
+    optional: true
+- tapOn:
+    id: "saleItemRow_SKU-SALE-TEST"
+    optional: true
+- assertVisible: "Record Sale"
+- tapOn:
+    id: "quickSaleQuantityField"
+- eraseText: 5
+- inputText: "999"
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    id: "quickSaleRecordButton"
+- assertVisible: "Negative Stock"
+- tapOn: "OK"

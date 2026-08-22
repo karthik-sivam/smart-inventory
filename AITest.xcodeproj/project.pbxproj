@@ -19,6 +19,8 @@
 		D257B5472E2C0DE600D46682 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = D257B5462E2C0DE600D46682 /* FirebaseMessaging */; };
 		D257B5492E2C0DE600D46682 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = D257B5482E2C0DE600D46682 /* FirebaseStorage */; };
 		D257B54B2E2C0DE600D46682 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = D257B54A2E2C0DE600D46682 /* GoogleMobileAds */; };
+		D257B54D2E2C0DE600D46682 /* FirebaseInAppMessaging-Beta in Frameworks */ = {isa = PBXBuildFile; productRef = D257B54E2E2C0DE600D46682 /* FirebaseInAppMessaging-Beta */; };
+		F29B00C12E2C0DE600D46682 /* FacebookCore in Frameworks */ = {isa = PBXBuildFile; productRef = F29B00B12E2C0DE600D46682 /* FacebookCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -86,7 +88,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				5A4AFEA72FED43E200B47D05 /* AmplitudeSwift in Frameworks */,
+				F29B00C12E2C0DE600D46682 /* FacebookCore in Frameworks */,
 				D257B5472E2C0DE600D46682 /* FirebaseMessaging in Frameworks */,
+				D257B54D2E2C0DE600D46682 /* FirebaseInAppMessaging-Beta in Frameworks */,
 				D257B53D2E2C0DE600D46682 /* FirebaseAnalytics in Frameworks */,
 				D257B5432E2C0DE600D46682 /* FirebaseCrashlytics in Frameworks */,
 				D257B5412E2C0DE600D46682 /* FirebaseAuth in Frameworks */,
@@ -185,10 +189,12 @@
 				D257B5422E2C0DE600D46682 /* FirebaseCrashlytics */,
 				D257B5442E2C0DE600D46682 /* FirebaseFirestore */,
 				D257B5462E2C0DE600D46682 /* FirebaseMessaging */,
+				D257B54E2E2C0DE600D46682 /* FirebaseInAppMessaging-Beta */,
 				D257B5482E2C0DE600D46682 /* FirebaseStorage */,
 				D257B54A2E2C0DE600D46682 /* GoogleMobileAds */,
 				D218DEF52E2CAE0400EB13A0 /* GoogleSignIn */,
 				5A4AFEA62FED43E200B47D05 /* AmplitudeSwift */,
+				F29B00B12E2C0DE600D46682 /* FacebookCore */,
 			);
 			productName = SmartInventory;
 			productReference = D2776A0E2E1DAA5D00C580F6 /* SmartInventory.app */;
@@ -269,6 +275,22 @@
 			knownRegions = (
 				en,
 				Base,
+				hi,
+				ta,
+				te,
+				kn,
+				ml,
+				ar,
+				es,
+				"pt-BR",
+				fr,
+				"zh-Hans",
+				id,
+				de,
+				ru,
+				ja,
+				th,
+				"fr-CA",
 			);
 			mainGroup = D2776A052E1DAA5D00C580F6;
 			minimizedProjectReferenceProxies = 1;
@@ -277,6 +299,7 @@
 				D257B54C2E2C0DE600D46682 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 				D218DEF42E2CAE0400EB13A0 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 				5A4AFEA52FED43E200B47D05 /* XCRemoteSwiftPackageReference "Amplitude-Swift" */,
+				F29B00A12E2C0DE600D46682 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D2776A0F2E1DAA5D00C580F6 /* Products */;
@@ -507,7 +530,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = AITest/AITest.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = V5987KNH55;
 				ENABLE_DEBUG_DYLIB = NO;
 				ENABLE_PREVIEWS = YES;
@@ -516,11 +539,13 @@
 				INFOPLIST_FILE = AITest/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Stoqly;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Stoqly uses your camera to scan product barcodes for quick inventory entry.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Stoqly uses your camera to scan product barcodes and photograph products for AI-powered inventory counting.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Stoqly uses your microphone to let you take inventory by speaking item names and quantities.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Stoqly accesses your photo library so you can upload inventory sheets and product photos for AI-powered counting.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Stoqly uses speech recognition to convert your spoken inventory counts into text for AI processing.";
 				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Stoqly uses your advertising ID to show you relevant ads that support the free version of this app.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
@@ -528,7 +553,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.4;
 				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
 				PRODUCT_BUNDLE_IDENTIFIER = com.vishuddhi.stoqly;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -551,7 +576,7 @@
 				CODE_SIGN_ENTITLEMENTS = AITest/AITest.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = V5987KNH55;
 				ENABLE_PREVIEWS = YES;
 				EXTRACT_APP_INTENTS_METADATA = NO;
@@ -559,11 +584,13 @@
 				INFOPLIST_FILE = AITest/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Stoqly;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Stoqly uses your camera to scan product barcodes for quick inventory entry.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Stoqly uses your camera to scan product barcodes and photograph products for AI-powered inventory counting.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Stoqly uses your microphone to let you take inventory by speaking item names and quantities.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Stoqly accesses your photo library so you can upload inventory sheets and product photos for AI-powered counting.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Stoqly uses speech recognition to convert your spoken inventory counts into text for AI processing.";
 				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Stoqly uses your advertising ID to show you relevant ads that support the free version of this app.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
@@ -571,7 +598,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.4;
 				OTHER_SWIFT_FLAGS = "-strict-concurrency=complete";
 				PRODUCT_BUNDLE_IDENTIFIER = com.vishuddhi.stoqly;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -745,6 +772,14 @@
 				minimumVersion = 11.0.0;
 			};
 		};
+		F29B00A12E2C0DE600D46682 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/facebook/facebook-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 17.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -797,6 +832,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D257B54C2E2C0DE600D46682 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
 			productName = GoogleMobileAds;
+		};
+		D257B54E2E2C0DE600D46682 /* FirebaseInAppMessaging-Beta */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D257B53B2E2C0DE600D46682 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = "FirebaseInAppMessaging-Beta";
+		};
+		F29B00B12E2C0DE600D46682 /* FacebookCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F29B00A12E2C0DE600D46682 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */;
+			productName = FacebookCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

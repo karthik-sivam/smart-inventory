@@ -143,8 +143,13 @@ struct PostLoginOnboardingView: View {
                 .foregroundStyle(.green)
             Text("You're all set!")
                 .font(.title).fontWeight(.bold)
-            let name = storages.last?.name ?? "your storage"
-            Text("Tap + to add your first item to \(name),\nor explore the app at your own pace.")
+            let name = storages.last?.name ?? L("onboarding.yourStorage", "your storage")
+            Text(
+                String(
+                    format: L("onboarding.readyMessage", "Tap + to add your first item to %@,\nor explore the app at your own pace."),
+                    name
+                )
+            )
                 .font(.body).foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
@@ -155,9 +160,12 @@ struct PostLoginOnboardingView: View {
 
     private var primaryButtonLabel: String {
         switch step {
-        case 0: return "Get Started"
-        case 1: return "Create Storage"
-        default: return "Go to Dashboard"
+        case 0:
+            return L("onboarding.getStarted", "Get Started")
+        case 1:
+            return L("onboarding.createStorage", "Create Storage")
+        default:
+            return L("onboarding.goToDashboard", "Go to Dashboard")
         }
     }
 

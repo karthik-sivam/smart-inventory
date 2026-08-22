@@ -10,6 +10,8 @@ struct ParsedSaleRow: Identifiable {
     var notes: String = ""
     var resolvedItem: InventoryItem? = nil
     var isSkipped: Bool = false
+    /// True once the user edits the price field — preserves explicit 0 input.
+    var priceWasEdited: Bool = false
 }
 
 struct ParsedSaleRowDTO: Decodable {

@@ -49,12 +49,36 @@ struct ImageInventoryView: View {
 
     @State private var errorMessage: String?
     @State private var showingPaywall = false
+    @State private var showingItemLimitPaywall = false
     @State private var fluidMode = false
     @State private var editableFillPercent: Double?
     @State private var editableRemainingVolume: String?
 
     private var isStorageSelected: Bool {
         selectedStorage != nil && !storages.isEmpty
+    }
+
+    private var remainingItemSlots: Int {
+        ItemCapReview.remainingSlots(
+            storage: selectedStorage,
+            context: modelContext,
+            isPro: subscriptionManager.isPro
+        )
+    }
+
+    private var canSaveShelfItems: Bool {
+        isStorageSelected && ItemCapReview.canSave(
+            items: parsedItems,
+            remainingSlots: remainingItemSlots,
+            isPro: subscriptionManager.isPro
+        )
+    }
+
+    private var canSaveSingleItem: Bool {
+        let nameOk = !editableName.trimmingCharacters(in: .whitespaces).isEmpty
+        guard nameOk, isStorageSelected else { return false }
+        if subscriptionManager.isPro || matchedExistingItem != nil { return true }
+        return remainingItemSlots > 0
     }
 
     /// Shelf-scan mode: AI returned more than one distinct product type.
@@ -96,9 +120,26 @@ struct ImageInventoryView: View {
         .sheet(isPresented: $showingPaywall) {
             PaywallView(source: "ai_limit").sheetStyle()
         }
+        .sheet(isPresented: $showingItemLimitPaywall) {
+            PaywallView(source: "item_limit", trigger: "item_cap_bulk").sheetStyle()
+        }
         .onAppear {
             if selectedStorage == nil, let preselectedStorage {
                 selectedStorage = preselectedStorage
+            }
+        }
+        .onChange(of: selectedStorage?.id) { _, _ in
+            guard step == .review else { return }
+            parsedItems.applyNameMatching(in: selectedStorage)
+            parsedItems.applyDefaultCapSelection(
+                remainingSlots: remainingItemSlots,
+                isPro: subscriptionManager.isPro
+            )
+            if parsedItems.count == 1, let name = parsedItems.first?.name, let storage = selectedStorage {
+                matchedExistingItem = storage.items.first {
+                    $0.name.lowercased().contains(name.lowercased()) ||
+                    name.lowercased().contains($0.name.lowercased())
+                }
             }
         }
     }
@@ -114,7 +155,13 @@ struct ImageInventoryView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "camera.badge.plus")
                             .foregroundColor(.stoqlyPrimary)
-                        Text("\(remaining) photo scan\(remaining == 1 ? "" : "s") left this month")
+                        Text(
+                            String(
+                                format: L("ai.image.quotaRemaining", "%1$d photo scan%2$@ left this month"),
+                                remaining,
+                                remaining == 1 ? "" : "s"
+                            )
+                        )
                             .font(.subheadline)
                         Spacer()
                         Button("Go Pro") { showingPaywall = true }
@@ -250,7 +297,13 @@ struct ImageInventoryView: View {
                             if let existing = matchedExistingItem {
                                 Label("Matched to existing item", systemImage: "checkmark.circle.fill")
                                     .font(.caption).foregroundColor(.stoqlySuccess)
-                                Text("Current stock: \(existing.currentQuantity.smartFormatted) \(existing.uom?.symbol ?? "")")
+                                Text(
+                                    String(
+                                        format: L("image.currentStock", "Current stock: %1$@ %2$@"),
+                                        existing.currentQuantity.smartFormatted,
+                                        existing.uom?.symbol ?? ""
+                                    )
+                                )
                                     .font(.caption).foregroundColor(.secondary)
                             } else {
                                 Label("New item detected", systemImage: "plus.circle.fill")
@@ -307,6 +360,13 @@ struct ImageInventoryView: View {
                         .font(.caption).foregroundColor(.stoqlyDanger)
                 }
 
+                if !subscriptionManager.isPro, matchedExistingItem == nil, remainingItemSlots == 0 {
+                    ItemCapOverflowBanner(remainingSlots: 0) {
+                        showingItemLimitPaywall = true
+                    }
+                    .padding(.horizontal, 0)
+                }
+
                 HStack(spacing: 12) {
                     Button("Try Again") { resetCapture() }
                         .font(.subheadline)
@@ -321,7 +381,7 @@ struct ImageInventoryView: View {
                     }
                     .stoqlyButtonStyle()
                     .frame(maxWidth: .infinity)
-                    .disabled(editableName.trimmingCharacters(in: .whitespaces).isEmpty || !isStorageSelected)
+                    .disabled(!canSaveSingleItem)
                 }
             }
             .padding()
@@ -356,14 +416,39 @@ struct ImageInventoryView: View {
                             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                     }
 
+                    if ItemCapReview.shouldShowBanner(
+                        newCount: ItemCapReview.newCount(parsedItems),
+                        remainingSlots: remainingItemSlots,
+                        isPro: subscriptionManager.isPro
+                    ) {
+                        Section {
+                            ItemCapOverflowBanner(remainingSlots: remainingItemSlots) {
+                                showingItemLimitPaywall = true
+                            }
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                        }
+                    }
+
                     Section {
                         ForEach($parsedItems) { $item in
-                            EditableItemRow(item: $item, selectedStorage: selectedStorage)
+                            EditableItemRow(
+                                item: $item,
+                                selectedStorage: selectedStorage,
+                                isPro: subscriptionManager.isPro,
+                                remainingSlots: remainingItemSlots
+                            )
                         }
                         .onDelete { parsedItems.remove(atOffsets: $0) }
                     } header: {
                         HStack {
-                            Text("\(parsedItems.count) product\(parsedItems.count == 1 ? "" : "s") found")
+                            Text(
+                                String(
+                                    format: L("image.productsFound", "%1$d product%2$@ found"),
+                                    parsedItems.count,
+                                    parsedItems.count == 1 ? "" : "s"
+                                )
+                            )
                             Spacer()
                             Text("Swipe to remove")
                                 .font(.caption2)
@@ -375,6 +460,12 @@ struct ImageInventoryView: View {
 
                 VStack(spacing: 12) {
                     Divider()
+                    if !subscriptionManager.isPro {
+                        ItemCapSelectionCounter(
+                            selectedNew: ItemCapReview.selectedNewCount(parsedItems),
+                            remainingSlots: remainingItemSlots
+                        )
+                    }
                     HStack(spacing: 12) {
                         Button("Re-take") { resetCapture() }
                             .font(.subheadline)
@@ -384,12 +475,17 @@ struct ImageInventoryView: View {
                             .background(Color.stoqlyPrimaryTint)
                             .cornerRadius(AppTheme.radiusMd)
 
-                        Button("Save All (\(parsedItems.count))") {
+                        Button(
+                            String(
+                                format: L("image.saveAll", "Save All (%1$d)"),
+                                parsedItems.count
+                            )
+                        ) {
                             Task { await saveAllItems() }
                         }
                         .stoqlyButtonStyle()
                         .frame(maxWidth: .infinity)
-                        .disabled(!isStorageSelected)
+                        .disabled(!canSaveShelfItems)
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 8)
@@ -450,7 +546,7 @@ struct ImageInventoryView: View {
         }
     }
 
-    private func formField<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+    private func formField<Content: View>(label: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
                 .font(.caption).fontWeight(.semibold).foregroundColor(.secondary)
@@ -474,13 +570,26 @@ struct ImageInventoryView: View {
     @ViewBuilder
     private func fluidInfoView(fillPercent: Double?, remainingVolume: String?, unit: String) -> some View {
         if let fill = fillPercent {
-            Text("~\(Int(fill))% full\(remainingVolume.map { " · \($0)" } ?? "")")
+            Text(
+                String(
+                    format: L("image.fluidFillLevel", "~%1$d%% full%2$@"),
+                    Int(fill),
+                    remainingVolume.map { " · \($0)" } ?? ""
+                )
+            )
                 .font(.caption)
                 .foregroundColor(.secondary)
-        } else if fluidMode && (unit.lowercased().contains("l") || unit.lowercased() == "ml") {
+        } else if fluidMode && Self.isLiquidUnit(unit) {
             Text("Fill level not visible — enter quantity manually")
                 .font(.caption).foregroundColor(.orange)
         }
+    }
+
+    private static func isLiquidUnit(_ unit: String) -> Bool {
+        let u = unit.lowercased()
+        if u == "ml" || u.contains("ml") || u.contains("மில") { return true }
+        if u == "l" || u.contains("litre") || u.contains("liter") || u.contains("லி") { return true }
+        return false
     }
 
     // MARK: - Logic: Analyse
@@ -500,7 +609,11 @@ struct ImageInventoryView: View {
         let compressed = image.jpegData(compressionQuality: 0.7) ?? Data()
 
         do {
-            let items = try await AIInventoryService.shared.identifyProduct(imageData: compressed, fluidMode: fluidMode)
+            let items = try await AIInventoryService.shared.identifyProduct(
+                imageData: compressed,
+                fluidMode: fluidMode,
+                appLanguageCode: LocalizationManager.shared.currentCode
+            )
             usageManager.recordUse(.image)
 
             let storage = selectedStorage
@@ -509,6 +622,14 @@ struct ImageInventoryView: View {
                 // Populate multi-product list (shelf scan path)
                 parsedItems = items.map { EditableItem(from: $0) }
                 parsedItems.applyNameMatching(in: storage)
+                parsedItems.applyDefaultCapSelection(
+                    remainingSlots: ItemCapReview.remainingSlots(
+                        storage: storage,
+                        context: modelContext,
+                        isPro: subscriptionManager.isPro
+                    ),
+                    isPro: subscriptionManager.isPro
+                )
 
                 // Also set single-product form fields for the 1-item path
                 let parsed = items.first
@@ -524,8 +645,8 @@ struct ImageInventoryView: View {
                 editableFillPercent = parsed?.fillPercent
                 editableRemainingVolume = parsed?.remainingVolume
                 if let vol = parsed?.remainingVolume?.lowercased() {
-                    if vol.contains("ml") { editableUnit = "mL" }
-                    else if vol.contains("l") { editableUnit = "L" }
+                if vol.contains("ml") || vol.contains("மில") { editableUnit = "mL" }
+                else if vol.contains("l") || vol.contains("லி") { editableUnit = "L" }
                 }
 
                 // Only attempt fuzzy match when a single product was returned
@@ -560,7 +681,7 @@ struct ImageInventoryView: View {
 
         let storage = selectedStorage
         guard let storage else {
-            errorMessage = "Please select a storage area."
+            errorMessage = L("ai.selectStorage", "Please select a storage area.")
             return
         }
 
@@ -571,7 +692,9 @@ struct ImageInventoryView: View {
             let count = InventoryCount(previousQuantity: existing.currentQuantity, countedQuantity: qty, notes: "Photo inventory")
             existing.countHistory.append(count)
             existing.currentQuantity = qty
-            existing.updatedAt = Date()
+            if let parsed = parsedItem {
+                existing.applyCapturedFields(from: parsed)
+            }
             let event = ActivityEvent(
                 eventType: "ItemCounted",
                 itemName: existing.name,
@@ -583,6 +706,9 @@ struct ImageInventoryView: View {
             )
             modelContext.insert(event)
         } else {
+            guard !SubscriptionManager.shared.freeItemCapReached(storage: storage, context: modelContext) else {
+                return
+            }
             let item = InventoryItem(
                 name: name,
                 currentQuantity: qty,
@@ -591,6 +717,16 @@ struct ImageInventoryView: View {
                 uom: matchedUOM
             )
             modelContext.insert(item)
+            if let parsed = parsedItem {
+                item.applyCapturedFields(from: parsed)
+            }
+            AnalyticsManager.shared.track(.itemAdded(
+                category: item.category,
+                hasBarcode: !item.barcode.isEmpty,
+                hasPhoto: false,
+                source: "ai",
+                inputMethod: "photo"
+            ))
             let event = ActivityEvent(
                 eventType: "ItemAdded",
                 itemName: name,
@@ -602,12 +738,14 @@ struct ImageInventoryView: View {
         }
 
         modelContext.safeSave(context: "ImageInventorySingleSave")
-        AnalyticsManager.shared.track(.smartCountCompleted(mode: "photo", itemCount: 1))
-        if let onComplete {
-            onComplete(1)
-        } else {
-            dismiss()
-        }
+        let extraFields = parsedItem.map { EditableItem(from: $0).capturedExtraFieldNames }
+        AnalyticsManager.shared.track(.smartCountCompleted(
+            mode: "photo",
+            itemCount: 1,
+            capturedExtraFields: extraFields?.isEmpty == false ? extraFields : nil
+        ))
+        onComplete?(1)
+        dismiss()
     }
 
     // MARK: - Logic: Save (shelf scan — multiple products)
@@ -619,6 +757,8 @@ struct ImageInventoryView: View {
         let itemsToSave = parsedItems.filter {
             !$0.name.trimmingCharacters(in: .whitespaces).isEmpty
         }
+        var runningCount = SubscriptionManager.shared.itemCount(in: storage, context: modelContext)
+        var appliedCount = 0
 
         for editable in itemsToSave {
             let matchedUOM = uoms.first {
@@ -635,7 +775,7 @@ struct ImageInventoryView: View {
                 )
                 existing.countHistory.append(count)
                 existing.currentQuantity = qty
-                existing.updatedAt = Date()
+                existing.applyCapturedFields(from: editable)
                 let event = ActivityEvent(
                     eventType: "ItemCounted",
                     itemName: existing.name,
@@ -646,16 +786,36 @@ struct ImageInventoryView: View {
                     performedBy: "You"
                 )
                 modelContext.insert(event)
+                appliedCount += 1
             case .new:
+                guard subscriptionManager.isPro || editable.isSelectedForAdd else { continue }
+                guard SubscriptionManager.shared.canInsertNewItem(runningCount: &runningCount) else {
+                    continue
+                }
                 let item = InventoryItem(
                     name: editable.name,
-                    description: "",
+                    description: editable.aiNotes ?? "",
+                    sku: editable.sku ?? "",
+                    barcode: editable.barcode ?? "",
                     currentQuantity: editable.quantity ?? 0,
+                    minQuantity: editable.minQuantity ?? 0,
+                    unitCost: editable.unitCost ?? 0,
                     category: editable.category ?? "Uncategorised",
+                    expiryDate: editable.expiryDate,
                     storage: storage,
                     uom: matchedUOM
                 )
+                if let sellingPrice = editable.sellingPrice {
+                    item.sellingPrice = sellingPrice
+                }
                 modelContext.insert(item)
+                AnalyticsManager.shared.track(.itemAdded(
+                    category: item.category,
+                    hasBarcode: !(editable.barcode?.isEmpty ?? true),
+                    hasPhoto: false,
+                    source: "ai",
+                    inputMethod: "photo"
+                ))
                 let event = ActivityEvent(
                     eventType: "ItemAdded",
                     itemName: item.name,
@@ -664,6 +824,7 @@ struct ImageInventoryView: View {
                     performedBy: "You"
                 )
                 modelContext.insert(event)
+                appliedCount += 1
             }
         }
 
@@ -671,7 +832,11 @@ struct ImageInventoryView: View {
 
         AnalyticsManager.shared.track(.smartCountCompleted(
             mode: "photo",
-            itemCount: itemsToSave.count
+            itemCount: appliedCount,
+            capturedExtraFields: {
+                let fields = Array(Set(itemsToSave.flatMap(\.capturedExtraFieldNames)))
+                return fields.isEmpty ? nil : fields
+            }()
         ))
 
         Task {
@@ -680,11 +845,8 @@ struct ImageInventoryView: View {
             }
         }
 
-        if let onComplete {
-            onComplete(itemsToSave.count)
-        } else {
-            dismiss()
-        }
+        onComplete?(appliedCount)
+        dismiss()
     }
 }
 

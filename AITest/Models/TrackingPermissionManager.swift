@@ -34,10 +34,11 @@ class TrackingPermissionManager: ObservableObject {
     func requestPermissionIfNeeded() async {
         let currentStatus = ATTrackingManager.trackingAuthorizationStatus
 
-        // Already decided by the user previously — just init AdMob.
+        // Already decided by the user previously — sync Meta ATT + init AdMob.
         if currentStatus != .notDetermined {
             authorizationStatus = currentStatus
             hasResolved = true
+            MetaAppEvents.setAdvertiserTrackingEnabled(currentStatus == .authorized)
             AdManager.shared.initializeAfterTrackingDecision()
             return
         }
@@ -48,6 +49,8 @@ class TrackingPermissionManager: ObservableObject {
         let status = await ATTrackingManager.requestTrackingAuthorization()
         authorizationStatus = status
         hasResolved = true
+
+        MetaAppEvents.setAdvertiserTrackingEnabled(status == .authorized)
 
         // Always initialize AdMob — it works with or without tracking permission.
         // With permission: personalized ads (higher CPM).
@@ -77,11 +80,16 @@ class TrackingPermissionManager: ObservableObject {
     /// Human-readable description for settings/profile screens.
     var statusDescription: String {
         switch authorizationStatus {
-        case .authorized:   return "Personalized ads enabled"
-        case .denied:       return "Non-personalized ads only"
-        case .restricted:   return "Restricted by device policy"
-        case .notDetermined: return "Not yet requested"
-        @unknown default:   return "Unknown"
+        case .authorized:
+            return L("tracking.status.authorized", "Personalized ads enabled")
+        case .denied:
+            return L("tracking.status.denied", "Non-personalized ads only")
+        case .restricted:
+            return L("tracking.status.restricted", "Restricted by device policy")
+        case .notDetermined:
+            return L("tracking.status.notDetermined", "Not yet requested")
+        @unknown default:
+            return L("tracking.status.unknown", "Unknown")
         }
     }
 }

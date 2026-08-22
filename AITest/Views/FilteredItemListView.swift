@@ -129,19 +129,27 @@ struct ItemsListView: View {
 
     private var emptyFilterTitle: String {
         switch filterType {
-        case .lowStock: return "No low stock items"
-        case .outOfStock: return "No out of stock items"
-        case .expiringSoon: return "No expiring items"
-        case .allItems: return "No items"
+        case .lowStock:
+            return L("filter.empty.lowStock.title", "No low stock items")
+        case .outOfStock:
+            return L("filter.empty.outOfStock.title", "No out of stock items")
+        case .expiringSoon:
+            return L("filter.empty.expiringSoon.title", "No expiring items")
+        case .allItems:
+            return L("filter.empty.allItems.title", "No items")
         }
     }
 
     private var emptyFilterSubtitle: String {
         switch filterType {
-        case .lowStock: return "All items are well stocked"
-        case .outOfStock: return "All items are in stock"
-        case .expiringSoon: return "No items expiring in the next 7 days"
-        case .allItems: return "Add items to get started"
+        case .lowStock:
+            return L("filter.empty.lowStock.subtitle", "All items are well stocked")
+        case .outOfStock:
+            return L("filter.empty.outOfStock.subtitle", "All items are in stock")
+        case .expiringSoon:
+            return L("filter.empty.expiringSoon.subtitle", "No items expiring in the next 7 days")
+        case .allItems:
+            return L("filter.empty.allItems.subtitle", "Add items to get started")
         }
     }
 
@@ -180,7 +188,7 @@ struct ItemsListView: View {
 }
 
 struct FilteredItemListView: View {
-    let title: String
+    let title: LocalizedStringKey
     let items: [InventoryItem]
     let filterType: FilterType
     
@@ -250,26 +258,38 @@ struct FilteredItemCard: View {
                     .foregroundColor(.primary)
                 
                 HStack {
-                    Text("SKU: \(item.sku)")
+                    Text(String(format: L("item.sku.label", "SKU: %@"), item.sku))
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
                     Spacer()
                     
-                    Text(item.storage?.name ?? "No Storage")
+                    Text(item.storage?.name ?? L("activity.noStorage", "No Storage"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
                 
                 HStack {
-                    Text("Current: \(item.currentQuantity.smartFormatted) \(item.uom?.symbol ?? "")")
+                    Text(
+                        String(
+                            format: L("item.currentQty.label", "Current: %1$@ %2$@"),
+                            item.currentQuantity.smartFormatted,
+                            item.uom?.symbol ?? ""
+                        )
+                    )
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
                     Spacer()
                     
                     if item.isLowStock {
-                        Text("Min: \(item.minQuantity.smartFormatted) \(item.uom?.symbol ?? "")")
+                        Text(
+                            String(
+                                format: L("item.minQty.label", "Min: %1$@ %2$@"),
+                                item.minQuantity.smartFormatted,
+                                item.uom?.symbol ?? ""
+                            )
+                        )
                             .font(.caption)
                             .foregroundColor(.orange)
                     }

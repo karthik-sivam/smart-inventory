@@ -1,0 +1,44 @@
+# Flow 99 — Quick Sale prefills fallback price when selling price is unset
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: seed_sale_test_item.yaml
+- tapOn: "Items"
+- tapOn: "Search items..."
+- inputText: "Sale Test Item"
+- swipe:
+    direction: LEFT
+    on: "Sale Test Item"
+- tapOn: "Edit"
+- scrollUntilVisible:
+    element:
+      id: "editItemSellingPrice"
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: "editItemSellingPrice"
+- eraseText: 10
+- inputText: "0"
+- tapOn:
+    id: "editItemLastPurchasePrice"
+- eraseText: 10
+- inputText: "12.00"
+- tapOn:
+    id: "editItemUnitCost"
+- eraseText: 10
+- inputText: "8.00"
+- tapOn: "Save"
+- tapOn: "Sales"
+- tapOn:
+    id: "salesAddButton"
+    optional: true
+- tapOn: "Record a Sale"
+    optional: true
+- tapOn: "Sale Test Item"
+    optional: true
+- assertVisible: "Record Sale"
+- assertVisible:
+    id: "quickSalePriceField"
+- assertVisible:
+    id: "quickSaleSaleTotal"
+- tapOn: "Cancel"

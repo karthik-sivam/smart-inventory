@@ -18,6 +18,7 @@ struct ProfileView: View {
     @State private var showPrivacyPolicy = false
     @State private var showPaywall = false
     @State private var showSettings = false
+    @State private var showFeedback = false
 
     var body: some View {
         NavigationStack {
@@ -134,7 +135,7 @@ struct ProfileView: View {
                                     .font(.subheadline)
                                     .fontWeight(.medium)
                                 if let last = firestoreManager.lastSyncDate {
-                                    Text("Last synced \(last, style: .relative) ago")
+                                    Text(last, style: .relative)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 } else {
@@ -228,14 +229,20 @@ struct ProfileView: View {
 
                 // MARK: - Support
                 Section("Support") {
-                    Button(action: openHelpAndSupport) {
-                        HStack {
-                            Label("Help & Support", systemImage: "questionmark.circle")
-                            Spacer()
-                            Image(systemName: "envelope")
-                                .foregroundColor(.blue)
-                        }
+                    NavigationLink(destination: HelpCentreView()) {
+                        Label(L("help.faqTitle", "Help & FAQ"), systemImage: "questionmark.circle")
                     }
+                    .accessibilityIdentifier("profileHelpCentreRow")
+                    Button {
+                        showFeedback = true
+                    } label: {
+                        Label(L("feedback.send", "Send Feedback"), systemImage: "text.bubble")
+                    }
+                    .accessibilityIdentifier("profileSendFeedbackRow")
+                    Button(action: openHelpAndSupport) {
+                        Label(L("support.emailUs", "Email Support"), systemImage: "envelope")
+                    }
+                    .accessibilityIdentifier("profileEmailSupportRow")
                     .foregroundColor(.primary)
                 }
 
@@ -265,7 +272,7 @@ struct ProfileView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.0.0")
+                        Text(Bundle.main.appVersionString)
                             .foregroundColor(.secondary)
                     }
                     Button { showPrivacyPolicy = true } label: {
@@ -319,6 +326,11 @@ struct ProfileView: View {
             SettingsView()
                 .environmentObject(currencyManager)
                 .environmentObject(firestoreManager)
+                .sheetStyle()
+        }
+        .sheet(isPresented: $showFeedback) {
+            FeedbackView()
+                .environmentObject(AuthManager.shared)
                 .sheetStyle()
         }
         .task {

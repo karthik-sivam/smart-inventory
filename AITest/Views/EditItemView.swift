@@ -4,6 +4,9 @@ import UIKit
 
 struct EditItemView: View {
     let item: InventoryItem
+    /// When true, fires `addItemStarted` on appear (add-item presentation).
+    var isAddFlow: Bool = false
+    var analyticsSource: String = "fab"
     
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -23,8 +26,10 @@ struct EditItemView: View {
     @State private var pendingScannedBarcode: String?
     @State private var usePercentThreshold = false
 
-    init(item: InventoryItem) {
+    init(item: InventoryItem, isAddFlow: Bool = false, source: String = "fab") {
         self.item = item
+        self.isAddFlow = isAddFlow
+        self.analyticsSource = source
     }
     
     var body: some View {
@@ -170,6 +175,7 @@ struct EditItemView: View {
                         TextField("0.00", text: $formVM.unitCost)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .accessibilityIdentifier("editItemUnitCost")
                     }
                     HStack {
                         Text("Last Purchase Price")
@@ -177,6 +183,7 @@ struct EditItemView: View {
                         TextField("0.00", text: $formVM.lastPurchasePrice)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .accessibilityIdentifier("editItemLastPurchasePrice")
                     }
                     HStack {
                         Text("Selling Price")
@@ -185,6 +192,7 @@ struct EditItemView: View {
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .accessibilityLabel("Selling price per unit")
+                            .accessibilityIdentifier("editItemSellingPrice")
                     }
                     if let sp = Double(formVM.sellingPrice), sp > 0 {
                         let cost = Double(formVM.unitCost) ?? 0
@@ -261,6 +269,7 @@ struct EditItemView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Edit Item")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -269,7 +278,17 @@ struct EditItemView: View {
                         dismiss()
                     }
                 }
-                
+
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
+                }
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         formVM.saveEdits(to: item)
@@ -308,6 +327,9 @@ struct EditItemView: View {
             }
         }
         .onAppear {
+            if isAddFlow {
+                AnalyticsManager.shared.track(.addItemStarted(source: analyticsSource))
+            }
             formVM.bind(modelContext: modelContext)
             formVM.load(from: item)
             usePercentThreshold = item.reorderPercentage > 0
@@ -364,10 +386,10 @@ struct EditItemView: View {
         let qty = Double(formVM.currentQuantity) ?? 0
         let minQ = effectiveEditMinQuantity
         let maxQ = Double(formVM.maxQuantity) ?? 0
-        if qty <= 0 { return "Out of Stock" }
-        if minQ > 0 && qty > 0 && qty <= minQ { return "Low Stock" }
-        if maxQ > 0 && qty >= maxQ { return "Over Stock" }
-        return "In Stock"
+        if qty <= 0 { return L("Out of Stock", "Out of Stock") }
+        if minQ > 0 && qty > 0 && qty <= minQ { return L("Low Stock", "Low Stock") }
+        if maxQ > 0 && qty >= maxQ { return L("Over Stock", "Over Stock") }
+        return L("In Stock", "In Stock")
     }
 
     private var editStockStatusColor: Color {

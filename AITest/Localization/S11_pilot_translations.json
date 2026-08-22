@@ -1,0 +1,32 @@
+{
+  "_comment": "S11 Localization Foundation — pilot translations (Hindi + Arabic) to prove non-Latin rendering + RTL. Keys are the ENGLISH SOURCE STRINGS (String Catalog default key). Cursor: match each key to the actual auto-extracted catalog key; if the real code literal differs slightly (e.g. 'Storage' vs 'Storages'), map to the real one. NATIVE REVIEW still recommended before wide release — these are strong drafts, not final.",
+  "_layers": "UI text only. Voice + AI response localization are later phases (see Stoqly_Multilingual_Spec.md).",
+  "strings": {
+    "Dashboard":     { "hi": "डैशबोर्ड",        "ar": "لوحة التحكم" },
+    "Storages":      { "hi": "भंडारण",          "ar": "المخازن" },
+    "Items":         { "hi": "आइटम",            "ar": "العناصر" },
+    "Count":         { "hi": "गिनती",           "ar": "الجرد" },
+    "Settings":      { "hi": "सेटिंग्स",         "ar": "الإعدادات" },
+    "Add Item":      { "hi": "आइटम जोड़ें",      "ar": "إضافة عنصر" },
+    "Add Storage":   { "hi": "भंडारण जोड़ें",     "ar": "إضافة مخزن" },
+    "Save":          { "hi": "सहेजें",           "ar": "حفظ" },
+    "Cancel":        { "hi": "रद्द करें",         "ar": "إلغاء" },
+    "Delete":        { "hi": "हटाएं",            "ar": "حذف" },
+    "Confirm":       { "hi": "पुष्टि करें",        "ar": "تأكيد" },
+    "Edit":          { "hi": "संपादित करें",      "ar": "تعديل" },
+    "Done":          { "hi": "पूर्ण",            "ar": "تم" },
+    "Total Items":   { "hi": "कुल आइटम",         "ar": "إجمالي العناصر" },
+    "Low Stock":     { "hi": "कम स्टॉक",         "ar": "مخزون منخفض" },
+    "Total Value":   { "hi": "कुल मूल्य",         "ar": "القيمة الإجمالية" },
+    "Out of Stock":  { "hi": "स्टॉक खत्म",        "ar": "نفد المخزون" },
+    "All caught up!":{ "hi": "सब कुछ पूरा हो गया!", "ar": "كل شيء مُحدَّث!" },
+    "No items yet":  { "hi": "अभी तक कोई आइटम नहीं", "ar": "لا توجد عناصر بعد" },
+    "Search":        { "hi": "खोजें",            "ar": "بحث" },
+    "Quantity":      { "hi": "मात्रा",           "ar": "الكمية" },
+    "Category":      { "hi": "श्रेणी",           "ar": "الفئة" },
+    "Reorder List":  { "hi": "पुनः ऑर्डर सूची",   "ar": "قائمة إعادة الطلب" },
+    "Activity":      { "hi": "गतिविधि",          "ar": "النشاط" },
+    "Export":        { "hi": "निर्यात",          "ar": "تصدير" },
+    "Upgrade to Pro":{ "hi": "प्रो में अपग्रेड करें", "ar": "الترقية إلى برو" }
+  }
+}

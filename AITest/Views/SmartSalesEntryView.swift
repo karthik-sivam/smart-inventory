@@ -78,23 +78,44 @@ struct SmartSalesEntryView: View {
         VStack(spacing: 12) {
             modeCard(icon: "mic.fill", iconColor: .stoqlyPrimary, title: "Voice",
                      description: "Say what you sold. \"5 chips, 2 waters, 1 sandwich\". AI parses into a sale list.",
-                     action: { showingVoice = true })
+                     accessibilityId: "voice",
+                     action: { openSaleMode("voice") { showingVoice = true } })
             modeCard(icon: "camera.fill", iconColor: .stoqlyAccent, title: "Photo",
                      description: "Photograph a handwritten chit, receipt, or invoice. AI reads every line.",
-                     action: { showingPhoto = true })
+                     accessibilityId: "photo",
+                     action: { openSaleMode("photo") { showingPhoto = true } })
             modeCard(icon: "text.alignleft", iconColor: .blue, title: "Text",
                      description: "Type or paste a free-form sales list. AI structures it for you.",
-                     action: { showingText = true })
+                     accessibilityId: "text",
+                     action: { openSaleMode("text") { showingText = true } })
             modeCard(icon: "tablecells", iconColor: .green, title: "CSV / Excel",
                      description: "Import a spreadsheet of sales. Map columns then confirm.",
-                     action: { showingCSV = true })
+                     accessibilityId: "csv_excel",
+                     action: { openSaleMode("csv") { showingCSV = true } })
             modeCard(icon: "doc.fill", iconColor: .orange, title: "PDF",
                      description: "Upload a PDF invoice or sales report. AI extracts the sale rows.",
-                     action: { showingPDF = true })
+                     accessibilityId: "pdf",
+                     action: { openSaleMode("pdf") { showingPDF = true } })
         }
     }
 
-    private func modeCard(icon: String, iconColor: Color, title: String, description: String, action: @escaping () -> Void) -> some View {
+    private func openSaleMode(_ mode: String, action: () -> Void) {
+        guard subscriptionManager.isPro else {
+            showingPaywall = true
+            return
+        }
+        AnalyticsManager.shared.track(.saleEntryStarted(mode: mode))
+        action()
+    }
+
+    private func modeCard(
+        icon: String,
+        iconColor: Color,
+        title: LocalizedStringKey,
+        description: LocalizedStringKey,
+        accessibilityId: String,
+        action: @escaping () -> Void
+    ) -> some View {
         let isPro = subscriptionManager.isPro
         return Button(action: isPro ? action : { showingPaywall = true }) {
             HStack(spacing: 16) {
@@ -125,7 +146,7 @@ struct SmartSalesEntryView: View {
             .opacity(isPro ? 1.0 : 0.7)
         }
         .buttonStyle(PlainButtonStyle())
-        .accessibilityIdentifier("smartSalesMode_\(title.lowercased().replacingOccurrences(of: " ", with: "_"))")
+        .accessibilityIdentifier("smartSalesMode_\(accessibilityId)")
     }
 
     private var proUpsellBanner: some View {

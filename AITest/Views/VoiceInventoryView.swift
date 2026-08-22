@@ -189,12 +189,14 @@ struct VoiceInventoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
+    @EnvironmentObject private var localizationManager: LocalizationManager
     @Query private var storages: [Storage]
     @Query private var uoms: [UOM]
     @Query(sort: \InventoryItem.name) private var allItems: [InventoryItem]
 
     // Audio controller — @StateObject ensures single ownership, main-thread init.
     @StateObject private var audio = VoiceRecordingController()
+    @StateObject private var sarvamRecorder = SarvamSpeechTranscriber()
 
     // @ObservedObject, not @StateObject — AIUsageManager.shared is a pre-existing
     // @MainActor singleton; @StateObject would incorrectly take ownership of it.
@@ -214,14 +216,52 @@ struct VoiceInventoryView: View {
     @State private var selectedStorage: Storage?
     @State private var errorMessage: String?
     @State private var showingPaywall = false
+    @State private var showingItemLimitPaywall = false
     @State private var recordingPermissionDenied = false
     @State private var didRequestRecordingPermissions = false
     @State private var selectedLocale: String = VoiceRecordingController.defaultLocaleID()
+    @State private var isCloudRecognizing = false
+    @State private var voiceEngine: VoiceSpeechEngine = .apple(localeID: VoiceRecordingController.defaultLocaleID())
+    @State private var didTrackVoiceEngineForSession = false
 
-    private let availableLocales = [("en-IN", "English (India)"), ("en-US", "English (US)"), ("en-GB", "English (UK)")]
+    private var localePills: [(String, String)] {
+        let lang = localizationManager.currentCode
+        let normalized = lang?.split(separator: "-").first.map(String.init) ?? "en"
+        if normalized == "en" || lang == nil {
+            return SpeechEnginePicker.englishLocalePills()
+        }
+        let localeID = SpeechEnginePicker.voiceLocaleID(for: lang)
+        return [(localeID, SpeechEnginePicker.localeDisplayName(for: localeID))]
+    }
+
+    private var voiceUnavailable: Bool {
+        if case .unavailable = voiceEngine { return true }
+        return false
+    }
+
+    private var usesCloudEngine: Bool {
+        if case .sarvam = voiceEngine { return true }
+        return false
+    }
 
     private var isStorageSelected: Bool {
         selectedStorage != nil && !storages.isEmpty
+    }
+
+    private var remainingItemSlots: Int {
+        ItemCapReview.remainingSlots(
+            storage: selectedStorage,
+            context: modelContext,
+            isPro: subscriptionManager.isPro
+        )
+    }
+
+    private var canSaveReviewItems: Bool {
+        isStorageSelected && ItemCapReview.canSave(
+            items: editableItems,
+            remainingSlots: remainingItemSlots,
+            isPro: subscriptionManager.isPro
+        )
     }
 
     var body: some View {
@@ -248,18 +288,42 @@ struct VoiceInventoryView: View {
         .sheet(isPresented: $showingPaywall) {
             PaywallView(source: "ai_limit").sheetStyle()
         }
+        .sheet(isPresented: $showingItemLimitPaywall) {
+            PaywallView(source: "item_limit", trigger: "item_cap_bulk").sheetStyle()
+        }
         .onAppear {
             if selectedStorage == nil, let preselectedStorage {
                 selectedStorage = preselectedStorage
             }
+            refreshVoiceEngine()
             guard !didRequestRecordingPermissions else { return }
             didRequestRecordingPermissions = true
             requestRecordingPermissions()
-            audio.setRecognizerLocale(Locale(identifier: selectedLocale))
+            if case .apple = voiceEngine {
+                audio.setRecognizerLocale(Locale(identifier: selectedLocale))
+            }
+        }
+        .onChange(of: localizationManager.refreshID) { _, _ in
+            refreshVoiceEngine()
         }
         .onChange(of: selectedLocale) { _, newLocale in
             if isRecording { stopRecording() }
-            audio.setRecognizerLocale(Locale(identifier: newLocale))
+            if case .apple = voiceEngine {
+                audio.setRecognizerLocale(Locale(identifier: newLocale))
+            }
+        }
+    }
+
+    private func refreshVoiceEngine() {
+        voiceEngine = SpeechEnginePicker.pickEngine(for: localizationManager.currentCode)
+        switch voiceEngine {
+        case .apple(let localeID):
+            selectedLocale = localeID
+            audio.setRecognizerLocale(Locale(identifier: localeID))
+        case .sarvam(let languageCode):
+            selectedLocale = languageCode
+        case .unavailable:
+            break
         }
     }
 
@@ -271,7 +335,7 @@ struct VoiceInventoryView: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(availableLocales, id: \.0) { id, label in
+                        ForEach(localePills, id: \.0) { id, label in
                             Button(label) { selectedLocale = id }
                                 .font(.caption)
                                 .padding(.horizontal, 12).padding(.vertical, 6)
@@ -283,13 +347,45 @@ struct VoiceInventoryView: View {
                     .padding(.horizontal)
                 }
 
+                if voiceUnavailable {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Voice not available in this language", systemImage: "mic.slash")
+                            .font(.subheadline).fontWeight(.semibold)
+                            .foregroundColor(.stoqlyWarning)
+                        Text("Voice counting isn't available in this language yet — try Photo or Sheet.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(12)
+                    .background(Color.stoqlyWarningTint)
+                    .cornerRadius(10)
+                }
+
+                if isCloudRecognizing {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Recognizing (cloud)…")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(12)
+                    .background(Color.stoqlyCard)
+                    .cornerRadius(10)
+                }
+
                 // Usage badge
                 if !subscriptionManager.isPro {
                     let remaining = usageManager.remaining(.voice, isPro: false)
                     HStack(spacing: 8) {
                         Image(systemName: "mic.badge.plus")
                             .foregroundColor(.stoqlyPrimary)
-                        Text("\(remaining) voice count\(remaining == 1 ? "" : "s") left this month")
+                        Text(
+                            String(
+                                format: L("ai.voice.quotaRemaining", "%1$d voice count%2$@ left this month"),
+                                remaining,
+                                remaining == 1 ? "" : "s"
+                            )
+                        )
                             .font(.subheadline)
                         Spacer()
                         Button("Go Pro") { showingPaywall = true }
@@ -405,6 +501,7 @@ struct VoiceInventoryView: View {
                 }
 
                 // Record button
+                if !voiceUnavailable {
                 VStack(spacing: 12) {
                     Button(action: toggleRecording) {
                         ZStack {
@@ -423,11 +520,12 @@ struct VoiceInventoryView: View {
                                 .foregroundColor(.white)
                         }
                     }
-                    .disabled(recordingPermissionDenied || !isStorageSelected)
+                    .disabled(recordingPermissionDenied || !isStorageSelected || isCloudRecognizing)
 
                     Text(isRecording ? "Tap to stop" : "Tap to record")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                }
                 }
 
                 if !transcript.isEmpty && !isRecording {
@@ -481,10 +579,25 @@ struct VoiceInventoryView: View {
                 }
                 .padding()
             } else {
+                if ItemCapReview.shouldShowBanner(
+                    newCount: ItemCapReview.newCount(editableItems),
+                    remainingSlots: remainingItemSlots,
+                    isPro: subscriptionManager.isPro
+                ) {
+                    ItemCapOverflowBanner(remainingSlots: remainingItemSlots) {
+                        showingItemLimitPaywall = true
+                    }
+                }
+
                 List {
                     Section {
                         ForEach($editableItems) { $item in
-                            EditableItemRow(item: $item, selectedStorage: selectedStorage)
+                            EditableItemRow(
+                                item: $item,
+                                selectedStorage: selectedStorage,
+                                isPro: subscriptionManager.isPro,
+                                remainingSlots: remainingItemSlots
+                            )
                         }
                         .onDelete { editableItems.remove(atOffsets: $0) }
                     } header: {
@@ -508,6 +621,12 @@ struct VoiceInventoryView: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                     }
+                    if !subscriptionManager.isPro {
+                        ItemCapSelectionCounter(
+                            selectedNew: ItemCapReview.selectedNewCount(editableItems),
+                            remainingSlots: remainingItemSlots
+                        )
+                    }
                     HStack(spacing: 12) {
                         Button("Re-record") {
                             transcript = ""
@@ -527,7 +646,7 @@ struct VoiceInventoryView: View {
                         }
                         .stoqlyButtonStyle()
                         .frame(maxWidth: .infinity)
-                        .disabled(!isStorageSelected)
+                        .disabled(!canSaveReviewItems)
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 8)
@@ -557,6 +676,8 @@ struct VoiceInventoryView: View {
         SpeechKit.requestAuthorization { speechStatus in
             AVAudioApplication.requestRecordPermission { micGranted in
                 DispatchQueue.main.async {
+                    AnalyticsManager.shared.track(.permissionResult(type: "speech", granted: speechStatus == .authorized))
+                    AnalyticsManager.shared.track(.permissionResult(type: "microphone", granted: micGranted))
                     recordingPermissionDenied = speechStatus != .authorized || !micGranted
                 }
             }
@@ -569,7 +690,8 @@ struct VoiceInventoryView: View {
     }
 
     private func startRecording() {
-        guard !isRecording, !audio.isRunning else { return }
+        guard !isRecording, !audio.isRunning, !isCloudRecognizing else { return }
+        guard !voiceUnavailable else { return }
         guard usageManager.canUse(.voice, isPro: subscriptionManager.isPro) else {
             showingPaywall = true
             return
@@ -577,6 +699,19 @@ struct VoiceInventoryView: View {
 
         errorMessage = nil
         audio.showLowConfidenceWarning = false
+        didTrackVoiceEngineForSession = false
+
+        switch voiceEngine {
+        case .apple:
+            startAppleRecording()
+        case .sarvam:
+            startSarvamRecording()
+        case .unavailable:
+            break
+        }
+    }
+
+    private func startAppleRecording() {
         audio.stop()
 
         let audioSession = AVAudioSession.sharedInstance()
@@ -584,7 +719,7 @@ struct VoiceInventoryView: View {
             try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
-            errorMessage = "Could not start audio session."
+            errorMessage = L("voice.audioSessionFailed", "Could not start audio session.")
             return
         }
 
@@ -594,7 +729,7 @@ struct VoiceInventoryView: View {
         audio.request = req
 
         guard let recognizer = audio.recognizer, recognizer.isAvailable else {
-            errorMessage = "Speech recognizer unavailable."
+            errorMessage = L("voice.recognizerUnavailable", "Speech recognizer unavailable.")
             audio.stop()
             return
         }
@@ -618,8 +753,21 @@ struct VoiceInventoryView: View {
             try audio.startEngine()
             isRecording = true
         } catch {
-            errorMessage = (error as? LocalizedError)?.errorDescription ?? "Recording failed to start."
+            errorMessage = (error as? LocalizedError)?.errorDescription
+                ?? L("voice.recordingFailed", "Recording failed to start.")
             stopRecording()
+        }
+    }
+
+    private func startSarvamRecording() {
+        audio.stop()
+        do {
+            try sarvamRecorder.startRecording()
+            isRecording = true
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription
+                ?? L("voice.recordingFailed", "Recording failed to start.")
+            sarvamRecorder.stopRecording(deleteFile: true)
         }
     }
 
@@ -633,6 +781,7 @@ struct VoiceInventoryView: View {
 
         if let transcriptText {
             transcript = transcriptText
+            trackVoiceEngineUsedIfNeeded()
         }
 
         if let minConfidence, minConfidence < 0.6 {
@@ -655,9 +804,46 @@ struct VoiceInventoryView: View {
     }
 
     private func stopRecording() {
-        guard isRecording || audio.isRunning else { return }
+        guard isRecording || audio.isRunning || isCloudRecognizing else { return }
+
+        if usesCloudEngine, isRecording {
+            isRecording = false
+            isCloudRecognizing = true
+            errorMessage = nil
+            let languageCode = selectedLocale
+            Task {
+                do {
+                    let text = try await sarvamRecorder.transcribe(languageCode: languageCode)
+                    transcript = text
+                    trackVoiceEngineUsedIfNeeded()
+                    isCloudRecognizing = false
+                } catch {
+                    isCloudRecognizing = false
+                    errorMessage = error.localizedDescription
+                    sarvamRecorder.stopRecording(deleteFile: true)
+                }
+            }
+            return
+        }
+
         audio.stop()
+        sarvamRecorder.stopRecording(deleteFile: true)
         isRecording = false
+    }
+
+    private func trackVoiceEngineUsedIfNeeded() {
+        guard !didTrackVoiceEngineForSession else { return }
+        guard !transcript.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+
+        let engine: String
+        switch voiceEngine {
+        case .apple: engine = "apple"
+        case .sarvam: engine = "sarvam"
+        case .unavailable: return
+        }
+
+        didTrackVoiceEngineForSession = true
+        AnalyticsManager.shared.track(.voiceEngineUsed(engine: engine, language: selectedLocale))
     }
 
     // MARK: - Logic: AI Parse
@@ -672,10 +858,18 @@ struct VoiceInventoryView: View {
         step = .parsing
         do {
             let hints = allItems.prefix(50).map(\.name)
-            let items = try await AIInventoryService.shared.parseVoiceTranscript(transcript, inventoryHints: Array(hints))
+            let items = try await AIInventoryService.shared.parseVoiceTranscript(
+                transcript,
+                inventoryHints: Array(hints),
+                appLanguageCode: localizationManager.currentCode
+            )
             usageManager.recordUse(.voice)
             editableItems = items.map { EditableItem(from: $0) }
             editableItems.applyNameMatching(in: selectedStorage)
+            editableItems.applyDefaultCapSelection(
+                remainingSlots: remainingItemSlots,
+                isPro: subscriptionManager.isPro
+            )
             step = .review
         } catch {
             errorMessage = error.localizedDescription
@@ -692,6 +886,8 @@ struct VoiceInventoryView: View {
         step = .saving
 
         let itemsToSave = editableItems.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
+        var runningCount = SubscriptionManager.shared.itemCount(in: storage, context: modelContext)
+        var appliedCount = 0
 
         for editable in itemsToSave {
             let matchedUOM = uoms.first { $0.symbol.lowercased() == (editable.unitSymbol?.lowercased() ?? "") }
@@ -702,7 +898,7 @@ struct VoiceInventoryView: View {
                 let count = InventoryCount(previousQuantity: existing.currentQuantity, countedQuantity: qty, notes: "Voice inventory")
                 existing.countHistory.append(count)
                 existing.currentQuantity = qty
-                existing.updatedAt = Date()
+                existing.applyCapturedFields(from: editable)
                 let event = ActivityEvent(
                     eventType: "ItemCounted",
                     itemName: existing.name,
@@ -713,16 +909,36 @@ struct VoiceInventoryView: View {
                     performedBy: "You"
                 )
                 modelContext.insert(event)
+                appliedCount += 1
             case .new:
+                guard subscriptionManager.isPro || editable.isSelectedForAdd else { continue }
+                guard SubscriptionManager.shared.canInsertNewItem(runningCount: &runningCount) else {
+                    continue
+                }
                 let item = InventoryItem(
                     name: editable.name,
-                    description: "",
+                    description: editable.aiNotes ?? "",
+                    sku: editable.sku ?? "",
+                    barcode: editable.barcode ?? "",
                     currentQuantity: editable.quantity ?? 0,
+                    minQuantity: editable.minQuantity ?? 0,
+                    unitCost: editable.unitCost ?? 0,
                     category: editable.category ?? "Uncategorised",
+                    expiryDate: editable.expiryDate,
                     storage: storage,
                     uom: matchedUOM
                 )
+                if let sellingPrice = editable.sellingPrice {
+                    item.sellingPrice = sellingPrice
+                }
                 modelContext.insert(item)
+                AnalyticsManager.shared.track(.itemAdded(
+                    category: item.category,
+                    hasBarcode: !(editable.barcode?.isEmpty ?? true),
+                    hasPhoto: false,
+                    source: "ai",
+                    inputMethod: "voice"
+                ))
                 let event = ActivityEvent(
                     eventType: "ItemAdded",
                     itemName: item.name,
@@ -731,18 +947,23 @@ struct VoiceInventoryView: View {
                     performedBy: "You"
                 )
                 modelContext.insert(event)
+                appliedCount += 1
             }
         }
 
         guard modelContext.safeSave(context: "VoiceInventorySave") else {
-            errorMessage = "Couldn't save your inventory changes. Please try again."
+            errorMessage = L("voice.saveFailed", "Couldn't save your inventory changes. Please try again.")
             step = .review
             return
         }
 
         AnalyticsManager.shared.track(.smartCountCompleted(
             mode: "voice",
-            itemCount: itemsToSave.count
+            itemCount: appliedCount,
+            capturedExtraFields: {
+                let fields = Array(Set(itemsToSave.flatMap(\.capturedExtraFieldNames)))
+                return fields.isEmpty ? nil : fields
+            }()
         ))
 
         // Sync to Firestore
@@ -752,7 +973,7 @@ struct VoiceInventoryView: View {
             }
         }
 
-        onComplete?(itemsToSave.count)
+        onComplete?(appliedCount)
         dismiss()
     }
 }
@@ -773,7 +994,21 @@ struct EditableItem: Identifiable {
     var confidence: Double
     var fillPercent: Double?
     var remainingVolume: String?
+    var unitCost: Double?
+    var sellingPrice: Double?
+    var expiryDate: Date?
+    var sku: String?
+    var barcode: String?
+    var minQuantity: Double?
+    var aiNotes: String?
     var match: ItemMatch = .new
+    /// Free-tier: whether this NEW row should be inserted. Updates ignore this.
+    var isSelectedForAdd: Bool = true
+
+    var isNew: Bool {
+        if case .new = match { return true }
+        return false
+    }
 
     init(from parsed: ParsedInventoryItem) {
         id           = parsed.id
@@ -784,10 +1019,65 @@ struct EditableItem: Identifiable {
         confidence   = parsed.confidence
         fillPercent  = parsed.fillPercent
         remainingVolume = parsed.remainingVolume
+        unitCost     = parsed.unitCost
+        sellingPrice = parsed.sellingPrice
+        expiryDate   = parsed.expiryDate
+        sku          = parsed.sku
+        barcode      = parsed.barcode
+        minQuantity  = parsed.minQuantity
+        aiNotes      = parsed.notes
         if let vol = parsed.remainingVolume?.lowercased() {
-            if vol.contains("ml") { unitSymbol = "mL" }
-            else if vol.contains("l") { unitSymbol = "L" }
+            if vol.contains("ml") || vol.contains("மில") { unitSymbol = "mL" }
+            else if vol.contains("l") || vol.contains("லி") { unitSymbol = "L" }
         }
+    }
+
+    var capturedExtraFieldNames: [String] {
+        var fields: [String] = []
+        if unitCost != nil { fields.append("unit_cost") }
+        if sellingPrice != nil { fields.append("selling_price") }
+        if expiryDate != nil { fields.append("expiry_date") }
+        if let sku, !sku.isEmpty { fields.append("sku") }
+        if let barcode, !barcode.isEmpty { fields.append("barcode") }
+        if minQuantity != nil { fields.append("min_quantity") }
+        if let aiNotes, !aiNotes.isEmpty { fields.append("notes") }
+        return fields
+    }
+
+    var capturedExtrasSummary: String? {
+        var parts: [String] = []
+        if let unitCost { parts.append(String(format: L("Cost: %@", "Cost: %@"), unitCost.smartFormatted)) }
+        if let sellingPrice { parts.append(String(format: L("Sell: %@", "Sell: %@"), sellingPrice.smartFormatted)) }
+        if let expiryDate {
+            parts.append(String(format: L("Exp: %@", "Exp: %@"), AppLocaleFormatting.abbreviatedDate(expiryDate)))
+        }
+        if let sku, !sku.isEmpty { parts.append("SKU: \(sku)") }
+        if let barcode, !barcode.isEmpty { parts.append("Barcode: \(barcode)") }
+        if let minQuantity { parts.append(String(format: L("Min: %@", "Min: %@"), minQuantity.smartFormatted)) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+extension InventoryItem {
+    func applyCapturedFields(from editable: EditableItem) {
+        if let unitCost = editable.unitCost { self.unitCost = unitCost }
+        if let sellingPrice = editable.sellingPrice { self.sellingPrice = sellingPrice }
+        if let expiryDate = editable.expiryDate { self.expiryDate = expiryDate }
+        if let sku = editable.sku, !sku.isEmpty { self.sku = sku }
+        if let barcode = editable.barcode, !barcode.isEmpty { self.barcode = barcode }
+        if let minQuantity = editable.minQuantity { self.minQuantity = minQuantity }
+        if let notes = editable.aiNotes, !notes.isEmpty {
+            if itemDescription.isEmpty {
+                itemDescription = notes
+            } else if !itemDescription.contains(notes) {
+                itemDescription += "\n\(notes)"
+            }
+        }
+        updatedAt = Date()
+    }
+
+    func applyCapturedFields(from parsed: ParsedInventoryItem) {
+        applyCapturedFields(from: EditableItem(from: parsed))
     }
 }
 
@@ -795,6 +1085,21 @@ extension Array where Element == EditableItem {
     mutating func applyNameMatching(in storage: Storage?) {
         guard let storage else { return }
         for index in indices {
+            if let barcode = self[index].barcode?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !barcode.isEmpty,
+               let found = storage.items.first(where: { $0.barcode == barcode }) {
+                self[index].match = .existing(found)
+                continue
+            }
+            if let sku = self[index].sku?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !sku.isEmpty,
+               let found = storage.items.first(where: {
+                   $0.sku.lowercased() == sku.lowercased()
+               }) {
+                self[index].match = .existing(found)
+                continue
+            }
+
             let query = self[index].name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
             guard !query.isEmpty else {
                 self[index].match = .new
@@ -820,6 +1125,11 @@ extension Array where Element == EditableItem {
             }
         }
     }
+
+    @MainActor
+    mutating func applyDefaultCapSelection(remainingSlots: Int, isPro: Bool) {
+        ItemCapReview.applyDefaultSelection(&self, remainingSlots: remainingSlots, isPro: isPro)
+    }
 }
 
 // MARK: - EditableItemRow
@@ -827,10 +1137,16 @@ extension Array where Element == EditableItem {
 struct EditableItemRow: View {
     @Binding var item: EditableItem
     var selectedStorage: Storage?
+    var isPro: Bool = true
+    var remainingSlots: Int = Int.max
 
     var body: some View {
         VStack(spacing: 8) {
             HStack {
+                if !isPro, item.isNew {
+                    capSelectionToggle
+                }
+
                 // Confidence dot
                 Circle()
                     .fill(item.confidence >= 0.8 ? Color.stoqlySuccess : Color.stoqlyWarning)
@@ -839,6 +1155,7 @@ struct EditableItemRow: View {
                 TextField("Item name", text: $item.name)
                     .font(.subheadline).fontWeight(.medium)
             }
+            .opacity(!isPro && item.isNew && remainingSlots == 0 ? 0.45 : 1)
 
             ItemMatchReviewControls(
                 match: $item.match,
@@ -883,14 +1200,43 @@ struct EditableItemRow: View {
                 Text("~\(Int(fill))% full\(item.remainingVolume.map { " · \($0)" } ?? "")")
                     .font(.caption)
                     .foregroundColor(.secondary)
-            } else if item.remainingVolume != nil || (item.unitSymbol?.lowercased().contains("l") == true) {
-                if item.fillPercent == nil && item.unitSymbol?.lowercased().contains("l") == true {
+            } else if item.remainingVolume != nil || Self.isLiquidUnit(item.unitSymbol ?? "") {
+                if item.fillPercent == nil && Self.isLiquidUnit(item.unitSymbol ?? "") {
                     Text("Fill level not visible — enter quantity manually")
                         .font(.caption).foregroundColor(.orange)
                 }
             }
+
+            if let summary = item.capturedExtrasSummary {
+                Text(summary)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(.vertical, 4)
+    }
+
+    private var capSelectionToggle: some View {
+        Button {
+            guard remainingSlots > 0 else { return }
+            item.isSelectedForAdd.toggle()
+        } label: {
+            Image(systemName: item.isSelectedForAdd ? "checkmark.circle.fill" : "circle")
+                .font(.title3)
+                .foregroundColor(remainingSlots == 0 ? .secondary : .stoqlyPrimary)
+        }
+        .buttonStyle(.plain)
+        .disabled(remainingSlots == 0)
+        .accessibilityLabel(item.isSelectedForAdd
+            ? L("itemCap.selected", "Selected to add")
+            : L("itemCap.deselected", "Not selected"))
+    }
+
+    private static func isLiquidUnit(_ unit: String) -> Bool {
+        let u = unit.lowercased()
+        if u == "ml" || u.contains("ml") || u.contains("மில") { return true }
+        if u == "l" || u.contains("litre") || u.contains("liter") || u.contains("லி") { return true }
+        return false
     }
 }
 

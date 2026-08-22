@@ -43,8 +43,22 @@ enum ImportField: String, CaseIterable, Identifiable {
 
 struct ImportResult {
     let imported: Int
+    var updated: Int = 0
     let skipped: Int
     let errors: [String]
+    var skippedDueToCap: Int = 0
+    var skippedDeselected: Int = 0
+}
+
+struct BulkPreviewRow: Identifiable {
+    let id = UUID()
+    let rowIndex: Int
+    let name: String
+    let quantityLabel: String
+    var isUpdate: Bool
+    var matchedItemId: UUID?
+    var isSelectedForAdd: Bool
+    var storageId: UUID
 }
 
 // MARK: - ViewModel
@@ -58,14 +72,146 @@ final class BulkImportViewModel: ObservableObject {
     @Published var isImporting = false
     @Published var importResult: ImportResult? = nil
     @Published var parseError: String? = nil
+    @Published var classifiedRows: [BulkPreviewRow] = []
+    @Published var remainingSlotsForPreview: Int = SubscriptionManager.freeItemLimit
 
     var targetStorage: Storage? = nil
     var importFileExtension: String? = nil
+    private var remainingSlotsByStorage: [UUID: Int] = [:]
 
     var previewRows: [[String]] { Array(rows.prefix(5)) }
 
     var canProceedToPreview: Bool {
         columnMapping.values.contains(.name) && !rows.isEmpty
+    }
+
+    var newRowCount: Int { classifiedRows.filter { !$0.isUpdate }.count }
+    var selectedNewCount: Int { classifiedRows.filter { !$0.isUpdate && $0.isSelectedForAdd }.count }
+    var updateRowCount: Int { classifiedRows.filter(\.isUpdate).count }
+
+    func remainingSlots(for storageId: UUID) -> Int {
+        remainingSlotsByStorage[storageId] ?? remainingSlotsForPreview
+    }
+
+    var canImportWithCap: Bool {
+        if SubscriptionManager.shared.isPro { return true }
+        var selectedByStorage: [UUID: Int] = [:]
+        for row in classifiedRows where !row.isUpdate && row.isSelectedForAdd {
+            selectedByStorage[row.storageId, default: 0] += 1
+        }
+        for (sid, count) in selectedByStorage {
+            if count > (remainingSlotsByStorage[sid] ?? 0) { return false }
+        }
+        return updateRowCount > 0 || selectedNewCount > 0
+    }
+
+    func prepareCapPreview(
+        fallbackStorage: Storage?,
+        allStorages: [Storage],
+        allItems: [InventoryItem],
+        context: ModelContext
+    ) {
+        guard let fallbackStorage else {
+            classifiedRows = []
+            return
+        }
+        let isPro = SubscriptionManager.shared.isPro
+        remainingSlotsForPreview = SubscriptionManager.shared.remainingFreeItemSlots(
+            storage: fallbackStorage,
+            context: context
+        )
+        remainingSlotsByStorage = [:]
+
+        let nameIdx = columnMapping.first(where: { $0.value == .name })?.key
+        let qtyIdx = columnMapping.first(where: { $0.value == .quantity })?.key
+        let skuIdx = columnMapping.first(where: { $0.value == .sku })?.key
+        let barcodeIdx = columnMapping.first(where: { $0.value == .barcode })?.key
+        let storageNameIdx = columnMapping.first(where: { $0.value == .storageName })?.key
+        guard let nameCol = nameIdx else {
+            classifiedRows = []
+            return
+        }
+
+        var built: [BulkPreviewRow] = []
+        var usedSlots: [UUID: Int] = [:]
+
+        for (index, row) in rows.enumerated() {
+            guard nameCol < row.count else { continue }
+            let name = row[nameCol].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+
+            func val(_ idx: Int?) -> String? {
+                guard let i = idx, i < row.count else { return nil }
+                let s = row[i].trimmingCharacters(in: .whitespacesAndNewlines)
+                return s.isEmpty ? nil : s
+            }
+
+            var itemStorage = fallbackStorage
+            if let rawStorage = val(storageNameIdx) {
+                let lower = rawStorage.lowercased()
+                if let match = allStorages.first(where: {
+                    $0.name.lowercased() == lower || $0.name.lowercased().contains(lower)
+                }) {
+                    itemStorage = match
+                }
+            }
+
+            if remainingSlotsByStorage[itemStorage.id] == nil {
+                remainingSlotsByStorage[itemStorage.id] = SubscriptionManager.shared
+                    .remainingFreeItemSlots(storage: itemStorage, context: context)
+            }
+
+            let sku = val(skuIdx) ?? ""
+            let barcode = val(barcodeIdx) ?? ""
+            let matched = Self.matchExisting(
+                name: name, sku: sku, barcode: barcode,
+                storage: itemStorage, items: allItems
+            )
+            let qty = val(qtyIdx) ?? ""
+            let isUpdate = matched != nil
+            var selected = true
+            if !isUpdate && !isPro {
+                let remaining = remainingSlotsByStorage[itemStorage.id] ?? 0
+                let used = usedSlots[itemStorage.id] ?? 0
+                if used < remaining {
+                    selected = true
+                    usedSlots[itemStorage.id] = used + 1
+                } else {
+                    selected = false
+                }
+            }
+
+            built.append(BulkPreviewRow(
+                rowIndex: index,
+                name: name,
+                quantityLabel: qty,
+                isUpdate: isUpdate,
+                matchedItemId: matched?.id,
+                isSelectedForAdd: selected,
+                storageId: itemStorage.id
+            ))
+        }
+        classifiedRows = built
+    }
+
+    private static func matchExisting(
+        name: String,
+        sku: String,
+        barcode: String,
+        storage: Storage,
+        items: [InventoryItem]
+    ) -> InventoryItem? {
+        let inStorage = items.filter { $0.storage?.id == storage.id }
+        if !barcode.isEmpty, let found = inStorage.first(where: { $0.barcode == barcode }) {
+            return found
+        }
+        if !sku.isEmpty, let found = inStorage.first(where: {
+            $0.sku.lowercased() == sku.lowercased()
+        }) {
+            return found
+        }
+        let query = name.lowercased()
+        return inStorage.first { $0.name.lowercased() == query }
     }
 
     // MARK: - Load file (dispatches by extension)
@@ -246,7 +392,12 @@ final class BulkImportViewModel: ObservableObject {
 
     // MARK: - Import
 
-    func performImport(modelContext: ModelContext, allStorages: [Storage], allUOMs: [UOM]) async {
+    func performImport(
+        modelContext: ModelContext,
+        allStorages: [Storage],
+        allUOMs: [UOM],
+        allItems: [InventoryItem]
+    ) async {
         guard let fallbackStorage = targetStorage else { return }
         isImporting = true
 
@@ -272,11 +423,16 @@ final class BulkImportViewModel: ObservableObject {
         }
 
         var imported = 0
+        var updated = 0
         var skipped = 0
+        var skippedDueToCap = 0
+        var skippedDeselected = 0
         let errors: [String] = []
         var newItems: [InventoryItem] = []
+        var runningCounts: [UUID: Int] = [:]
+        let classifiedByIndex = Dictionary(uniqueKeysWithValues: classifiedRows.map { ($0.rowIndex, $0) })
 
-        for row in rows {
+        for (rowIndex, row) in rows.enumerated() {
             guard nameCol < row.count else { skipped += 1; continue }
             let name = row[nameCol].trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { skipped += 1; continue }
@@ -322,6 +478,42 @@ final class BulkImportViewModel: ObservableObject {
                 }
             }
 
+            let preview = classifiedByIndex[rowIndex]
+            if let preview, preview.isUpdate, let matchId = preview.matchedItemId,
+               let existing = allItems.first(where: { $0.id == matchId }) {
+                let previous = existing.currentQuantity
+                existing.currentQuantity = qty
+                if cost > 0 { existing.unitCost = cost }
+                if let rawSelling = val(sellingPriceIdx).flatMap({ Double($0.replacingOccurrences(of: ",", with: "")) }) {
+                    existing.sellingPrice = rawSelling
+                }
+                if !sku.isEmpty { existing.sku = sku }
+                if !barcode.isEmpty { existing.barcode = barcode }
+                if minQty > 0 { existing.minQuantity = minQty }
+                if maxQty > 0 { existing.maxQuantity = maxQty }
+                if category != "Uncategorised" { existing.category = category }
+                if !notes.isEmpty { existing.itemDescription = notes }
+                existing.updatedAt = Date()
+                let event = ActivityEvent(
+                    eventType: "ItemCounted",
+                    itemName: existing.name,
+                    storageName: itemStorage.name,
+                    quantityBefore: previous,
+                    quantityAfter: qty,
+                    notes: "Updated via bulk import",
+                    performedBy: AuthManager.shared.actorName
+                )
+                modelContext.insert(event)
+                FirestoreManager.shared.syncItem(existing)
+                updated += 1
+                continue
+            }
+
+            if let preview, !preview.isUpdate, !preview.isSelectedForAdd, !SubscriptionManager.shared.isPro {
+                skippedDeselected += 1
+                continue
+            }
+
             let item = InventoryItem(
                 name: name,
                 description: notes,
@@ -335,7 +527,6 @@ final class BulkImportViewModel: ObservableObject {
                 storage: itemStorage,
                 uom: nil
             )
-
             if let rawSelling = val(sellingPriceIdx).flatMap({ Double($0.replacingOccurrences(of: ",", with: "")) }) {
                 item.sellingPrice = rawSelling
             }
@@ -351,6 +542,16 @@ final class BulkImportViewModel: ObservableObject {
                     modelContext.insert(newUOM)
                     item.uom = newUOM
                 }
+            }
+
+            if !SubscriptionManager.shared.isPro {
+                let current = runningCounts[itemStorage.id]
+                    ?? SubscriptionManager.shared.itemCount(in: itemStorage, context: modelContext)
+                if current >= SubscriptionManager.freeItemLimit {
+                    skippedDueToCap += 1
+                    continue
+                }
+                runningCounts[itemStorage.id] = current + 1
             }
 
             modelContext.insert(item)
@@ -379,7 +580,14 @@ final class BulkImportViewModel: ObservableObject {
             FirestoreManager.shared.syncItem(item)
         }
 
-        importResult = ImportResult(imported: imported, skipped: skipped, errors: errors)
+        importResult = ImportResult(
+            imported: imported,
+            updated: updated,
+            skipped: skipped + skippedDueToCap + skippedDeselected,
+            errors: errors,
+            skippedDueToCap: skippedDueToCap,
+            skippedDeselected: skippedDeselected
+        )
         let fmt = (importFileExtension == "xlsx" || importFileExtension == "xlsm") ? "xlsx" : "csv"
         AnalyticsManager.shared.track(.bulkImportCompleted(itemCount: imported, format: fmt))
         AdManager.shared.recordCompletion(event: .bulkImportCompleted)
@@ -400,11 +608,13 @@ struct BulkImportView: View {
     @Environment(\.dismiss) private var dismiss
     @Query private var storages: [Storage]
     @Query private var uoms: [UOM]
+    @Query(sort: \InventoryItem.name) private var allItems: [InventoryItem]
 
     @StateObject private var vm = BulkImportViewModel()
     @State private var showFilePicker = false
     @State private var selectedStorage: Storage? = nil
     @State private var showAddStorage = false
+    @State private var showingItemLimitPaywall = false
 
     var body: some View {
         NavigationStack {
@@ -432,6 +642,12 @@ struct BulkImportView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     if vm.step == 1 {
                         Button("Preview") {
+                            vm.prepareCapPreview(
+                                fallbackStorage: selectedStorage ?? vm.targetStorage,
+                                allStorages: storages,
+                                allItems: allItems,
+                                context: modelContext
+                            )
                             withAnimation { vm.step = 2 }
                         }
                         .disabled(!vm.canProceedToPreview)
@@ -459,6 +675,9 @@ struct BulkImportView: View {
             case .failure:
                 vm.parseError = "Could not access the file. Please try again."
             }
+        }
+        .sheet(isPresented: $showingItemLimitPaywall) {
+            PaywallView(source: "item_limit", trigger: "item_cap_bulk").sheetStyle()
         }
     }
 
@@ -627,62 +846,89 @@ struct BulkImportView: View {
 
     private var previewStep: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Column headers
-            let mappedCols = vm.csvHeaders.indices.filter {
-                (vm.columnMapping[$0] ?? .skip) != .skip
-            }
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Header row
-                    HStack(spacing: 0) {
-                        ForEach(mappedCols, id: \.self) { i in
-                            Text(vm.columnMapping[i]?.rawValue ?? vm.csvHeaders[i])
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.secondary)
-                                .frame(width: 110, alignment: .leading)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 8)
-                        }
-                    }
-                    .background(Color(.systemGroupedBackground))
-
-                    Divider()
-
-                    // Data rows
-                    ForEach(vm.previewRows.indices, id: \.self) { ri in
-                        HStack(spacing: 0) {
-                            ForEach(mappedCols, id: \.self) { ci in
-                                Text(ci < vm.previewRows[ri].count ? vm.previewRows[ri][ci] : "")
-                                    .font(.caption)
-                                    .frame(width: 110, alignment: .leading)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 8)
-                                    .lineLimit(1)
-                            }
-                        }
-                        .background(ri % 2 == 0 ? Color(.systemBackground) : Color(.systemGroupedBackground))
-                        Divider()
-                    }
+            if ItemCapReview.shouldShowBanner(
+                newCount: vm.newRowCount,
+                remainingSlots: vm.remainingSlotsForPreview,
+                isPro: SubscriptionManager.shared.isPro
+            ) {
+                ItemCapOverflowBanner(remainingSlots: vm.remainingSlotsForPreview) {
+                    showingItemLimitPaywall = true
                 }
             }
-            .background(Color(.systemBackground))
-            .cornerRadius(12)
-            .shadow(color: .black.opacity(0.06), radius: 4)
-            .padding()
 
-            Text("Showing first \(vm.previewRows.count) of \(vm.rows.count) rows")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            List {
+                ForEach($vm.classifiedRows) { $row in
+                    HStack(spacing: 10) {
+                        if row.isUpdate {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .foregroundColor(.stoqlyPrimary)
+                        } else if !SubscriptionManager.shared.isPro {
+                            Button {
+                                guard vm.remainingSlots(for: row.storageId) > 0 else { return }
+                                row.isSelectedForAdd.toggle()
+                            } label: {
+                                Image(systemName: row.isSelectedForAdd ? "checkmark.circle.fill" : "circle")
+                                    .font(.title3)
+                                    .foregroundColor(
+                                        vm.remainingSlots(for: row.storageId) == 0
+                                        ? .secondary : .stoqlyPrimary
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(vm.remainingSlots(for: row.storageId) == 0)
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.name)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            HStack(spacing: 8) {
+                                if !row.quantityLabel.isEmpty {
+                                    Text(row.quantityLabel)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Text(row.isUpdate
+                                     ? L("itemCap.willUpdate", "Will update")
+                                     : L("itemCap.willAdd", "Will add"))
+                                    .font(.caption2)
+                                    .foregroundColor(row.isUpdate ? .stoqlyPrimary : .stoqlySuccess)
+                            }
+                        }
+                    }
+                    .opacity(!row.isUpdate && vm.remainingSlots(for: row.storageId) == 0 ? 0.45 : 1)
+                }
+            }
+            .listStyle(.plain)
+
+            Text(
+                String(
+                    format: L("itemCap.bulk.rowCount", "%1$d of %2$d rows ready"),
+                    vm.classifiedRows.count,
+                    vm.rows.count
+                )
+            )
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .padding(.horizontal)
+
+            if !SubscriptionManager.shared.isPro {
+                ItemCapSelectionCounter(
+                    selectedNew: vm.selectedNewCount,
+                    remainingSlots: vm.remainingSlotsForPreview
+                )
                 .padding(.horizontal)
+                .padding(.top, 6)
+            }
 
-            Spacer()
-
-            // Import button
             Button(action: {
                 Task {
-                    await vm.performImport(modelContext: modelContext, allStorages: storages, allUOMs: uoms)
+                    await vm.performImport(
+                        modelContext: modelContext,
+                        allStorages: storages,
+                        allUOMs: uoms,
+                        allItems: allItems
+                    )
                 }
             }) {
                 HStack {
@@ -696,12 +942,12 @@ struct BulkImportView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(Color.blue)
+                .background(vm.canImportWithCap && !vm.isImporting ? Color.blue : Color.gray)
                 .foregroundColor(.white)
                 .cornerRadius(14)
                 .fontWeight(.semibold)
             }
-            .disabled(vm.isImporting)
+            .disabled(vm.isImporting || !vm.canImportWithCap)
             .padding()
         }
         .background(Color(.systemGroupedBackground))
@@ -714,7 +960,7 @@ struct BulkImportView: View {
             Spacer()
 
             if let result = vm.importResult {
-                let success = result.imported > 0
+                let success = result.imported > 0 || result.updated > 0
 
                 Image(systemName: success ? "checkmark.circle.fill" : "xmark.circle.fill")
                     .font(.system(size: 64))
@@ -724,13 +970,26 @@ struct BulkImportView: View {
                     Text(success ? "Import Complete!" : "Nothing Imported")
                         .font(.title2).fontWeight(.bold)
 
-                    if success {
+                    if result.imported > 0 {
                         Text("\(result.imported) item\(result.imported == 1 ? "" : "s") added to \(vm.targetStorage?.name ?? "storage")")
                             .font(.subheadline).foregroundColor(.secondary)
                     }
+                    if result.updated > 0 {
+                        Text("\(result.updated) existing item\(result.updated == 1 ? "" : "s") updated")
+                            .font(.subheadline).foregroundColor(.secondary)
+                    }
 
-                    if result.skipped > 0 {
-                        Text("\(result.skipped) row\(result.skipped == 1 ? "" : "s") skipped (missing name or blank)")
+                    if result.skippedDueToCap > 0 {
+                        Text("\(result.skippedDueToCap) row\(result.skippedDueToCap == 1 ? "" : "s") skipped — Free limit of 50 items per storage")
+                            .font(.caption).foregroundColor(.orange)
+                    }
+                    if result.skippedDeselected > 0 {
+                        Text("\(result.skippedDeselected) row\(result.skippedDeselected == 1 ? "" : "s") skipped (deselected)")
+                            .font(.caption).foregroundColor(.orange)
+                    }
+                    let blankSkipped = result.skipped - result.skippedDueToCap - result.skippedDeselected
+                    if blankSkipped > 0 {
+                        Text("\(blankSkipped) row\(blankSkipped == 1 ? "" : "s") skipped (missing name or blank)")
                             .font(.caption).foregroundColor(.orange)
                     }
                 }

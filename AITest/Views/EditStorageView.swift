@@ -6,6 +6,7 @@ struct EditStorageView: View {
     
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var currencyManager: CurrencyManager
     
     @State private var name: String
     @State private var location: String
@@ -73,10 +74,11 @@ struct EditStorageView: View {
                     }
                     
                     HStack {
-                        Text("Total Quantity")
+                        Text(L("Total Value", "Total Value"))
                         Spacer()
-                        Text(storage.totalQuantity.smartFormatted)
+                        Text(currencyManager.formatPrice(storage.totalValue))
                             .fontWeight(.medium)
+                            .accessibilityIdentifier("editStorageTotalValue")
                     }
                     
                     HStack {
@@ -87,6 +89,7 @@ struct EditStorageView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Edit Storage")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -95,7 +98,17 @@ struct EditStorageView: View {
                         dismiss()
                     }
                 }
-                
+
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
+                }
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         saveStorage()

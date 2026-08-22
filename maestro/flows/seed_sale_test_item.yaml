@@ -1,0 +1,72 @@
+# Helper — Seed "Sale Test Item" in Test Warehouse with known qty and prices.
+appId: com.vishuddhi.stoqly
+env:
+  ITEM_NAME: Sale Test Item
+  ITEM_SKU: SKU-SALE-TEST
+---
+- tapOn: "Storages"
+- scrollUntilVisible:
+    element: "Test Warehouse"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Test Warehouse"
+- swipe:
+    direction: LEFT
+    on: "Sale Test Item"
+    optional: true
+- tapOn:
+    text: "Delete"
+    optional: true
+- tapOn:
+    text: "Delete"
+    optional: true
+- runFlow: open_add_item_storage.yaml
+- tapOn:
+    id: "itemNameField"
+- eraseText: 80
+- inputText: "Sale Test Item"
+- tapOn:
+    text: "Done"
+    optional: true
+- tapOn:
+    id: "addItemSkuField"
+- inputText: "SKU-SALE-TEST"
+- scrollUntilVisible:
+    element:
+      id: "currentQuantityInput"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "currentQuantityInput"
+- eraseText: 10
+- inputText: "10"
+- tapOn:
+    text: "Done"
+    optional: true
+- runFlow: save_add_item.yaml
+- scrollUntilVisible:
+    element: "Sale Test Item"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Items"
+- tapOn: "Search items..."
+- inputText: "Sale Test Item"
+- swipe:
+    direction: LEFT
+    on: "Sale Test Item"
+- tapOn: "Edit"
+- scrollUntilVisible:
+    element:
+      id: "editItemUnitCost"
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: "editItemUnitCost"
+- eraseText: 10
+- inputText: "10.00"
+- tapOn:
+    id: "editItemSellingPrice"
+- eraseText: 10
+- inputText: "15.00"
+- tapOn: "Save"
+- assertVisible: "Sale Test Item"

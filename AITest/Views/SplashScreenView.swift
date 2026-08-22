@@ -137,7 +137,7 @@ struct SplashScreenView: View {
         }
     }
 
-    private func featurePill(icon: String, label: String) -> some View {
+    private func featurePill(icon: String, label: LocalizedStringKey) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
                 .font(.system(size: 10, weight: .semibold))

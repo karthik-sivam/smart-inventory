@@ -21,8 +21,10 @@ struct PaperInventoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
+    @EnvironmentObject private var localizationManager: LocalizationManager
     @Query private var storages: [Storage]
     @Query private var uoms: [UOM]
+    @Query(sort: \InventoryItem.name) private var allItems: [InventoryItem]
 
     @ObservedObject private var usageManager: AIUsageManager = AIUsageManager.shared
 
@@ -40,9 +42,26 @@ struct PaperInventoryView: View {
 
     @State private var errorMessage: String?
     @State private var showingPaywall = false
+    @State private var showingItemLimitPaywall = false
 
     private var isStorageSelected: Bool {
         selectedStorage != nil && !storages.isEmpty
+    }
+
+    private var remainingItemSlots: Int {
+        ItemCapReview.remainingSlots(
+            storage: selectedStorage,
+            context: modelContext,
+            isPro: subscriptionManager.isPro
+        )
+    }
+
+    private var canSaveReviewItems: Bool {
+        isStorageSelected && ItemCapReview.canSave(
+            items: editableItems,
+            remainingSlots: remainingItemSlots,
+            isPro: subscriptionManager.isPro
+        )
     }
 
     var body: some View {
@@ -81,6 +100,9 @@ struct PaperInventoryView: View {
         .sheet(isPresented: $showingPaywall) {
             PaywallView(source: "ai_limit").sheetStyle()
         }
+        .sheet(isPresented: $showingItemLimitPaywall) {
+            PaywallView(source: "item_limit", trigger: "item_cap_bulk").sheetStyle()
+        }
         .onAppear {
             if selectedStorage == nil, let preselectedStorage {
                 selectedStorage = preselectedStorage
@@ -99,7 +121,13 @@ struct PaperInventoryView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "doc.viewfinder")
                             .foregroundColor(.stoqlyPrimary)
-                        Text("\(remaining) sheet scan\(remaining == 1 ? "" : "s") left this month")
+                        Text(
+                            String(
+                                format: L("ai.paper.quotaRemaining", "%1$d sheet scan%2$@ left this month"),
+                                remaining,
+                                remaining == 1 ? "" : "s"
+                            )
+                        )
                             .font(.subheadline)
                         Spacer()
                         Button("Go Pro") { showingPaywall = true }
@@ -288,10 +316,25 @@ struct PaperInventoryView: View {
                 }
                 .padding()
             } else {
+                if ItemCapReview.shouldShowBanner(
+                    newCount: ItemCapReview.newCount(editableItems),
+                    remainingSlots: remainingItemSlots,
+                    isPro: subscriptionManager.isPro
+                ) {
+                    ItemCapOverflowBanner(remainingSlots: remainingItemSlots) {
+                        showingItemLimitPaywall = true
+                    }
+                }
+
                 List {
                     Section {
                         ForEach($editableItems) { $item in
-                            SheetItemRow(item: $item, selectedStorage: selectedStorage)
+                            SheetItemRow(
+                                item: $item,
+                                selectedStorage: selectedStorage,
+                                isPro: subscriptionManager.isPro,
+                                remainingSlots: remainingItemSlots
+                            )
                         }
                         .onDelete { editableItems.remove(atOffsets: $0) }
                     } header: {
@@ -308,6 +351,13 @@ struct PaperInventoryView: View {
 
                 VStack(spacing: 0) {
                     Divider()
+                    if !subscriptionManager.isPro {
+                        ItemCapSelectionCounter(
+                            selectedNew: ItemCapReview.selectedNewCount(editableItems),
+                            remainingSlots: remainingItemSlots
+                        )
+                        .padding(.top, 8)
+                    }
                     HStack(spacing: 12) {
                         Button("Re-scan") {
                             capturedImage = nil
@@ -326,7 +376,7 @@ struct PaperInventoryView: View {
                         }
                         .stoqlyButtonStyle()
                         .frame(maxWidth: .infinity)
-                        .disabled(!isStorageSelected)
+                        .disabled(!canSaveReviewItems)
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 10)
@@ -379,12 +429,24 @@ struct PaperInventoryView: View {
         let compressed = image.jpegData(compressionQuality: 0.75) ?? Data()
 
         do {
-            let items = try await AIInventoryService.shared.parseInventorySheet(imageData: compressed)
+            let items = try await AIInventoryService.shared.parseInventorySheet(
+                imageData: compressed,
+                inventoryHints: Array(allItems.prefix(50).map(\.name)),
+                appLanguageCode: localizationManager.currentCode
+            )
             usageManager.recordUse(.paper)
 
             await MainActor.run {
                 editableItems = items.map { EditableItem(from: $0) }
                 editableItems.applyNameMatching(in: selectedStorage)
+                editableItems.applyDefaultCapSelection(
+                    remainingSlots: ItemCapReview.remainingSlots(
+                        storage: selectedStorage,
+                        context: modelContext,
+                        isPro: subscriptionManager.isPro
+                    ),
+                    isPro: subscriptionManager.isPro
+                )
                 step = .review
             }
         } catch {
@@ -400,12 +462,14 @@ struct PaperInventoryView: View {
 
     private func saveAll() async {
         guard let storage = selectedStorage else {
-            errorMessage = "Please select a storage area."
+            errorMessage = L("ai.selectStorage", "Please select a storage area.")
             return
         }
 
         step = .saving
         let validItems = editableItems.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
+        var runningCount = SubscriptionManager.shared.itemCount(in: storage, context: modelContext)
+        var appliedCount = 0
 
         for editable in validItems {
             let matchedUOM = uoms.first { $0.symbol.lowercased() == (editable.unitSymbol?.lowercased() ?? "") }
@@ -416,22 +480,44 @@ struct PaperInventoryView: View {
                 let count = InventoryCount(previousQuantity: existing.currentQuantity, countedQuantity: qty, notes: "Sheet inventory")
                 existing.countHistory.append(count)
                 existing.currentQuantity = qty
-                existing.updatedAt = Date()
+                existing.applyCapturedFields(from: editable)
+                appliedCount += 1
             case .new:
+                guard subscriptionManager.isPro || editable.isSelectedForAdd else { continue }
+                guard SubscriptionManager.shared.canInsertNewItem(runningCount: &runningCount) else {
+                    continue
+                }
                 let item = InventoryItem(
                     name: editable.name.trimmingCharacters(in: .whitespaces),
+                    description: editable.aiNotes ?? "",
+                    sku: editable.sku ?? "",
+                    barcode: editable.barcode ?? "",
                     currentQuantity: qty,
+                    minQuantity: editable.minQuantity ?? 0,
+                    unitCost: editable.unitCost ?? 0,
                     category: editable.category ?? "Uncategorised",
+                    expiryDate: editable.expiryDate,
                     storage: storage,
                     uom: matchedUOM
                 )
+                if let sellingPrice = editable.sellingPrice {
+                    item.sellingPrice = sellingPrice
+                }
                 modelContext.insert(item)
+                AnalyticsManager.shared.track(.itemAdded(
+                    category: item.category,
+                    hasBarcode: !item.barcode.isEmpty,
+                    hasPhoto: false,
+                    source: "ai",
+                    inputMethod: "sheet"
+                ))
+                appliedCount += 1
             }
         }
 
         let event = ActivityEvent(
             eventType: "BulkImportCompleted",
-            itemName: "\(validItems.count) items",
+            itemName: "\(appliedCount) items",
             storageName: storage.name,
             notes: "Added via sheet/paper inventory",
             performedBy: "You"
@@ -441,7 +527,11 @@ struct PaperInventoryView: View {
 
         AnalyticsManager.shared.track(.smartCountCompleted(
             mode: "sheet",
-            itemCount: validItems.count
+            itemCount: appliedCount,
+            capturedExtraFields: {
+                let fields = Array(Set(validItems.flatMap(\.capturedExtraFieldNames)))
+                return fields.isEmpty ? nil : fields
+            }()
         ))
 
         Task {
@@ -451,7 +541,7 @@ struct PaperInventoryView: View {
         }
 
         if let onComplete {
-            onComplete(validItems.count)
+            onComplete(appliedCount)
         } else {
             dismiss()
         }
@@ -463,9 +553,24 @@ struct PaperInventoryView: View {
 private struct SheetItemRow: View {
     @Binding var item: EditableItem
     var selectedStorage: Storage?
+    var isPro: Bool = true
+    var remainingSlots: Int = Int.max
 
     var body: some View {
         HStack(spacing: 10) {
+            if !isPro, item.isNew {
+                Button {
+                    guard remainingSlots > 0 else { return }
+                    item.isSelectedForAdd.toggle()
+                } label: {
+                    Image(systemName: item.isSelectedForAdd ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundColor(remainingSlots == 0 ? .secondary : .stoqlyPrimary)
+                }
+                .buttonStyle(.plain)
+                .disabled(remainingSlots == 0)
+            }
+
             // Low-confidence indicator
             if item.confidence < 0.75 {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -506,5 +611,6 @@ private struct SheetItemRow: View {
             }
         }
         .padding(.vertical, 4)
+        .opacity(!isPro && item.isNew && remainingSlots == 0 ? 0.45 : 1)
     }
 }

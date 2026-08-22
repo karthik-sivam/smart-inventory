@@ -66,10 +66,17 @@ class FirestoreManager: ObservableObject {
 
         var description: String {
             switch self {
-            case .idle:           return "Not synced"
-            case .syncing:        return "Syncing…"
-            case .success:        return "Synced"
-            case .failed(let msg): return "Sync failed: \(msg)"
+            case .idle:
+                return L("Not synced", "Not synced")
+            case .syncing:
+                return L("Syncing…", "Syncing…")
+            case .success:
+                return L("Synced", "Synced")
+            case .failed(let msg):
+                return String(
+                    format: L("Sync failed: %@", "Sync failed: %@"),
+                    msg
+                )
             }
         }
 
@@ -167,6 +174,103 @@ class FirestoreManager: ObservableObject {
             if let error {
                 print("[Firestore] Failed to write isPro: \(error.localizedDescription)")
             }
+        }
+    }
+
+    /// Persists the device FCM token on the signed-in user document for targeted push.
+    func writeFCMToken(uid: String, token: String) {
+        db.collection("users").document(uid).setData(
+            [
+                "fcmToken": token,
+                "fcmPlatform": "ios",
+                "fcmUpdatedAt": FieldValue.serverTimestamp()
+            ],
+            merge: true
+        ) { error in
+            if let error {
+                print("[Firestore] Failed to write FCM token: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Writes user feedback to the top-level `feedback` collection (S32).
+    func submitFeedback(
+        uid: String?,
+        email: String,
+        type: String,
+        message: String,
+        appVersion: String,
+        iosVersion: String,
+        device: String,
+        locale: String
+    ) async throws {
+        let payload: [String: Any] = [
+            "uid": uid ?? "",
+            "email": email,
+            "type": type,
+            "message": message,
+            "appVersion": appVersion,
+            "iosVersion": iosVersion,
+            "device": device,
+            "locale": locale,
+            "createdAt": FieldValue.serverTimestamp()
+        ]
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            db.collection("feedback").addDocument(data: payload) { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    /// Syncs notification preferences to Firestore (S33 Phase 1).
+    func syncNotificationPrefs(_ prefs: NotificationPrefs) {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let payload: [String: Any] = [
+            "masterEnabled": prefs.masterEnabled,
+            "lowStockDaily": prefs.lowStockDaily,
+            "expiryDaily": prefs.expiryDaily,
+            "weeklySummary": prefs.weeklySummary,
+            "monthlyCount": prefs.monthlyCount,
+            "announcements": prefs.announcements,
+            "preferredHour": prefs.preferredHour,
+            "preferredMinute": prefs.preferredMinute,
+            "timezone": prefs.timezone,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]
+        db.collection("users").document(uid).collection("notificationPrefs").document("default")
+            .setData(payload, merge: true) { error in
+                if let error {
+                    print("[Firestore] Failed to sync notification prefs: \(error.localizedDescription)")
+                }
+            }
+    }
+
+    /// Pulls notification prefs from Firestore after sign-in (S33 Phase 1).
+    func fetchNotificationPrefs() async -> NotificationPrefs? {
+        guard let uid = Auth.auth().currentUser?.uid else { return nil }
+        do {
+            let doc = try await db.collection("users").document(uid)
+                .collection("notificationPrefs").document("default")
+                .getDocument()
+            guard let data = doc.data() else { return nil }
+            var prefs = NotificationPrefs()
+            prefs.masterEnabled = data["masterEnabled"] as? Bool ?? prefs.masterEnabled
+            prefs.lowStockDaily = data["lowStockDaily"] as? Bool ?? prefs.lowStockDaily
+            prefs.expiryDaily = data["expiryDaily"] as? Bool ?? prefs.expiryDaily
+            prefs.weeklySummary = data["weeklySummary"] as? Bool ?? prefs.weeklySummary
+            prefs.monthlyCount = data["monthlyCount"] as? Bool ?? prefs.monthlyCount
+            prefs.announcements = data["announcements"] as? Bool ?? prefs.announcements
+            prefs.preferredHour = data["preferredHour"] as? Int ?? prefs.preferredHour
+            prefs.preferredMinute = data["preferredMinute"] as? Int ?? prefs.preferredMinute
+            prefs.timezone = data["timezone"] as? String ?? prefs.timezone
+            return prefs
+        } catch {
+            print("[Firestore] Failed to fetch notification prefs: \(error.localizedDescription)")
+            return nil
         }
     }
 
@@ -493,6 +597,20 @@ class FirestoreManager: ObservableObject {
             "linkedSaleEventId": movement.linkedSaleEventId?.uuidString ?? ""
         ]
         try? await docRef.setData(data)
+    }
+
+    func deleteSaleEvent(id: UUID) {
+        Task {
+            guard let ref = try? userRef() else { return }
+            try? await ref.collection("saleEvents").document(id.uuidString).delete()
+        }
+    }
+
+    func deleteInventoryMovement(id: UUID) {
+        Task {
+            guard let ref = try? userRef() else { return }
+            try? await ref.collection("inventoryMovements").document(id.uuidString).delete()
+        }
     }
 
     // MARK: - Full Sync (Pull from Cloud → Local SwiftData)

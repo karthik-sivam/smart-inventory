@@ -79,7 +79,22 @@ maestro studio
 | 84_smart_count_sheet_mode.yaml | Navigate to Sheet Inventory UI from Smart Count |
 | 85_smart_count_back_nav.yaml | Cancel from Voice mode returns to Smart Count picker |
 | 86_smart_count_pro_gate.yaml | Free-tier Upgrade CTA on Smart Count (optional assertions) |
-| 87_post_login_onboarding_full.yaml | Post-login onboarding walkthrough (optional — fresh state) |
+| 92_global_invoice_import_entry.yaml | Global invoice import entry from Settings |
+| 93_quick_sale_record.yaml | Record quick sale; verify sale appears under Today |
+| 94_quick_sale_negative_stock.yaml | Oversell shows non-blocking Negative Stock alert |
+| 95_storage_total_value_edit.yaml | Edit Storage sheet shows Total Value (currency) |
+| 96_language_picker.yaml | Settings language row opens LanguagePickerView |
+| 97_sales_reports.yaml | Sales Reports sheet opens with Movements section |
+| 98_smart_sales_text_ui.yaml | Smart Sales Text mode UI (no AI parse) |
+| 99_sale_price_fallback.yaml | Quick sale prefills fallback price when selling price unset |
+| 100_storage_card_total_value.yaml | Storage card shows currency total value |
+| 101_smart_sales_csv_mapping.yaml | Smart Sales CSV import screen opens |
+| 102_sale_total_hierarchy.yaml | Quick sale shows Price/unit + Sale Total hierarchy |
+| seed_sale_test_item.yaml | Helper: seeds Sale Test Item with qty/prices |
+
+## Phase S15 Maestro (2026-07)
+
+New accessibility hooks for Maestro: `quickSaleQuantityField`, `quickSalePriceField`, `quickSaleSaleTotal`, `quickSaleRecordButton`, `editStorageTotalValue`, `storageCardTotalValue`, `editItemUnitCost`, `editItemSellingPrice`, `editItemLastPurchasePrice`, `languageOption_*`, `smartSalesTextInput`, `saleReviewConfirmButton`, `reportsView`.
 
 ## Phase A fixes (2026-05)
 

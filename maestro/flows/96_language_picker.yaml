@@ -1,0 +1,31 @@
+# Flow 96 — Settings language picker opens and can switch language
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- tapOn: "Dashboard"
+- tapOn:
+    id: "dashboardGearButton"
+    optional: true
+- tapOn:
+    id: "gear"
+    optional: true
+- assertVisible: "Settings"
+- scrollUntilVisible:
+    element:
+      id: "languageSettingsRow"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "languageSettingsRow"
+- assertVisible:
+    id: "languagePicker"
+- tapOn:
+    id: "languageOption_systemDefault"
+    optional: true
+- tapOn:
+    id: "languageOption_en"
+    optional: true
+- tapOn: "Done"
+    optional: true
+- tapOn: "Cancel"
+    optional: true

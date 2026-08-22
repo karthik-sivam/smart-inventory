@@ -10,20 +10,32 @@ struct HelpCentreView: View {
     @State private var isAsking = false
     @State private var aiError: String?
     @State private var showPaywall = false
+    @State private var showFeedback = false
 
     private struct FAQItem: Identifiable {
         let id = UUID()
         let section: String
-        let question: String
-        let answer: String
+        let question: LocalizedStringKey
+        let answer: LocalizedStringKey
+
+        var sectionTitle: LocalizedStringKey {
+            switch section {
+            case "Getting Started": "Getting Started"
+            case "SmartCount": "SmartCount"
+            case "Reorder Alerts": "Reorder Alerts"
+            case "Reports": "Reports"
+            case "Pro": "Pro"
+            default: LocalizedStringKey(section)
+            }
+        }
     }
 
-    private let suggestedQuestions = [
-        "How do I add a new item?",
-        "What is the difference between Free and Pro?",
-        "How do Photo Inventory counts work?",
-        "How do I set a low stock alert?",
-        "How do I add my team members?",
+    private let suggestedQuestions: [String] = [
+        L("help.suggested.addItem", "How do I add a new item?"),
+        L("help.suggested.freeVsPro", "What is the difference between Free and Pro?"),
+        L("help.suggested.photoInventory", "How do Photo Inventory counts work?"),
+        L("help.suggested.lowStock", "How do I set a low stock alert?"),
+        L("help.suggested.teamMembers", "How do I add my team members?"),
     ]
 
     private let allItems: [FAQItem] = [
@@ -69,8 +81,7 @@ struct HelpCentreView: View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return allItems }
         return allItems.filter {
-            $0.question.localizedCaseInsensitiveContains(query)
-                || $0.answer.localizedCaseInsensitiveContains(query)
+            $0.section.localizedCaseInsensitiveContains(query)
         }
     }
 
@@ -81,8 +92,8 @@ struct HelpCentreView: View {
 
     var body: some View {
         List {
-            ForEach(groupedSections, id: \.0) { section, items in
-                Section(section) {
+            ForEach(groupedSections, id: \.0) { _, items in
+                Section(items.first?.sectionTitle ?? "") {
                     ForEach(items) { item in
                         VStack(alignment: .leading, spacing: 6) {
                             Text(item.question)
@@ -105,6 +116,22 @@ struct HelpCentreView: View {
             Section(header: Text("Ask AI")) {
                 aiChatSection
             }
+
+            Section(header: Text(L("feedback.contact.header", "Contact"))) {
+                Button {
+                    showFeedback = true
+                } label: {
+                    Label(L("feedback.send", "Send Feedback"), systemImage: "text.bubble")
+                }
+                .accessibilityIdentifier("sendFeedbackRow")
+
+                Button {
+                    openEmailSupport()
+                } label: {
+                    Label(L("feedback.emailSupport", "Email Support"), systemImage: "envelope")
+                }
+                .accessibilityIdentifier("emailSupportRow")
+            }
         }
         .navigationTitle("Help & FAQ")
         .navigationBarTitleDisplayMode(.inline)
@@ -112,13 +139,32 @@ struct HelpCentreView: View {
         .sheet(isPresented: $showPaywall) {
             PaywallView(source: "help_chat").sheetStyle()
         }
+        .sheet(isPresented: $showFeedback) {
+            FeedbackView()
+                .environmentObject(AuthManager.shared)
+                .sheetStyle()
+        }
+    }
+
+    private func openEmailSupport() {
+        let subject = L("feedback.email.subject", "Stoqly Feedback")
+        let mailtoString = "mailto:\(HelpAndSupport.supportEmail)?subject=\(subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+        if let url = URL(string: mailtoString), UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+        }
     }
 
     private var aiChatSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             let remaining = AIUsageManager.shared.remaining(.helpChat, isPro: subscriptionManager.isPro)
             if !subscriptionManager.isPro {
-                Text("\(remaining) free question\(remaining == 1 ? "" : "s") remaining this month")
+                Text(
+                    String(
+                        format: L("help.aiQuotaRemaining", "%1$d free question%2$@ remaining this month"),
+                        remaining,
+                        remaining == 1 ? "" : "s"
+                    )
+                )
                     .font(.caption)
                     .foregroundColor(remaining == 0 ? .red : .secondary)
             }
@@ -194,9 +240,11 @@ struct HelpCentreView: View {
         let trimmed = aiQuestion.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
+        AnalyticsManager.shared.track(.aiHelpQuestionAsked(question: trimmed))
+
         guard AIUsageManager.shared.canUse(.helpChat, isPro: subscriptionManager.isPro) else {
             if subscriptionManager.isPro {
-                aiError = "Something went wrong with usage tracking. Please try again."
+                aiError = L("help.aiUsageError", "Something went wrong with usage tracking. Please try again.")
             } else {
                 showPaywall = true
             }

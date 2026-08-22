@@ -1,0 +1,31 @@
+# Flow 93 — Quick Sale: record a sale and verify it appears in Sales list
+appId: com.vishuddhi.stoqly
+---
+- runFlow: 00_signin_helper.yaml
+- runFlow: seed_sale_test_item.yaml
+- tapOn: "Sales"
+- tapOn:
+    id: "salesEmptyRecordButton"
+    optional: true
+- tapOn:
+    id: "salesAddButton"
+    optional: true
+- tapOn: "Record a Sale"
+    optional: true
+- assertVisible: "Select Item"
+- tapOn:
+    id: "saleItemRow_SKU-SALE-TEST"
+    optional: true
+- tapOn: "Sale Test Item"
+    optional: true
+- assertVisible: "Record Sale"
+- assertVisible:
+    id: "quickSaleSaleTotal"
+    optional: true
+- tapOn:
+    id: "quickSaleRecordButton"
+- extendedWaitUntil:
+    visible: "Today"
+    timeout: 15000
+    optional: true
+- assertVisible: "Sale Test Item"

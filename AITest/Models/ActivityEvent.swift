@@ -38,47 +38,108 @@ final class ActivityEvent {
     }
 
     var displayDescription: String {
+        let storage = storageName.isEmpty
+            ? L("activity.noStorage", "No Storage")
+            : storageName
         switch eventType {
         case "ItemAdded":
-            return "Added to \(storageName)"
+            return String(
+                format: L("activity.addedTo", "Added to %@"),
+                storage
+            )
         case "ItemCounted":
-            // Only show "?" if BOTH values are missing. If one is nil, fall back gracefully.
             if quantityBefore == nil && quantityAfter == nil {
-                return "Count recorded in \(storageName)"
+                return String(
+                    format: L("activity.countRecordedIn", "Count recorded in %@"),
+                    storage
+                )
             }
             let before = quantityBefore.map { $0.smartFormatted } ?? "?"
-            let after  = quantityAfter.map  { $0.smartFormatted } ?? "?"
-            return "Count updated: \(before) → \(after)"
+            let after = quantityAfter.map { $0.smartFormatted } ?? "?"
+            return String(
+                format: L("activity.countUpdated", "Count updated: %1$@ → %2$@"),
+                before,
+                after
+            )
         case "ItemUpdated":
             let before = quantityBefore.map { $0.smartFormatted } ?? "?"
-            let after  = quantityAfter.map  { $0.smartFormatted } ?? "?"
-            return before == after
-                ? "Item details updated"
-                : "Quantity: \(before) -> \(after)"
+            let after = quantityAfter.map { $0.smartFormatted } ?? "?"
+            if before == after {
+                return L("activity.itemDetailsUpdated", "Item details updated")
+            }
+            return String(
+                format: L("activity.quantityChanged", "Quantity: %1$@ -> %2$@"),
+                before,
+                after
+            )
         case "ItemDeleted":
-            return "Removed from \(storageName)"
+            return String(
+                format: L("activity.removedFrom", "Removed from %@"),
+                storage
+            )
         case "LowStockAlert":
-            return "Low stock alert triggered"
+            return L("activity.lowStockAlert", "Low stock alert triggered")
         case "StorageCreated":
-            return "Storage area created"
+            return L("activity.storageCreated", "Storage area created")
         case "SaleMade":
-            // quantityBefore = stock before sale, quantityAfter = stock after sale
-            // soldQty = before - after
             if let before = quantityBefore, let after = quantityAfter {
                 let soldQty = (before - after).smartFormatted
-                return "Sale recorded: \(soldQty) sold from \(storageName)"
+                return String(
+                    format: L("activity.saleRecordedQty", "Sale recorded: %1$@ sold from %2$@"),
+                    soldQty,
+                    storage
+                )
             }
-            return "Sale recorded from \(storageName)"
+            return String(
+                format: L("activity.saleRecordedFrom", "Sale recorded from %@"),
+                storage
+            )
         case "MovementLogged":
-            // quantityBefore = stock before, quantityAfter = stock after
             if let before = quantityBefore, let after = quantityAfter {
                 let change = after - before
                 let sign = change >= 0 ? "+" : ""
-                return "Movement: \(sign)\(change.smartFormatted) in \(storageName)"
+                return String(
+                    format: L("activity.movementChange", "Movement: %1$@%2$@ in %3$@"),
+                    sign,
+                    change.smartFormatted,
+                    storage
+                )
             }
-            return "Movement logged in \(storageName)"
+            return String(
+                format: L("activity.movementLoggedIn", "Movement logged in %@"),
+                storage
+            )
         case "BulkCountImported":
-            return "Bulk count imported in \(storageName)"
+            return String(
+                format: L("activity.bulkCountImported", "Bulk count imported in %@"),
+                storage
+            )
+        case "SaleReversed":
+            if let before = quantityBefore, let after = quantityAfter {
+                return String(
+                    format: L("activity.saleReversed", "Sale reversed: %1$@ → %2$@ in %3$@"),
+                    before.smartFormatted,
+                    after.smartFormatted,
+                    storage
+                )
+            }
+            return String(
+                format: L("activity.saleReversedSimple", "Sale reversed in %@"),
+                storage
+            )
+        case "MovementReversed":
+            if let before = quantityBefore, let after = quantityAfter {
+                return String(
+                    format: L("activity.movementReversed", "Movement reversed: %1$@ → %2$@ in %3$@"),
+                    before.smartFormatted,
+                    after.smartFormatted,
+                    storage
+                )
+            }
+            return String(
+                format: L("activity.movementReversedSimple", "Movement reversed in %@"),
+                storage
+            )
         default:
             return eventType
         }
@@ -95,6 +156,8 @@ final class ActivityEvent {
         case "SaleMade": return "cart.fill"
         case "MovementLogged": return "arrow.up.arrow.down.circle.fill"
         case "BulkCountImported": return "list.clipboard.fill"
+        case "SaleReversed": return "arrow.uturn.backward.circle.fill"
+        case "MovementReversed": return "arrow.uturn.backward.circle.fill"
         default: return "circle.fill"
         }
     }
@@ -110,6 +173,8 @@ final class ActivityEvent {
         case "SaleMade": return "green"
         case "MovementLogged": return "blue"
         case "BulkCountImported": return "blue"
+        case "SaleReversed": return "orange"
+        case "MovementReversed": return "orange"
         default: return "gray"
         }
     }

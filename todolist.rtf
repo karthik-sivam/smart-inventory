@@ -7370,3 +7370,1918 @@ Update automation_results.rtf with:
     - AppStorage persistence verified across launches
     - Clamping: bubble never goes off-screen or behind tab bar
     - BUILD SUCCEEDED
+\par
+===========================================\par
+S13 \emdash  IN-APP LANGUAGE PICKER (Cursor Spec)\par
+===========================================\par
+Sprint goal: Let users choose Stoqly's language inside the app (Settings > Language), independent of the iPhone language. DEFAULT = follow the device language (behavior UNCHANGED for users who never open the picker). Selected language persists across launches and applies app-wide, including RTL for Arabic.\par
+\par
+Depends on S11 (String Catalog + localizations). Full plan: Stoqly_Multilingual_Spec.md (Phase 1.5). NOTE: Cursor's S12 was the floating-bubble sprint; this multilingual sprint is S13.\par
+\par
+CRITICAL RULES (never violate):\par
+- Use modelContext.safeSave(context:) \emdash  never try? modelContext.save()\par
+- Insert ActivityEvent BEFORE modelContext.delete(item)\par
+- Never set isPro = true in any code\par
+- Never add NavigationStack inside a sheet/modal that already has one\par
+- Never introduce free-trial language anywhere (Stoqly has NO free trial)\par
+- Do NOT change the Claude API model, endpoint, or Firestore schema\par
+- Keep accessibilityIdentifier values English/stable (Maestro hooks)\par
+- The language picker is FREE \emdash  do NOT Pro-gate it\par
+\par
+Supported languages + native display names: AITest/Localization/language_display_names.json\par
+(System Default first, then the 15 languages. Show nativeName as primary label, englishName as subtitle.)\par
+\par
+\emdash \par
+\par
+ITEM S13-1 \emdash  Register all 15 locales as project localizations\par
+knownRegions currently has only en + Base. Add ALL 15 target locales so they actually activate and appear in the picker:\par
+  hi, ta, te, kn, ml, ar, es, pt-BR, fr, zh-Hans, id, de, ru, ja   (plus en base)\par
+Do this via Xcode Project > Info > Localizations (updates knownRegions) and ensure Localizable.xcstrings has a column for each (untranslated columns are fine \emdash  they fall back to English). Verify knownRegions lists all 15 afterward.\par
+\par
+ITEM S13-2 \emdash  LocalizationManager\par
+Create AITest/Utilities/LocalizationManager.swift:\par
+- final class LocalizationManager: ObservableObject\par
+- @AppStorage("appLanguageOverride") private var storedCode: String = ""   // "" = follow device\par
+- @Published var refreshID = UUID()   // bump to force SwiftUI re-render on change\par
+- var currentCode: String? \{ storedCode.isEmpty ? nil : storedCode \}\par
+- func setLanguage(_ code: String?):\par
+    - code == nil  -> clear override + AppleLanguages override, follow device\par
+    - else -> store code; UserDefaults.standard.set([code], forKey: "AppleLanguages"); apply Bundle override (S13-3); refreshID = UUID()\par
+- func effectiveLocale() -> Locale \{ Locale(identifier: currentCode ?? Locale.current.identifier) \}\par
+- On init (app launch), if currentCode != nil, re-apply the Bundle override so the choice persists across launches.\par
+Inject as an @StateObject at app root and .environmentObject(...) down the tree.\par
+\par
+ITEM S13-3 \emdash  Live language apply (Bundle override) + root refresh\par
+Switch language live, without needing reinstall:\par
+- Add a Bundle+Localization override: a custom Bundle subclass whose localizedString(forKey:value:table:) loads from the SELECTED language .lproj; swap it onto Bundle.main via object_setClass when an override is active, restore to normal when set back to System Default.\par
+- At the app root (InventoryAppView / top WindowGroup content) apply:\par
+      .environment(\\.locale, localizationManager.effectiveLocale())\par
+      .id(localizationManager.refreshID)   // forces re-render so labels switch immediately\par
+- Acceptance: switching updates tab bar + Settings + primary screens IMMEDIATELY. If one cached view fails to refresh live, a relaunch is acceptable for that edge only \emdash  tabs/labels/buttons MUST switch live.\par
+- The environment locale change must also drive RTL (Arabic) mirroring.\par
+\par
+ITEM S13-4 \emdash  Settings > Language row + LanguagePickerView\par
+- In SettingsView, add a "Language" row (SF Symbol "globe") whose trailing value shows the current language's native name; tapping opens LanguagePickerView.\par
+- LanguagePickerView: a List with "System Default" at top (checkmark when no override), then the 15 languages from language_display_names.json (nativeName primary line, englishName subtitle). Checkmark the active language. Tapping a row calls localizationManager.setLanguage(code) then dismisses.\par
+- The visible "Language" label goes through the String Catalog (localized).\par
+- accessibilityIdentifier "languageSettingsRow" on the Settings row; "languagePicker" on the list.\par
+\par
+ITEM S13-5 \emdash  RTL smoke check\par
+With Arabic selected via the IN-APP picker, verify the layout mirrors (tab order, alignment, back buttons). LIST any views that do not mirror in automation_results.rtf for the Phase-5 RTL sprint. Do NOT try to fix all RTL here.\par
+\par
+\emdash \par
+\par
+BUILD VERIFICATION (S13):\par
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build\par
+Must exit 0, BUILD SUCCEEDED.\par
+\par
+Manual test checklist:\par
+1. Fresh user (no override): app follows iPhone language (iPhone Hindi -> app shows Hindi pilot strings). Behavior unchanged.\par
+2. Settings > Language \emdash  list shows System Default + 15 languages by native name; current one checkmarked.\par
+3. Select Hindi \emdash  tab bar + Settings switch to Hindi immediately (pilot strings); untranslated strings stay English (expected until S14).\par
+4. Select Arabic \emdash  UI mirrors RTL immediately.\par
+5. Select System Default \emdash  reverts to the iPhone language.\par
+6. Kill + relaunch \emdash  the selected language persists.\par
+7. No crash on switching; SwiftData + Firestore unaffected.\par
+\par
+Update automation_results.rtf with:\par
+    S13 \emdash  In-App Language Picker\par
+    [COMPLETED or FAILED]\par
+    - S13-1: 15 locales registered in knownRegions (list the final knownRegions)\par
+    - S13-2: LocalizationManager with persisted override\par
+    - S13-3: Live Bundle-override apply + root refresh\par
+    - S13-4: Settings Language row + LanguagePickerView (native names)\par
+    - S13-5: RTL with in-app Arabic \emdash  list any non-mirroring views\par
+    - State whether live-switch worked fully or any view needed relaunch\par
+
+
+\par
+===========================================\par
+S14 \emdash  FULL TRANSLATION + VOICE LOCALIZATION (Cursor Spec)\par
+===========================================\par
+Sprint goal: (A) Populate ALL 15 languages in the String Catalog (AI-translated, marked needs-review), and (B) make SmartCount Voice work in every language via an Apple + Sarvam hybrid. One sprint, two parts. Completes Phase 2 (UI translation) + Phase 3 (voice) of Stoqly_Multilingual_Spec.md.\par
+\par
+Prior sprints: S11 (foundation), S13 (in-app picker) both COMPLETED. This is S14.\par
+\par
+CRITICAL RULES (never violate):\par
+- Use modelContext.safeSave(context:) \emdash  never try? modelContext.save()\par
+- Insert ActivityEvent BEFORE modelContext.delete(item)\par
+- Never set isPro = true in any code\par
+- Never add NavigationStack inside a sheet/modal that already has one\par
+- Never introduce free-trial language anywhere (Stoqly has NO free trial)\par
+- Do NOT change the APP's Claude model/endpoint or the Firestore schema\par
+- Keep accessibilityIdentifier values English/stable (Maestro hooks)\par
+- The Voice barcode/scanner rules still apply (fullScreenCover, etc.)\par
+\par
+PREREQUISITES (founder / CEO \emdash  do before running Part B):\par
+- Sarvam AI account + API key (https://www.sarvam.ai \emdash  free credits on signup). Put the key in SecretsManager as SARVAM_API_KEY. (Security: ideally proxy via a Cloud Function like the Claude key \emdash  flagged as tech debt, MVP may read from SecretsManager to match the existing pattern.)\par
+- ANTHROPIC_API_KEY available in the shell that runs the Part A script.\par
+\par
+=====================\par
+PART A \emdash  FULL UI TRANSLATION (Phase 2)\par
+=====================\par
+\par
+ITEM S14-A1 \emdash  Generate translations (run the script, do NOT hand-translate)\par
+- The translator is a script: AITest/Localization/translate_catalog.py (uses the Claude API + a domain glossary; stdlib only, no pip installs).\par
+- Run:\par
+      export ANTHROPIC_API_KEY="<key>"\par
+      # Step 1: India-core 5 languages with a STRONGER model for better regional phrasing:\par
+      python3 AITest/Localization/translate_catalog.py --langs hi,ta,te,kn,ml --model claude-sonnet-5\par
+      # Step 2: all remaining languages with the default Haiku model (cheaper):\par
+      python3 AITest/Localization/translate_catalog.py\par
+- Run BOTH steps in order. Step 1 does Hindi/Tamil/Telugu/Kannada/Malayalam on the stronger model; Step 2 fills the rest (ar, es, pt-BR, fr, zh-Hans, id, de, ru, ja) on Haiku and skips anything already translated.\par
+- It fills every untranslated string in all 14 non-English languages (~9,482 strings), each marked state="needs_review". It is idempotent (skips the Hindi/Arabic pilot already done) and saves incrementally.\par
+- Optional: python3 AITest/Localization/translate_catalog.py --dry-run   (counts only, no writes)\par
+- Do NOT translate strings by hand in Cursor \emdash  the script is the source of translations.\par
+\par
+ITEM S14-A2 \emdash  Import + verify\par
+- Open AITest/Localizable.xcstrings in Xcode. New strings appear as "Needs Review" (yellow). This is expected and correct \emdash  native review is a later gate.\par
+- Confirm all 15 languages now have ~683 strings each (was 40 for hi/ar, 0 for the rest).\par
+- Build: must stay green.\par
+\par
+ITEM S14-A3 \emdash  Spot-check rendering\par
+- Run app; via Settings > Language switch to Hindi, Tamil, Arabic, Spanish, Japanese. Confirm screens are now largely in-language (not English). Arabic still mirrors RTL.\par
+- Note any obviously broken/overflowing strings in automation_results.rtf for the polish sprint (do not fix layout here).\par
+\par
+=====================\par
+PART B \emdash  VOICE HYBRID: Apple + Sarvam (Phase 3)\par
+=====================\par
+Design: prefer Apple on-device/free; fall back to Sarvam cloud ONLY for languages Apple cannot transcribe on that device. Sarvam supports INDIAN languages only (hi, ta, te, kn, ml, plus bn/gu/mr/od/pa) \emdash  it is the fallback for Telugu/Kannada/Malayalam (and Tamil on older iOS). Non-Indian languages rely on Apple.\par
+\par
+ITEM S14-B1 \emdash  SpeechTranscriber abstraction\par
+Create AITest/Services/SpeechTranscription/:\par
+- protocol SpeechTranscriber \{ func transcribe(...) async throws -> String ; static func supports(locale:) -> Bool \}\par
+- AppleSpeechTranscriber: wraps SFSpeechRecognizer (existing VoiceInventoryView logic moves here).\par
+- SarvamSpeechTranscriber: records audio to a file (m4a/wav), POSTs to Sarvam, returns transcript.\par
+\par
+ITEM S14-B2 \emdash  Runtime engine selection\par
+- func pickEngine(for appLanguage) -> SpeechTranscriber:\par
+    - map app language -> voice locale (hi->hi-IN, ta->ta-IN, te->te-IN, kn->kn-IN, ml->ml-IN, ar->ar-SA, es->es-ES, pt-BR->pt-BR, fr->fr-FR, zh-Hans->zh-CN, id->id-ID, de->de-DE, ru->ru-RU, ja->ja-JP, en->en-IN)\par
+    - if SFSpeechRecognizer.supportedLocales() contains that locale -> AppleSpeechTranscriber\par
+    - else if language is Indian (te/kn/ml/ta/hi) -> SarvamSpeechTranscriber\par
+    - else -> nil (no engine): show the fallback UX in B4\par
+- Use the CURRENT app language from LocalizationManager (S13), defaulting to device locale.\par
+\par
+ITEM S14-B3 \emdash  Sarvam integration\par
+- Endpoint: POST https://api.sarvam.ai/speech-to-text\par
+- Header: api-subscription-key: <SARVAM_API_KEY from SecretsManager>\par
+- Multipart form: file=<recorded audio>, model="saaras:v3", language_code=<e.g. "kn-IN">, (optional) mode="codemix" to handle mixed English+regional speech.\par
+- Response JSON: use the "transcript" field.\par
+- Show a small "Recognizing (cloud)..." indicator while the request runs; handle network errors with a retry + graceful message.\par
+\par
+ITEM S14-B4 \emdash  VoiceInventoryView wiring + fallback UX\par
+- Locale pills now reflect the selected app language (keep en-IN/en-US/en-GB for English; for other languages show that language's pill).\par
+- Route recording through pickEngine(); if engine is Apple, live transcript as today; if Sarvam, record -> upload -> show transcript for edit.\par
+- If pickEngine returns nil (language has neither Apple nor Sarvam support, e.g. an unsupported non-Indian locale on an old OS): hide the mic flow and show a short note: "Voice counting isn't available in this language yet \emdash  try Photo or Sheet." Do NOT block the screen.\par
+- Transcript then flows into the EXISTING Claude extraction pipeline unchanged.\par
+\par
+ITEM S14-B5 \emdash  Usage gating (unchanged limits)\par
+- Cloud (Sarvam) voice counts against the SAME SmartCount voice usage limits as Apple voice (free: 3/month; Pro: unlimited). Do NOT add a separate gate or Pro-wall for cloud voice. Reuse AIUsageManager.\par
+\par
+ITEM S14-B6 \emdash  Prompt hints per language\par
+- Extend the voice extraction prompt with quantity-expression hints for the active language where helpful (e.g. Hindi "ek dozen / aadha kilo", Tamil "arai kilo"). English/Indian-English hints already exist \emdash  keep them.\par
+\par
+\emdash \par
+\par
+BUILD VERIFICATION (S14):\par
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build\par
+Must exit 0, BUILD SUCCEEDED.\par
+\par
+Manual test checklist:\par
+1. Part A: Settings > Language -> Hindi/Tamil/Arabic/Spanish/Japanese \emdash  screens are in-language; Arabic mirrors RTL.\par
+2. Voice (Apple language, e.g. Hindi): speak 2 items -> live transcript -> Claude extraction -> confirm.\par
+3. Voice (Sarvam language, e.g. Kannada on a device where Apple lacks kn): speak -> "Recognizing (cloud)" -> transcript -> extraction -> confirm.\par
+4. Voice usage: free user, 3 voice counts allowed/month across BOTH engines; 4th shows paywall (no separate cloud gate).\par
+5. Unsupported-voice language: mic flow hidden, Photo/Sheet suggested; screen still usable.\par
+6. No crash; safeSave used on confirm; SwiftData + Firestore unaffected.\par
+\par
+Update automation_results.rtf with:\par
+    S14 \emdash  Full Translation + Voice Localization\par
+    [COMPLETED or FAILED]\par
+    - S14-A1: translate_catalog.py run \emdash  strings filled per language (list counts)\par
+    - S14-A2: catalog imported, needs-review state, build green\par
+    - S14-A3: rendering spot-check \emdash  note any broken strings\par
+    - S14-B1..B6: SpeechTranscriber (Apple + Sarvam), engine selection, Sarvam call, VoiceInventoryView, gating, prompt hints\par
+    - Note which languages used Apple vs Sarvam on the test device\par
+    - Flag if Sarvam key handling needs the Cloud Function proxy follow-up\par
+
+
+\par
+===========================================\par
+S15 \emdash  SALES POLISH + STORAGE VALUE + REMOTE ANNOUNCEMENTS (Cursor Spec)\par
+===========================================\par
+Sprint goal: Ship 5 pieces of user feedback: (1) non-zero sale price fallback + warning, (2) clearer sale value vs total, (3) negative-stock warning, (4) storage Total Value instead of Total Quantity, (5) real remote announcement push + in-app popup.\par
+\par
+CRITICAL RULES (never violate):\par
+- Use modelContext.safeSave(context:) \emdash  never try? modelContext.save()\par
+- Insert ActivityEvent BEFORE modelContext.delete(item)\par
+- Never set isPro = true in any code\par
+- Never add NavigationStack inside a sheet/modal that already has one\par
+- Never introduce free-trial language anywhere (Stoqly has NO free trial)\par
+- Do NOT change the APP's Claude model/endpoint\par
+- Keep accessibilityIdentifier values English/stable (Maestro hooks)\par
+- All NEW user-facing strings go through the String Catalog via String(localized:) (S11)\par
+\par
+\emdash \par
+\par
+ITEM S15-1 \emdash  Non-zero sale price fallback + "no selling price" warning\par
+Problem: sale price defaults to 0 (ParsedSaleRow default), so revenue = qty x 0 = 0.\par
+Fallback chain (CONFIRMED): item.sellingPrice (if > 0) else item.lastPurchasePrice (if > 0) else item.unitCost (if > 0) else 0.\par
+- Add a shared helper, e.g. InventoryItem.fallbackSalePrice: Double returning that chain.\par
+- Files: SaleEntryReviewView.swift, QuickSaleSheet.swift, SmartSalesCSVView.swift (and confirm photo/voice/text sale paths funnel through SaleEntryReviewView \emdash  if so they are covered).\par
+- On item resolution (auto-resolve AND manual pick), if the price field has NOT been edited by the user, prefill pricePerUnit = item.fallbackSalePrice. Track a per-row priceWasEdited flag set true when the user types in the price field, so an explicit 0 the user enters is preserved (0 allowed as input, never as silent default).\par
+- Warning: when the resolved item has sellingPrice == 0, show under the price field, orange caption:\par
+      String(localized: "sale.noSellingPrice.warning", defaultValue: "Selling price not set. Set selling price for better profit insights.")\par
+- The SaleEvent.pricePerUnit stored must be the actual (fallback) price so revenue is non-zero.\par
+\par
+ITEM S15-2 \emdash  Clear sale value vs. sale total\par
+In SaleEntryReviewView row cell (and QuickSaleSheet):\par
+- Label the per-unit price field with a small caption "Price/unit" so it is not confused with a line total.\par
+- Show the line value (quantitySold * pricePerUnit) as a SMALL caption2 secondary label prefixed "= " (e.g. "= <formatted>"). Show it whenever price and qty > 0 (including fallback price).\par
+- Add a prominent SALE TOTAL footer below the rows: sum of (quantitySold * pricePerUnit) over confirmable, non-skipped rows. Render LARGE + highlighted (title3, bold, .stoqlyPrimary), labelled "Sale Total". This is the big number; per-unit price and line value stay small. Clear visual hierarchy is the point.\par
+\par
+ITEM S15-3 \emdash  Negative-stock warning after a sale\par
+Applies to ALL sale-apply paths: SaleEntryReviewView.saveAllSales, QuickSaleSheet, SmartSalesCSVView import apply.\par
+- After saving, collect items whose resulting currentQuantity < 0.\par
+- If any, present a NON-BLOCKING alert (single OK) summarizing them:\par
+      String(localized: "sale.negativeStock.warning", defaultValue: "%@ is now at negative stock (%@). You may have missed a stock count or a purchase entry.")\par
+   (one line per item, or a combined list). Do NOT block or reverse the sale \emdash  it still records.\par
+- One alert per batch. Use item.currentQuantity.smartFormatted for the qty.\par
+\par
+ITEM S15-4 \emdash  Storage "Total Value" instead of "Total Quantity"\par
+Storage.totalValue already exists (sum of item.totalValue). Do NOT show total quantity as a headline (UOMs differ across items).\par
+- EditStorageView.swift (~lines 76-78): label "Total Quantity" -> String(localized:) "Total Value"; value storage.totalQuantity.smartFormatted -> currencyManager.formatPrice(storage.totalValue).\par
+- StorageListView.swift (~lines 290-291): replace "\\(storage.totalQuantity.smartFormatted) units" with currencyManager.formatPrice(storage.totalValue); change the guard storage.totalQuantity > 0 -> storage.totalValue > 0.\par
+- SWEEP for any other display of storage.totalQuantity (StorageDetailView header, DashboardView, reports) and convert the DISPLAY to totalValue. Keep the Storage.totalQuantity computed property (may be used in logic) \emdash  only stop surfacing it as a headline metric.\par
+\par
+ITEM S15-5 \emdash  Remote announcement push + in-app popup\par
+Context: FCM already wired in AITestApp.swift (config, APNs->FCM token, permission, willPresent banner). Add token storage, topics, tap handling, and the popup.\par
+PREREQ (founder, see Stoqly_Push_Notifications_Setup.md): upload APNs Auth Key to Firebase; test on a real device.\par
+\par
+S15-5a \emdash  Save token + subscribe to topics\par
+- In MessagingDelegate.didReceiveRegistrationToken (and once after sign-in), write the token to Firestore users/\{uid\}: fields fcmToken, fcmPlatform="ios", fcmUpdatedAt (add FirestoreManager.writeFCMToken(uid:token:)). Guard on a signed-in uid.\par
+- Subscribe device: Messaging.messaging().subscribe(toTopic: "all_users").\par
+- Segment topics by Pro status: when SubscriptionManager resolves isPro, subscribe "pro" + unsubscribe "free"; else subscribe "free" + unsubscribe "pro". Put this in the isPro refresh path.\par
+\par
+S15-5b \emdash  Tap + foreground announcement handling\par
+- Payload convention (data keys): type="announcement", title, message, url(optional).\par
+- Implement UNUserNotificationCenterDelegate userNotificationCenter(_:didReceive:withCompletionHandler:): if userInfo["type"] == "announcement", post Notification.Name .stoqlyAnnouncement with a struct \{title, message, url\}; else default handling. Call completionHandler().\par
+- In willPresent (foreground): keep showing the banner; additionally, if type == announcement, post .stoqlyAnnouncement so the popup shows immediately while the app is open.\par
+\par
+S15-5c \emdash  Announcement popup\par
+- New AnnouncementPopupView.swift: title (headline), scrollable message body, optional "Learn more" (opens url), and a primary "Dismiss" button. Localize the Dismiss/Learn more labels.\par
+- Host it from ContentView (or MainAppContent): @State currentAnnouncement; on receiving .stoqlyAnnouncement set it and present as a .sheet (do NOT add a NavigationStack if the sheet content does not need one). Clear on dismiss.\par
+- accessibilityIdentifier "announcementPopup" on the popup; "announcementDismiss" on the button.\par
+\par
+\emdash \par
+\par
+ITEM S15-6 \emdash  Firebase In-App Messaging (Console-driven in-app offers)\par
+Purpose: show rich offer/welcome cards to ACTIVE users when they OPEN the app (no push, no notification permission). Complements S15-5 (which reaches users OUTSIDE the app via push). Together: push pulls users back, in-app messaging shows the rich offer once they open.\par
+- Add the FirebaseInAppMessaging product to the AITest target (Project > Package Dependencies > firebase-ios-sdk is ALREADY added > tick FirebaseInAppMessaging for the AITest target). No new package needed.\par
+- import FirebaseInAppMessaging where appropriate. FIAM auto-initializes after FirebaseApp.configure() \emdash  no per-campaign code required. It uses the default on_foreground trigger and Firebase Analytics (already integrated).\par
+- Verify: a test campaign from Firebase Console (Messaging > In-App Messaging) displays on next app open. Modal / card / image / top-banner formats all work out of the box.\par
+- Optional: implement InAppMessagingDisplayDelegate action-URL handling ONLY if offer cards use a button/deep-link. Default tap handling is fine for MVP.\par
+- Do NOT remove the S15-5 push announcement popup \emdash  FIAM (in-app, active users) and the push popup (push-triggered, from outside the app) serve different triggers.\par
+\par
+BUILD VERIFICATION (S15):\par
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build\par
+Must exit 0, BUILD SUCCEEDED.\par
+\par
+Manual test checklist:\par
+1. Sale entry, item WITH selling price, no price typed -> price prefills to selling price; line value + Sale Total correct.\par
+2. Sale entry, item with NO selling price -> price prefills to last purchase or cost; orange "Selling price not set..." warning shows; revenue is non-zero.\par
+3. Type 0 into price explicitly -> stays 0 (explicit input respected).\par
+4. Sale Total shows large/highlighted; per-unit price + line value are small and clearly labelled.\par
+5. Sell more than in stock -> after save, non-blocking alert names the item(s) now negative; sale still recorded.\par
+6. Edit Storage sheet + storage cards show Total Value (currency), not units/quantity.\par
+7. Push: with APNs key uploaded, send a Firebase notification with type=announcement custom data -> popup shows title+message+Dismiss (foreground immediately; background on tap). Plain notification still shows as banner.\par
+8. Topics: device subscribes all_users + pro/free per status (verify via a topic send).\par
+9. In-App Messaging: a test campaign from Firebase Console (Messaging > In-App Messaging) shows a card on next app open, with no notification permission required.\par
+\par
+Update automation_results.rtf with:\par
+    S15 \emdash  Sales Polish + Storage Value + Remote Announcements\par
+    [COMPLETED or FAILED]\par
+    - S15-1: fallback price chain + no-selling-price warning\par
+    - S15-2: Price/unit + line value small, Sale Total large\par
+    - S15-3: negative-stock non-blocking warning (all sale paths)\par
+    - S15-4: storage Total Value replaces Total Quantity (list all places changed)\par
+    - S15-5: FCM token->Firestore, topics (all_users/pro/free), tap+foreground handling, AnnouncementPopupView\par
+    - Note whether push delivery was verified on device (needs APNs key uploaded)\par
+    - S15-6: FirebaseInAppMessaging product linked; in-app test campaign displays on app open\par
+
+
+\par
+===========================================\par
+S16 \emdash  VOICE MIME FIX + LOCALIZATION CORRECTNESS SWEEP (Cursor Spec)\par
+===========================================\par
+Sprint goal: (1) Fix the Sarvam voice "Invalid file type" error. (2) Make the app ACTUALLY show translated text \emdash  many labels stay English because they are rendered from String variables (SwiftUI only auto-localizes string LITERALS) or were never externalized. Found during Tamil device QA.\par
+\par
+Prior sprints S11/S13/S14/S15 COMPLETED. This is S16.\par
+\par
+CRITICAL RULES (never violate):\par
+- Use modelContext.safeSave(context:) \emdash  never try? modelContext.save()\par
+- Never set isPro = true in any code\par
+- Never add NavigationStack inside a sheet/modal that already has one\par
+- Never introduce free-trial language anywhere (Stoqly has NO free trial)\par
+- Do NOT change the APP's Claude model/endpoint or the Firestore schema\par
+- Keep accessibilityIdentifier values English/stable (Maestro hooks)\par
+- Do NOT translate DATA: item names, storage names, user categories. Only UI LABELS/messages.\par
+\par
+\emdash \par
+\par
+ITEM S16-1 \emdash  Sarvam voice: fix audio MIME type (ONE LINE)\par
+File: AITest/Services/SpeechTranscription/SarvamSpeechTranscriber.swift, line ~70.\par
+Problem: it sends  Content-Type: audio/m4a  for the file part. Sarvam rejects it ("Invalid file type: audio/m4a"). Its allowed list includes audio/x-m4a, audio/mp4, application/octet-stream \emdash  but NOT audio/m4a.\par
+Fix: change the file-part Content-Type from "audio/m4a" to "audio/x-m4a".\par
+    append("Content-Type: audio/x-m4a\\r\\n\\r\\n")\par
+(Recording is AAC in an m4a container \emdash  kAudioFormatMPEG4AAC \emdash  so audio/x-m4a is correct.)\par
+Verify on device: Tamil/Kannada voice SmartCount returns a transcript, no "Invalid file type" error.\par
+\par
+ITEM S16-2 \emdash  Localize variable-rendered labels (the main bug)\par
+Root cause: Text(someStringVariable) does NOT localize; only Text("literal") does. Several labels are passed as String and rendered via Text(variable), so they show English even though the catalog HAS the translation (e.g. "Revenue" -> catalog ta "\u0bb5\u0bb0\u0bc1\u0bb5\u0bbe\u0baf\u0bcd" but screen shows "Revenue").\par
+Fix pattern (choose per case):\par
+  (a) Fixed labels: change the model/struct property type from String to LocalizedStringKey and keep passing the literal; Text(property) will then localize. \par
+  (b) Runtime strings whose values exist in the catalog: render with Text(LocalizedStringKey(theString)).\par
+  (c) Interpolated messages: use String(localized:) with interpolation / a format string so the WHOLE sentence is one catalog key.\par
+\par
+Known offenders (fix these AND grep for more):\par
+- DashboardView.swift KPI cards: title is String (struct ~line 68/737, passed "Revenue","Gross Profit","Low Stock","Out of Stock","Expiring Soon","Total Value" ~lines 240-285), rendered Text(title) ~line 790. Make title LocalizedStringKey (pattern a).\par
+- DashboardView.swift Smart Insights: Text(insight.title) ~1196 and Text(insight.subtitle) ~1198. insight.title fixed labels -> LocalizedStringKey. insight.subtitle is INTERPOLATED (e.g. "\\(noCost.count) items have no cost price \emdash  profit margin tracking is incomplete" ~line 1064) -> rewrite with String(localized:) using a format arg so it is one catalog key and fully translates (no English fragments).\par
+- Sales period pills "Today","This Week","This Month","Last 30 Days": externalize + localize (currently English).\par
+- Activity rows "Sale recorded from %@", "No Storage", badges like "Low Stock" (HealthDetailRow badge: "Low Stock" ~948 \emdash  badge is a String -> localize).\par
+- Relative time "2w ago": use RelativeDateTimeFormatter with Locale.current (or a localized formatter), not a hardcoded English string.\par
+- The "Go Pro \emdash  ..." paywall banner and any string mixing English + Tamil: make the ENTIRE sentence one catalog key.\par
+\par
+ITEM S16-3 \emdash  Externalize the strings that are NOT in the catalog yet\par
+These are missing entirely (never externalized in S11): "Gross Profit","Expiring Soon","Missing cost prices","Missing selling prices","Needs Attention","Possible dead stock","Today","This Week","This Month","Inventory value at risk", the insight subtitles, "Sale recorded from %@", relative-time strings, and any others found in the S16-2 grep.\par
+- Wrap them so they enter Localizable.xcstrings (literal Text / String(localized:) with stable keys).\par
+- Build once in Xcode so the catalog auto-populates the new literal keys.\par
+\par
+ITEM S16-4 \emdash  Re-run translation + FIX SCRIPT CONTAMINATION\par
+Bug found in Tamil QA: AI translations have cross-script contamination \emdash  wrong-script characters inside otherwise-correct words (Tamil 53, Telugu 11, Kannada 5, Malayalam 4; e.g. a Devanagari/Hindi char inside a Tamil word). The script has been hardened: it now enforces the target script in the prompt, SKIPS writing any wrong-script output, and a new --revalidate flag CLEARS existing contaminated values so they get re-translated cleanly.\par
+Run (in order):\par
+    # 1. Fix contaminated Indic languages on the stronger model (clears + refills):\par
+    python3 AITest/Localization/translate_catalog.py --revalidate --langs hi,ta,te,kn,ml --model claude-sonnet-5\par
+    # 2. Fill any remaining gaps (new keys from S16-2/3) across all languages:\par
+    python3 AITest/Localization/translate_catalog.py\par
+    # 3. (optional) re-run step 1 once more \emdash  the write-guard leaves a gap if a\par
+    #    batch still returns wrong script, so a second pass converges to clean.\par
+After: open the catalog in Xcode (needs-review state) and build. Verify no Tamil/Telugu/Kannada/Malayalam string contains stray Devanagari/Bengali characters.\par
+Also fix any obviously-wrong existing values, e.g. "Smart Insights" whose ta value was left as "Smart Insights" \emdash  re-translate or set manually.\par
+\par
+ITEM S16-5 \emdash  App-wide sweep (not just Dashboard)\par
+The same Text(variable)/interpolation pattern likely exists on other screens. Grep the app for user-facing Text(...) that takes a variable or interpolation and localize them. Priority order: Dashboard, Smart Insights, Sales, Items, Storages, Settings, Reorder, Reports. Leave item/storage/user-category DATA untranslated.\par
+- NOTE (do NOT change without asking the CEO): predefined categories ("Food & Beverage" etc.) are stored data used for grouping/matching \emdash  leave them for now; flag separately.\par
+\par
+ITEM S16-6 \emdash  CSV/PDF export must handle non-Latin names (Tamil/Arabic/etc.)\par
+File: AITest/Models/ExportManager.swift. User-entered names can be Tamil, Arabic, Hindi, etc. Exports must preserve them.\par
+CSV (two fixes):\par
+- UTF-8 BOM: prepend a byte-order mark so Excel (esp. Windows) opens the file as UTF-8 instead of garbling non-Latin text. Prepend "\\u\{FEFF\}" to the CSV string before writing (line ~447 still writes .utf8), OR write Data with the BOM bytes EF BB BF.\par
+- Field quoting/escaping (RFC-4180): every field must be wrapped in double quotes with internal quotes doubled, so a name containing a comma, quote, or newline (in ANY language) does not break the row. Currently fields are joined with "," unquoted (lines ~106-169) \emdash  add a csvEscape(_ field:) helper and apply to every column.\par
+PDF:\par
+- The HTML already declares <meta charset="UTF-8"> (line ~186), so the WKWebView PDF path renders Tamil/Arabic/CJK correctly \emdash  just VERIFY on a real export. If the createSimplePDF fallback (line ~504) is ever used, confirm its UIFont.systemFont renders non-Latin (system font cascade normally does); acceptable if the primary WKWebView path works.\par
+- Optional: export column HEADERS ("Total Value" etc.) can be localized like other UI labels; DATA (names) must stay in the user's language regardless.\par
+Test: create items with a Tamil name and an Arabic name, export CSV (open in Excel AND Numbers) and PDF \emdash  names render correctly, not boxes or mojibake; a name with a comma stays in one column.\par
+\par
+\emdash \par
+\par
+BUILD VERIFICATION (S16):\par
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build\par
+Must exit 0, BUILD SUCCEEDED.\par
+\par
+Manual test checklist (on device, app language = Tamil):\par
+1. Voice SmartCount in Tamil/Kannada -> transcript returns, NO "Invalid file type" error.\par
+2. Dashboard: KPI cards (Revenue, Gross Profit, Low Stock, Out of Stock, Expiring Soon, Total Value) show Tamil.\par
+3. Smart Insights: titles AND subtitles fully Tamil (no English fragments, no mixed "17 items ... unit cost ...").\par
+4. Sales period pills (Today/This Week/This Month/Last 30 Days) show Tamil.\par
+5. Activity feed labels ("Sale recorded from ...") and relative time show Tamil.\par
+6. Spot-check Items/Storages/Settings for remaining English labels.\par
+7. Item names, storage names, categories remain in their original language (data, not translated).\par
+8. Tamil/Telugu/Kannada/Malayalam text contains NO stray Hindi/Devanagari or Bengali characters (script contamination fixed).\par
+9. Export an item with a Tamil name and an Arabic name to CSV (open in Excel + Numbers) and PDF \emdash  names render correctly (no boxes/mojibake); a name containing a comma stays in one column.\par
+\par
+Update automation_results.rtf with:\par
+    S16 \emdash  Voice MIME Fix + Localization Correctness Sweep\par
+    [COMPLETED or FAILED]\par
+    - S16-1: Sarvam Content-Type audio/x-m4a (voice error fixed)\par
+    - S16-2: variable-rendered labels localized (list screens/props changed)\par
+    - S16-3: missing strings externalized (count added to catalog)\par
+    - S16-4: translator re-run with --revalidate; contamination cleared (ta/te/kn/ml counts); Smart Insights ta fixed\par
+    - S16-5: app-wide sweep \emdash  list any screens still showing English labels\par
+    - S16-6: CSV UTF-8 BOM + field quoting; PDF non-Latin verified\par
+    - Note any remaining mixed/English labels for a follow-up\par
+
+
+\par
+===========================================\par
+S17 \emdash  EXPORT FIXES: PDF "code dump" + Share sheet not showing (Cursor Spec)\par
+===========================================\par
+Sprint goal: Fix two broken export behaviours reported from device.\par
+BUG A: "Export PDF" output is full of CSS/code (user says "looks like JSON").\par
+BUG B: "Export Excel" (which is the CSV option) says exported but the share/preview never appears.\par
+Files: AITest/Models/ExportManager.swift, AITest/Views/ExportView.swift.\par
+\par
+CRITICAL RULES (never violate):\par
+- Use modelContext.safeSave(context:) \emdash  never try? modelContext.save()\par
+- Never set isPro = true in any code\par
+- Never add NavigationStack inside a sheet/modal that already has one\par
+- Never introduce free-trial language anywhere (Stoqly has NO free trial)\par
+- Keep accessibilityIdentifier values English/stable (Maestro hooks)\par
+- Any user-facing strings added/changed go through the String Catalog (String(localized:))\par
+\par
+\emdash \par
+\par
+ITEM S17-1 \emdash  PDF: make the WKWebView -> PDF path reliable (root cause of the "JSON" output)\par
+Root cause: convertHTMLToPDF (ExportManager.swift ~line 471) creates a LOCAL WKWebView that is not retained and not attached to a window, and calls createPDF on a fixed 1.5s timer after an evaluateJavaScript readyState check. It frequently FAILS -> falls back to createSimplePDF, which strips HTML tags but NOT the <style> block contents (CSS at lines ~189-252), so the stylesheet is rendered as text -> looks like JSON/code.\par
+Fix (primary path):\par
+- Retain the WKWebView with a STRONG reference for the whole render (store it as a property on ExportManager, or capture it strongly in the continuation) so it is not deallocated mid-render.\par
+- Give it a real frame: WKWebView(frame: CGRect(x:0,y:0,width:612,height:792)).\par
+- Use a WKNavigationDelegate and trigger createPDF from webView(_:didFinish:) (a ~0.2s settle after didFinish is OK) instead of the readyState + 1.5s hack.\par
+- Keep WKPDFConfiguration at US Letter (612x792).\par
+- HTML already has <meta charset="UTF-8"> so non-Latin names render (ties to S16-6).\par
+Goal: the primary WebKit path succeeds, so the fallback is rarely hit.\par
+\par
+ITEM S17-2 \emdash  PDF: fix the fallback so it can NEVER dump CSS/script\par
+Even if createSimplePDF is used, it must not leak stylesheet/script text.\par
+- BEFORE stripping tags (~line 517), remove <style> and <script> BLOCKS entirely (dot-matches-newline regex), e.g. remove "(?s)<style[^>]*>.*?</style>" and "(?s)<script[^>]*>.*?</script>".\par
+- Preferred: build the fallback text with NSAttributedString(data: htmlData, options: [.documentType: .html, .characterEncoding: String.Encoding.utf8.rawValue], documentAttributes: nil) so the fallback PDF is real formatted text, not stripped source. (Do this on the main thread.)\par
+- Result: the fallback PDF shows only the report (title, summary, item rows) \emdash  never CSS.\par
+\par
+ITEM S17-3 \emdash  Share sheet must appear after export (the "no preview" bug)\par
+Root cause: ExportView.swift presents ShareSheet from INSIDE the "Export Complete" alert's OK action (sets showingShareSheet = true at ~line 172). The alert-dismiss + sheet-present race makes SwiftUI drop the sheet, so nothing shows.\par
+Fix:\par
+- On SUCCESSFUL export (exportData(), ~line 190-196): set exportedFileURL, then present the share sheet DIRECTLY (showingShareSheet = true). REMOVE the intermediate "Export Complete" success alert entirely. Keep an alert ONLY for the failure branch (~line 198-201).\par
+- Guard the .sheet content on a non-nil exportedFileURL (already there ~line 165).\par
+- Applies to BOTH formats (CSV/"Excel" and PDF).\par
+- Optional polish: QuickLook (QLPreviewController) gives a true in-app preview; the iOS share sheet (Save to Files / share) is acceptable for MVP.\par
+\par
+\emdash \par
+\par
+BUILD VERIFICATION (S17):\par
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build\par
+Must exit 0, BUILD SUCCEEDED.\par
+\par
+Manual test checklist:\par
+1. Export PDF (Inventory Summary) -> a properly FORMATTED PDF report opens; NO CSS/code/JSON text anywhere.\par
+2. If the fallback path can be forced -> it still shows report text only, no CSS/script.\par
+3. Export "Excel" (CSV) -> the iOS share sheet appears IMMEDIATELY (Save to Files / share) \emdash  the "preview" the user was missing.\par
+4. Both formats open correctly in Files / Numbers / Excel; a Tamil/Arabic item name stays intact (S16-6).\par
+5. Failure case (e.g. export with zero matching items) -> a clear error alert, no crash, no share sheet.\par
+\par
+Update automation_results.rtf with:\par
+    S17 \emdash  Export Fixes (PDF + Share Sheet)\par
+    [COMPLETED or FAILED]\par
+    - S17-1: WKWebView retained + navigation-delegate didFinish + framed; primary PDF path reliable\par
+    - S17-2: fallback strips <style>/<script> (or NSAttributedString HTML) \emdash  no CSS dump\par
+    - S17-3: share sheet presented directly on success; success alert removed; failure alert kept\par
+    - Note whether PDF used primary WebKit path or fallback in testing\par
+
+
+\par
+===========================================\par
+S18 \emdash  RELIABLE LANGUAGE SWITCH + FULL LOCALIZATION COVERAGE (Cursor Spec)\par
+===========================================\par
+Sprint goal: Fix the two remaining localization defects from Tamil/Hindi device QA:\par
+(1) switching language mid-session leaves HALF the UI in the old language;\par
+(2) many labels (whole Paywall, Dashboard, StorageDetail, etc.) stay ENGLISH because they are rendered from String variables/interpolation, which SwiftUI does NOT localize.\par
+Diagnosis is quantified: literals are all in the catalog (0 missing), but there are ~125 Text(variable) UI labels + ~108 interpolated Text that bypass localization across ~58 files.\par
+\par
+CRITICAL RULES (never violate):\par
+- Use modelContext.safeSave(context:) \emdash  never try? modelContext.save()\par
+- Never set isPro = true in any code\par
+- Never add NavigationStack inside a sheet/modal that already has one\par
+- Never introduce free-trial language anywhere (Stoqly has NO free trial)\par
+- Keep accessibilityIdentifier values English/stable (Maestro hooks)\par
+- Do NOT translate DATA: item/storage/template names, categories, UOM symbols, SKUs, barcodes, StoreKit product.displayName/displayPrice, currency symbols. ONLY localize UI labels/messages.\par
+\par
+\emdash \par
+\par
+ITEM S18-1 \emdash  Make language switching reliable (fix the half-old/half-new bug)\par
+Root cause: LocalizationManager.setLanguage bumps refreshID and the root uses .id(refreshID), but .id() on a child view does NOT tear down presented sheets, NavigationStack destinations, or @StateObject-cached strings, so those keep the previous language. Bundle-swizzle + .id() is unreliable for mid-session switch.\par
+Fix (primary \emdash  full window re-root):\par
+- On setLanguage(): after updating storedCode + Bundle.setLanguage + AppleLanguages, DISMISS any presented sheet/navigation, then RE-ROOT the key window:\par
+    - get the active UIWindowScene from UIApplication.shared.connectedScenes, its keyWindow,\par
+    - set window.rootViewController = UIHostingController(rootView: ContentView()... with the same environmentObjects + .environment(\\.locale, ...) + .environment(\\.layoutDirection, ...)),\par
+    - optional: a short cross-dissolve transition for polish.\par
+  This rebuilds the ENTIRE tree (and drops stale sheets) so every string re-resolves in the new language.\par
+- Keep .environment(\\.locale, effectiveLocale()) and the Bundle override; the re-root makes both take effect everywhere.\par
+- Fallback (only if re-root proves flaky): show a one-line "Restart Stoqly to apply the language" note after switching. Prefer the re-root.\par
+Test: Tamil -> switch to Hindi -> 100% Hindi immediately (no Tamil remnants), including Dashboard, Settings, and any open sheet.\par
+\par
+ITEM S18-2 \emdash  Localize variable-rendered UI labels (the English-text bug)\par
+Use the audit script as the checklist:\par
+    python3 AITest/Localization/localization_audit.py --all\par
+It lists Text(variable) "LIKELY UI LABELS" (~125) and interpolated Text (~108), grouped by file, EXCLUDING data vars.\par
+For each LABEL case, localize at the source:\par
+  (a) Fixed label held in a String property/struct -> change the property TYPE to LocalizedStringKey and keep the literal; Text(prop) then localizes. (Best for enums/structs of feature rows, tips, KPI titles, etc.)\par
+  (b) Runtime string whose value is a known catalog key -> Text(LocalizedStringKey(value)).\par
+  (c) INTERPOLATED strings ("\\(count) items ...") -> String(localized:) with format arguments so the WHOLE sentence is one catalog key (no English fragments). e.g. String(localized: "negativeStock.msg \\(item.name) \\(qty)") or a %@/%lld format key.\par
+Do NOT touch data vars (names/categories/symbols/prices/SKUs) \emdash  they must stay in the user's language.\par
+Priority order (highest visibility first): SubscriptionManager (Paywall), DashboardView, StorageDetailView, ExportView, SettingsView, SmartCountView, ImageInventoryView, ReportsView, then the rest from the audit.\par
+\par
+ITEM S18-3 \emdash  Paywall specifically (user reported it is "mostly English")\par
+SubscriptionManager.swift PaywallView renders paywallHeadline, priceHint, feature title/text/note, displayDescription, badge, "/ month" etc. via Text(variable).\par
+- Convert the feature-list model + headline/priceHint/badge/subtitle to LocalizedStringKey (or String(localized:)). Localize the plan period suffixes ("/ month", "/ year", "one-time"), disclaimers, and buttons.\par
+- LEAVE StoreKit product.displayName and product.displayPrice as-is (Apple-provided, localized/formatted by StoreKit).\par
+- Verify the whole paywall renders in Tamil/Hindi/Arabic.\par
+\par
+ITEM S18-4 \emdash  Externalize + re-run translator for any new keys\par
+- New String(localized:) keys from S18-2/3 must enter the catalog: build once in Xcode so literals auto-extract; add explicit keys where needed.\par
+- Run the translator (reads key from Secrets.plist automatically):\par
+    python3 AITest/Localization/translate_catalog.py --revalidate --langs hi,ta,te,kn,ml --model claude-sonnet-5\par
+    python3 AITest/Localization/translate_catalog.py\par
+- Open catalog in Xcode (needs-review) and build.\par
+\par
+ITEM S18-5 \emdash  Verify completeness (do not eyeball)\par
+- Re-run: python3 AITest/Localization/localization_audit.py\par
+  The "LIKELY UI LABELS" list must contain ONLY genuine data vars (review the --all output to confirm none are user-facing labels). If any real label remains, fix it.\par
+- Catalog check: all 14 languages 100% translated, 0 contamination (the S16 revalidate guard covers this).\par
+\par
+\emdash \par
+\par
+BUILD VERIFICATION (S18):\par
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build\par
+Must exit 0, BUILD SUCCEEDED.\par
+\par
+Manual test checklist (device, switch between Tamil / Hindi / Arabic):\par
+1. Switch Tamil -> Hindi: ENTIRE UI becomes Hindi immediately, no Tamil left anywhere (incl. open sheets). Kill+relaunch: persists.\par
+2. Paywall: fully translated (headline, features, price notes, buttons) \emdash  no English except StoreKit price/product name.\par
+3. Dashboard, StorageDetail, Export, Settings, SmartCount: no stray English labels.\par
+4. Interpolated messages (negative stock, "N items ...", insight subtitles) fully in-language, no English fragments.\par
+5. Data (item/storage/category names) stays in the language the user typed it.\par
+6. Arabic still mirrors RTL after a switch.\par
+\par
+Update automation_results.rtf with:\par
+    S18 \emdash  Reliable Language Switch + Full Localization Coverage\par
+    [COMPLETED or FAILED]\par
+    - S18-1: window re-root on language change (switch is now 100%, no stale strings)\par
+    - S18-2: localized ~125 variable labels + ~108 interpolated (list files/counts)\par
+    - S18-3: Paywall fully localized (StoreKit price/name left as data)\par
+    - S18-4: new keys translated; catalog 100%/14 langs, 0 contamination\par
+    - S18-5: localization_audit.py "LIKELY UI LABELS" = data-only (paste the final count)\par
+
+
+\par
+===========================================\par
+S19 \emdash  FIX 105 UNTRANSLATED UI STRINGS (custom-view literals not in catalog) (Cursor Spec)\par
+===========================================\par
+Sprint goal: S18 built green but did NOT actually translate ~105 UI strings (Paywall features, StorageDetail, Export, Dashboard tips, Onboarding, etc.). They still render ENGLISH on Tamil/Hindi devices. Root cause: string literals passed to CUSTOM view initializers are not extracted into Localizable.xcstrings by Xcode (even when the parameter is LocalizedStringKey), and a few params are still plain String. The literal is never in the catalog, so it falls back to the English key.\par
+\par
+CRITICAL RULES (never violate):\par
+- Never set isPro = true in any code\par
+- Never add NavigationStack inside a sheet/modal that already has one\par
+- Never introduce free-trial language anywhere (Stoqly has NO free trial)\par
+- Keep accessibilityIdentifier values English/stable (Maestro hooks)\par
+- Do NOT translate data (item/storage/template names, categories, UOM symbols, SKUs, StoreKit product.displayName/displayPrice)\par
+\par
+THE GATE (run this to find + verify): \par
+    python3 AITest/Localization/catalog_gap_check.py --all\par
+It lists every UI-label literal passed to an init arg (text:/title:/note:/subtitle:/description:/action:/badge etc.) that is NOT a catalog key. S19 is done when it prints 0 (GATE PASS).\par
+\par
+\emdash \par
+\par
+ITEM S19-1 \emdash  Ensure custom-view UI params are LocalizedStringKey (not String)\par
+For each custom view that renders a label via Text(param), the param TYPE must be LocalizedStringKey (so the literal localizes). Audit these and fix any still typed String:\par
+- ExportView: ExportTypeCard.title/subtitle, FormatCard.title/subtitle are String -> change to LocalizedStringKey.\par
+- PaywallFeatureRow.note, ProductCard.badge and any String label param -> LocalizedStringKey (leave StoreKit product.displayName/displayPrice as String data).\par
+- Any other from the gate output (StorageDetail rows, Dashboard tips already LocalizedStringKey, Onboarding already LocalizedStringKey, SmartCount/SmartSales mode cards, BulkImport help rows, EmailVerification steps, BarcodeScanner labels, SplashScreen chips).\par
+Do NOT convert data params (names, categories, symbols).\par
+\par
+ITEM S19-2 \emdash  Get the 105 literals INTO the catalog\par
+Xcode auto-extraction misses custom-init literals, so do not rely on a rebuild alone.\par
+- Preferred: after S19-1, do a clean build (Product > Clean Build Folder, then Build) and re-run the gate. Some will now extract.\par
+- For any the gate STILL reports missing: add them explicitly to Localizable.xcstrings (English source entry), OR wrap at definition with String(localized:). Every literal the gate lists must become a catalog key.\par
+- Re-run the gate until it prints 0.\par
+\par
+ITEM S19-3 \emdash  Translate the newly-added keys\par
+    python3 AITest/Localization/translate_catalog.py --revalidate --langs hi,ta,te,kn,ml --model claude-sonnet-5\par
+    python3 AITest/Localization/translate_catalog.py\par
+Open catalog in Xcode (needs-review) and build. Confirm all 14 languages 100% translated, 0 contamination.\par
+\par
+ITEM S19-4 \emdash  Verify (both gates must pass)\par
+- python3 AITest/Localization/catalog_gap_check.py   -> 0 missing (GATE PASS)\par
+- python3 AITest/Localization/localization_audit.py   -> LIKELY UI LABELS only data/localized-at-source\par
+- Catalog: 14 langs, 0 gaps, 0 contamination.\par
+\par
+\emdash \par
+\par
+BUILD VERIFICATION (S19):\par
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build\par
+Must exit 0, BUILD SUCCEEDED.\par
+\par
+Manual test checklist (device, app language = Tamil AND Hindi):\par
+1. PAYWALL: every feature row, section header, note, price line, button is translated (only StoreKit price/product name may be non-Tamil). No English feature text.\par
+2. StorageDetail (Item Info, Batches, Description labels), Export cards (Inventory Summary, Low Stock List...), Dashboard tips (Try SmartCount...), Onboarding pages, SmartCount/SmartSales mode cards: all translated.\par
+3. Switch Tamil <-> Hindi: whole UI including these screens flips fully (S18 re-root).\par
+4. Data (item/storage/category names, prices) stays as entered.\par
+\par
+Update automation_results.rtf with:\par
+    S19 \emdash  Fix 105 Untranslated UI Strings\par
+    [COMPLETED or FAILED]\par
+    - S19-1: String->LocalizedStringKey param fixes (list views)\par
+    - S19-2: literals added to catalog; catalog_gap_check.py = 0\par
+    - S19-3: translated; 14 langs 100%, 0 contamination\par
+    - S19-4: both gates pass (paste final gate counts)\par
+
+
+\par
+===========================================\par
+S20 \emdash  FIX: Sarvam voice "Failed to read the file" (Cursor Spec)\par
+===========================================\par
+Sprint goal: Fix Indian-language voice SmartCount failing with Sarvam error \{"message":"Failed to read the file, please check the audio format."\}. Sarvam is fine; the app was sending an UNFINALIZED .m4a.\par
+Root cause: VoiceInventoryView.stopRecording() (cloud path, ~line 766) called sarvamRecorder.transcribe() WITHOUT stopping the recorder first, so transcribe() read the .m4a mid-recording (the moov atom is only written on stop()) -> Sarvam gets a header-less file.\par
+\par
+FIX ALREADY APPLIED (verify + build):\par
+- AITest/Services/SpeechTranscription/SarvamSpeechTranscriber.swift transcribe(): now calls recorder?.stop() + recorder=nil + deactivates the audio session BEFORE reading Data(contentsOf:); defer now only deletes the temp file (does not stop again); added guard !fileData.isEmpty -> recordingFailed.\par
+\par
+S20-1 \emdash  Verify the fix + optional caller tidy\par
+- Confirm the edit builds. Optionally, in VoiceInventoryView the cloud path may also call sarvamRecorder.stopRecording(deleteFile:false) before transcribe() for clarity, but the in-transcribe() finalize is the authoritative fix.\par
+- If Sarvam STILL returns a format error after this, downsample the recording to 16 kHz mono (AVSampleRateKey: 16000) which Sarvam prefers \u2014 but the finalize fix is expected to resolve it.\par
+\par
+BUILD VERIFICATION (S20):\par
+    xcodebuild -project AITest.xcodeproj -scheme AITest -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build\par
+Must exit 0, BUILD SUCCEEDED.\par
+\par
+Manual test (REAL device, app language Tamil/Kannada/Telugu/Malayalam):\par
+1. Voice SmartCount -> speak 2 items -> transcript returns (no "Failed to read the file" / no "Invalid file type").\par
+2. Very short/silent tap -> graceful error, no crash (empty-file guard).\par
+3. Transcript flows into the normal Claude extraction + review.\par
+\par
+Update automation_results.rtf with:\par
+    S20 \emdash  Sarvam voice finalize-before-read fix\par
+    [COMPLETED or FAILED]\par
+    - S20-1: recorder finalized before file read; empty-file guard; device voice verified (or note if 16kHz downsample was also needed)\par
+
+
+\par
+===========================================\par
+S21 \emdash  FINAL LOCALIZATION RESIDUE: enum labels + feature-name re-translation (Cursor Spec)\par
+===========================================\par
+Sprint goal: Close the last localization gaps found in Tamil/Hindi QA. Two real issues remain (most other reported words are ALREADY translated in the catalog \u2014 a stale build shows them English, so REBUILD first):\par
+(1) enum raw values rendered as UI labels never localize (e.g. "Purchase", "Sale", "Transfer In", "Waste / Spoilage");\par
+(2) ~86 strings had translation == English (the AI kept feature names like "Smart Insights", "Smart Sales Entry", "Go Pro"); these have been CLEARED and the translator hardened \u2014 re-run to refill.\par
+\par
+CRITICAL RULES (never violate):\par
+- Never set isPro = true; never add free-trial language; never add NavigationStack inside a modal that has one\par
+- Keep accessibilityIdentifier values English/stable\par
+- Do NOT translate DATA (item/storage/category names, SKUs, StoreKit price/name)\par
+- Enum RAW VALUES are stored in SwiftData/Firestore \u2014 do NOT change the rawValue strings (that would corrupt data). Add a SEPARATE localized display label.\par
+\par
+ITEM S21-1 \emdash  Localized labels for enum types rendered in the UI\par
+File: AITest/Models/InventoryMovement.swift (MovementTypeIn / MovementTypeOut) and any other enum whose rawValue is shown to the user (search: Text(<enum>.rawValue), Text(type), Picker over cases).\par
+- Keep the rawValue exactly as-is (data key). ADD a computed:  var localizedLabel: LocalizedStringKey  mapping each case to a localizable literal, e.g. case .purchase: return "Purchase" (as LocalizedStringKey so it enters the catalog + localizes), .saleOut: "Sale", .transferIn: "Transfer In", .waste: "Waste / Spoilage", .adjustmentUp: "Adjustment (Up)", .openingStock: "Opening Stock", etc.\par
+- Update every UI render site to use .localizedLabel instead of .rawValue. Do NOT touch persistence/matching that uses rawValue.\par
+- Also check other enums shown as labels (movement direction "IN"/"OUT"/"DIRECTION", sale/purchase transaction types) and give them localized labels the same way.\par
+\par
+ITEM S21-2 \emdash  Re-run the hardened translator (refills the 86 cleared + new enum keys)\par
+The translator glossary + prompt were hardened (no longer keeps "Pro"/"AI"/feature names; rule 5b forces feature-name translation; script guard + same-as-source handling).\par
+    python3 AITest/Localization/translate_catalog.py --revalidate --langs hi,ta,te,kn,ml --model claude-sonnet-5\par
+    python3 AITest/Localization/translate_catalog.py\par
+- Build once in Xcode first so the new enum LocalizedStringKey literals auto-extract into the catalog, THEN run the translator so they get translated.\par
+- Open catalog, confirm 0 gaps, and that "Smart Insights"/"Smart Sales Entry"/"Go Pro"/movement labels now have real Tamil/Hindi (NOT the English word).\par
+\par
+ITEM S21-3 \emdash  Gates (all must pass)\par
+    python3 AITest/Localization/catalog_gap_check.py          # 0 missing\par
+    python3 AITest/Localization/localization_audit.py         # labels = data/localized-at-source only\par
+    # translation == English source check (feature-name regressions):\par
+    python3 - <<'PY'\par
+import json,re\par
+cat=json.load(open('AITest/Localizable.xcstrings',encoding='utf-8'))['strings']\par
+def src(k,e):\par
+    v=e.get('localizations',\{\}).get('en',\{\}).get('stringUnit',\{\}).get('value');return v if v else k\par
+KEEP=re.compile(r'%|SDK|API Key|sk-ant|http|Excel \\(CSV\\)|CSV / Excel')\par
+bad=0\par
+for k,e in cat.items():\par
+    s=src(k,e)\par
+    if not re.search(r'[A-Za-z]',s) or s in \{'Stoqly','SKU','PDF','CSV','AI','OK','QR','FIFO','UOM','Pro'\} or KEEP.search(s): continue\par
+    for L in ['ta','hi','te','kn','ml']:\par
+        v=e.get('localizations',\{\}).get(L,\{\}).get('stringUnit',\{\}).get('value')\par
+        if v and v==s and len(s)>2: bad+=1\par
+print('translation==English (should be ~0):',bad)\par
+PY\par
+\par
+BUILD VERIFICATION (S21): xcodebuild -project AITest.xcodeproj -scheme AITest -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build  (exit 0)\par
+\par
+Manual test (device, Tamil + Hindi):\par
+1. Movement/transaction labels (Purchase, Sale, Transfer In, Waste) show translated.\par
+2. Smart Insights / Smart Sales Entry / Go Pro show translated (not English).\par
+3. Period pills, Inventory Health, Needs Attention, Revenue/Profit already translated \u2014 confirm after rebuild.\par
+\par
+Update automation_results.rtf with:\par
+    S21 \emdash  Enum labels + feature-name re-translation\par
+    [COMPLETED or FAILED]\par
+    - S21-1: localizedLabel added to movement/transaction enums; render sites updated; rawValues untouched\par
+    - S21-2: hardened translator re-run; 86 cleared refilled; 0 gaps\par
+    - S21-3: all gates pass (catalog_gap=0, audit clean, translation==English ~0)\par
+
+
+\par
+===========================================\par
+S21 ADDENDUM (from Tamil screenshot review) \u2014 extra items\par
+===========================================\par
+Screenshot review of 8 Tamil screens classified every English string. REBUILD fixes the "stale build" group (already translated in catalog: Inventory Health, Needs Attention, Revenue/Profit/Margin, Go Pro strip, activity messages). The items below are NOT fixed by rebuild \u2014 add to S21:\par
+\par
+ITEM S21-4 \emdash  Locale-aware date / time / relative formatting\par
+Movements + Activity show English dates ("Jul 6, 2026 at 6:29 PM") and relative time ("1d ago", "2w ago").\par
+- Route ALL user-facing dates through a DateFormatter with locale = Locale.current (or the app override locale), e.g. formatter.locale = LocalizationManager.shared.effectiveLocale().\par
+- Relative time: use RelativeDateTimeFormatter with that locale (gives \u0b87/\u0ba8\u0bbe\u0bb3\u0bcd/\u0bb5\u0bbe\u0bb0\u0bae\u0bcd etc.) instead of a hardcoded "%dd ago"/"%dw ago" string. If a custom short format is kept, make "%lldd ago"/"%lldw ago" catalog keys.\par
+\par
+ITEM S21-5 \emdash  Interpolated Smart Insights subtitles (dynamic messages)\par
+Insight TITLES are translated but SUBTITLES are English ("19 item(s) have no cost price \u2014 profit margin tracking is incomplete", "56 item(s) have no selling price \u2014 revenue tracking won't be accurate", "... no minimum quantity \u2014 you won't get restock alerts", "... haven't been touched in 60+ days", "... represent stock that needs restocking", "... never been counted \u2014 quantities unverified").\par
+- These are interpolated. Convert each to String(localized:) with a format arg so the WHOLE sentence is one catalog key, e.g. String(localized: "insight.missingCost.subtitle \\(count)") -> key "insight.missingCost.subtitle %lld". Do the same for the "%lld items recently purchased above unit cost" strip.\par
+- Externalize + translate (they are currently plain interpolation, so they never entered the catalog).\par
+\par
+ITEM S21-6 \emdash  Period pill labels + COGS + "by" + Smart Insights header\par
+- Period pills (Today / This Week / This Month / Last 30 Days) in BOTH DashboardSalesPeriod.localizedTitleString and ReportsView ReportPeriod: ensure the localizedTitle keys are real catalog keys AND translated (currently English on device). Confirm via catalog after the translator run.\par
+- "COGS" (Reports summary) -> localize (expand to a short local term, not the English acronym).\par
+- "by %@" (activity "by <name>") -> localize the "by" prefix.\par
+- "Smart Insights" header + "See Plans" button + "Last 30 Days"/"93% margin" badges -> confirm catalog keys exist + translated (were among the 86 cleared / ~150 untranslated).\par
+\par
+(All of S21-4/5/6 feed the same final gate: translator run -> 0 gaps, 0 contamination, translation!=English; then REBUILD.)\par
+
+
+\par
+===========================================\par
+S22 \emdash  Tamil register + fill 191 gaps (Cursor Spec)\par
+===========================================\par
+Two things: (a) 191 catalog strings are still untranslated (added by S21) and show English; (b) Tamil register hardened to "everyday retail Tamil" with a founder-approved glossary (Storage=\u0b95\u0bbf\u0b9f\u0b99\u0bcd\u0b95\u0bc1, Stock=\u0b87\u0bb0\u0bc1\u0baa\u0bcd\u0baa\u0bc1, Low Stock=\u0b95\u0bc1\u0bb1\u0bc8\u0ba8\u0bcd\u0ba4 \u0b87\u0bb0\u0bc1\u0baa\u0bcd\u0baa\u0bc1; Count/Purchase kept). translate_catalog.py now injects the glossary + register rule 4b.\par
+\par
+RUN (reads key from Secrets.plist):\par
+  # Fill all current gaps in every language with the new register/glossary:\par
+  python3 AITest/Localization/translate_catalog.py --langs hi,ta,te,kn,ml --model claude-sonnet-5\par
+  python3 AITest/Localization/translate_catalog.py\par
+  # Optional \u2014 if Tamil still reads too literary anywhere, redo ALL Tamil uniformly:\par
+  #   python3 AITest/Localization/translate_catalog.py --regenerate --langs ta --model claude-sonnet-5\par
+Then open catalog in Xcode, CLEAN BUILD FOLDER, build. Verify 0 gaps, gates pass.\par
+\par
+Manual test (device, Tamil): Storage shows \u0b95\u0bbf\u0b9f\u0b99\u0bcd\u0b95\u0bc1; Low Stock/Out of Stock consistent (\u0b87\u0bb0\u0bc1\u0baa\u0bcd\u0baa\u0bc1); overall reads like everyday shop language, not literary. Then rebuild is MANDATORY (see brief rule).\par
+\par
+Update automation_results.rtf with: S22 \u2014 Tamil register + gap fill [COMPLETED/FAILED]; gaps filled count; register spot-check.\par
+
+
+\par
+===========================================\par
+S23 \emdash  Xcode Cloud CI scripts + "trial" wording fix (build-verify)\par
+===========================================\par
+Context: setting up Xcode Cloud CD (merge -> TestFlight). CI scripts added; a release guard found a mislabeled "trial" banner (Stoqly has no trial). Changes ALREADY MADE \u2014 Cursor: build + verify only.\par
+\par
+Changes made:\par
+- ci_scripts/ci_post_clone.sh \u2014 rebuilds Secrets.plist + GoogleService-Info.plist from Xcode Cloud env vars.\par
+- ci_scripts/ci_pre_xcodebuild.sh \u2014 release guards (isPro!=true, no user-facing "trial", catalog_gap_check=0, set build number). chmod +x.\par
+- SubscriptionManager.swift line 18 \u2014 stale comment "(7-day free trial)" -> "(no free trial)".\par
+- DashboardView.swift ~242 \u2014 banner now "Your Pro access expires today" / "Pro access expires in %1$lld day%2$@" (was "Trial expires..."). Uses String(localized:).\par
+- Localizable.xcstrings \u2014 removed orphaned keys "Your trial expires today" + "Trial expires in %lld day%@".\par
+\par
+S23-1 \emdash  Build + verify\par
+- xcodebuild -project AITest.xcodeproj -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build  (exit 0)\par
+- New keys "Your Pro access expires today" / "Pro access expires in %1$lld day%2$@" auto-extract; run translate_catalog.py to translate them (part of the pending S22 gap-fill run).\par
+- Optional internal rename trialExpiry/trialDaysRemaining -> proExpiry/proDaysRemaining for clarity (NOT user-facing; only if low-risk).\par
+\par
+Manual test: Dashboard banner (when a Pro grant/subscription is <=3 days from expiry) reads "Pro access expires in N days" \u2014 never "trial".\par
+\par
+Update automation_results.rtf: S23 \u2014 Xcode Cloud CI + trial-wording fix [COMPLETED/FAILED]; build result; note if internal rename done.\par
+
+
+\par
+===========================================\par
+S24 \emdash  ANALYTICS EXPANSION: dashboard taps, journeys, drop-off, blockers (Cursor Spec)\par
+===========================================\par
+Goal: answer "what did the user tap (esp. on the Dashboard), what did they do next, and where did they get stuck?" Add tap events, screen-view events, flow-START events (to pair with existing completions for drop-off), and blocker events. All go through the existing AnalyticsManager / StoqlyEvent enum (AITest/Services/AnalyticsManager.swift). No magic strings.\par
+\par
+CONVENTIONS (keep consistent): event names object_action snake_case; property values snake_case from the fixed lists below; NEVER log PII or free text (no search query text, no item/customer names as event props \u2014 IDs/counts/categories only).\par
+\par
+\emdash  1. ADD THESE CASES to enum StoqlyEvent (name + properties in the two switches) \emdash \par
+\par
+// Journey backbone\par
+screenViewed(name: String)                 "screen_viewed"          \{screen: name\}\par
+// name from: dashboard, storages, items, storage_detail, item_detail, count, settings,\par
+//            reports, reorder_list, expiry_timeline, category_explorer, help_centre,\par
+//            ai_chat, paywall, purchase_invoice, team, templates, bulk_import,\par
+//            global_search, profile  (screens WITHOUT an existing *_viewed event)\par
+\par
+// Dashboard taps (the headline gap)\par
+dashboardCardTapped(card: String)          "dashboard_card_tapped"  \{card\}\par
+//   card: revenue | gross_profit | low_stock | out_of_stock | expiring_soon | total_value | inventory_health\par
+dashboardInsightTapped(insight: String)    "dashboard_insight_tapped" \{insight\}\par
+//   insight: missing_cost | missing_selling | low_stock_alerts_disabled | dead_stock | value_at_risk | never_audited\par
+dashboardTipTapped(tip: String)            "dashboard_tip_tapped"   \{tip\}\par
+dashboardPeriodChanged(period: String)     "dashboard_period_changed" \{period\}   // today|this_week|last_30_days|this_month\par
+viewFullReportTapped                       "view_full_report_tapped" \{\}\par
+floatingAIButtonTapped                     "floating_ai_button_tapped" \{\}\par
+\par
+// Upgrade / paywall interaction (distinct from existing paywallShown = impression)\par
+upgradeCtaTapped(source: String)           "upgrade_cta_tapped"     \{source\}  // go_pro_strip|see_plans|settings|feature_lock|dashboard\par
+paywallCtaTapped(plan: String)             "paywall_cta_tapped"     \{plan\}    // monthly|annual|remove_ads\par
+paywallDismissed                           "paywall_dismissed"      \{\}\par
+\par
+// Flow START events (pair with existing COMPLETION events to measure drop-off)\par
+addItemStarted(source: String)             "add_item_started"       \{source\}  // fab|storage_detail|empty_state|barcode\par
+saleEntryStarted(mode: String)             "sale_entry_started"     \{mode\}    // manual|voice|photo|text|csv|pdf\par
+purchaseEntryStarted(mode: String)         "purchase_entry_started" \{mode\}\par
+\par
+// Onboarding funnel (find where new users drop)\par
+onboardingStarted                          "onboarding_started"     \{\}\par
+onboardingStepViewed(step: Int, name: String) "onboarding_step_viewed" \{step, step_name: name\}\par
+onboardingCompleted                        "onboarding_completed"   \{\}\par
+onboardingSkipped(step: Int)               "onboarding_skipped"     \{step\}\par
+\par
+// Blockers (where users get stuck)\par
+permissionResult(type: String, granted: Bool) "permission_result"   \{type, granted\}  // type: camera|microphone|notifications|att|speech\par
+aiRequestFailed(feature: String, reason: String) "ai_request_failed" \{feature, reason\} // feature: help_chat|photo|voice|sheet|invoice|sales\par
+emptyStateShown(screen: String)            "empty_state_shown"      \{screen\}  // items|storages|count|reorder|activity|search\par
+\par
+// Engagement depth\par
+searchPerformed(scope: String, resultCount: Int) "search_performed" \{scope, result_count\}  // NO query text\par
+filterApplied(screen: String, filter: String)    "filter_applied"   \{screen, filter\}\par
+languageChanged(toLanguage: String)        "language_changed"       \{to_language: toLanguage\}\par
+aiHelpQuestionAsked                        "ai_help_question_asked" \{\}\par
+reorderEmailSent(supplierCount: Int, itemCount: Int) "reorder_email_sent" \{supplier_count, item_count\}\par
+voiceEngineUsed(engine: String, language: String) "voice_engine_used" \{engine, language\}  // engine: apple|sarvam\par
+\par
+\emdash  2. WHERE TO FIRE EACH (exact placements) \emdash \par
+DashboardView.swift:\par
+- .onAppear already -> dashboardViewed (keep).\par
+- Each KPI card tap action (Revenue/Gross Profit/Low Stock/Out of Stock/Expiring Soon/Total Value cards ~lines 240-285 and the Inventory Health card): add dashboardCardTapped(card:) in the tap/navigation closure.\par
+- Smart Insights rows (InsightRow onShowItems ~line 1213): dashboardInsightTapped(insight:).\par
+- Tip cards: dashboardTipTapped(tip:). Period pills (localizedTitleString picker): dashboardPeriodChanged(period:). "View full report" link: viewFullReportTapped.\par
+- Go Pro strip "See Plans" (ProUpgradeStrip): upgradeCtaTapped(source: "go_pro_strip").\par
+- Floating AI bubble (InventoryAppView ZStack): floatingAIButtonTapped.\par
+InventoryAppView.swift: add screenViewed on tab changes not already covered.\par
+OnboardingView.swift: onboardingStarted on first page appear; onboardingStepViewed(step,name) per page; onboardingCompleted on finish; onboardingSkipped(step) on Skip.\par
+PostLoginOnboardingView.swift: reuse onboardingStepViewed with names welcome|choose_storage|done.\par
+EditItemView.swift (add path): addItemStarted(source:) on open (source depends on caller). itemAdded already on save.\par
+SaleEntryReviewView / QuickSaleSheet / SmartSales*View: saleEntryStarted(mode:) on open. PurchaseInvoiceImportView: purchaseEntryStarted(mode:).\par
+PaywallView (SubscriptionManager): paywallShown already; add paywallCtaTapped(plan:) on Subscribe tap, paywallDismissed on close, upgradeCtaTapped(source:) wherever the paywall is triggered by a tap.\par
+Permission call sites: NotificationManager.requestPermission -> permissionResult("notifications", granted); camera (BarcodeScannerView/ImageInventoryView), microphone/speech (VoiceInventoryView SpeechKit.requestAuthorization), ATT (TrackingPermissionManager) -> permissionResult(type, granted).\par
+AIInventoryService: on each failure path -> aiRequestFailed(feature, reason). Also AIHelpChatView ask -> aiHelpQuestionAsked.\par
+Empty states: where "No items"/"All caught up!"/empty reorder etc. render -> emptyStateShown(screen:) in .onAppear of the empty branch.\par
+GlobalSearchView: searchPerformed(scope, resultCount) after a search resolves (do NOT pass the query). Filter chips (Count tab, item lists): filterApplied(screen, filter).\par
+LocalizationManager.setLanguage: languageChanged(toLanguage:).\par
+ReorderListView mailto send: reorderEmailSent(supplierCount, itemCount).\par
+VoiceInventoryView: voiceEngineUsed(engine, language) when a transcript succeeds (engine apple|sarvam).\par
+\par
+\emdash  3. METRICS THIS ENABLES \emdash \par
+- Dashboard click map: dashboard_card_tapped / _insight_tapped / _tip_tapped by property -> what users actually use.\par
+- Add-item funnel: add_item_started -> item_added (drop-off %). Sale funnel: sale_entry_started -> sale_recorded/smart_sales_completed.\par
+- Onboarding funnel: onboarding_started -> _step_viewed(step) -> _completed (find the drop step).\par
+- Activation: first item_added / item_counted per user (Amplitude first-time).\par
+- Blockers: permission_result(granted=false), ai_request_failed, empty_state_shown -> where users stall.\par
+- Upgrade funnel: upgrade_cta_tapped -> paywall_shown -> paywall_cta_tapped -> subscription_started.\par
+- Localization adoption: language_changed by to_language. Voice engine mix: voice_engine_used apple vs sarvam by language.\par
+\par
+\emdash  QA / BUILD \emdash \par
+- Build: xcodebuild -project AITest.xcodeproj -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build (exit 0).\par
+- Verify in Amplitude (or DEBUG logs): tap each dashboard card/insight/tip -> matching event with correct property; start+abandon an add-item -> add_item_started with no item_added; deny a permission -> permission_result granted=false.\par
+- Confirm NO PII/free-text in any property (no names, no search text).\par
+\par
+Update automation_results.rtf: S24 \emdash  Analytics expansion [COMPLETED/FAILED]; list events added + files touched; note any dashboard tap that couldn't be instrumented.\par
+
+
+\par
+===========================================\par
+S25 \emdash  RELIABLE IN-APP LANGUAGE SWITCH (apply on relaunch) (Cursor Spec)\par
+===========================================\par
+Problem: the in-app Language picker changes Text/LocalizedStringKey (via .environment(\\.locale)) but NOT imperative String(localized:) calls (Inventory Health, Needs Attention, Go Pro strip, Sales Performance, etc.). Those follow the DEVICE/process language, so on a non-Tamil phone they stay English. Root cause: String(localized:) does not read the SwiftUI environment locale, and the Bundle swizzle does not intercept the modern String(localized:) API. Catalog is fine \u2014 all strings ARE translated.\par
+\par
+Fix (CEO-chosen): apply the language on RELAUNCH, exactly like iOS per-app language. After relaunch the PROCESS language is the chosen one, so BOTH Text and String(localized:) resolve correctly \u2014 no swizzle tricks, no half-translated screens.\par
+\par
+CRITICAL RULES: never isPro=true; no free-trial wording; no NavigationStack-in-modal dupes; keep accessibilityIdentifiers stable; new UI strings via the catalog.\par
+\par
+ITEM S25-1 \emdash  Set AppleLanguages + prompt relaunch on language change\par
+File: AITest/Utilities/LocalizationManager.swift, AITest/Views/LanguagePickerView (Settings Language screen).\par
+- In LocalizationManager.setLanguage(code):\par
+  - store the override (@AppStorage) as today,\par
+  - set UserDefaults.standard.set([code], forKey: "AppleLanguages") for a real code, or removeObject for System Default, then UserDefaults.standard.synchronize().\par
+  - (You may KEEP Bundle.setLanguage + refreshID for an immediate partial preview, but it is no longer required for correctness.)\par
+- In the Language picker, AFTER calling setLanguage, present an alert:\par
+    title:  String(localized: "language.restart.title", defaultValue: "Restart to apply")\par
+    message:String(localized: "language.restart.message", defaultValue: "Please reopen Stoqly to finish switching the language.")\par
+    button: OK (dismiss)\par
+  Do NOT call exit(0)/abort (App Store may flag it). Let the user reopen. (Optional: a secondary "Close Stoqly" button that backgrounds the app is acceptable but keep OK-only if unsure.)\par
+- Localize the two new alert keys (they will be auto-extracted; run translate_catalog.py after).\par
+\par
+ITEM S25-2 \emdash  Make launch authoritative\par
+- On app launch, iOS reads AppleLanguages[0] as the app language automatically, so String(localized:) + Text both use it. Verify LocalizationManager.init does NOT fight this (it may still call Bundle.setLanguage(storedCode) for the pre-restart preview \u2014 fine). Ensure storedCode and AppleLanguages[0] agree.\par
+- effectiveLocale() should return the stored code so SwiftUI \\.locale matches on launch.\par
+\par
+ITEM S25-3 \emdash  Simplify (optional, low-risk)\par
+- With relaunch-based switching, the S18 AppWindowCoordinator window re-root and the Bundle+Localization swizzle are no longer needed for correctness. You MAY leave them (harmless) or remove to reduce complexity \u2014 do not remove if it risks regressions; a follow-up can clean up.\par
+\par
+BUILD VERIFICATION (S25): xcodebuild -project AITest.xcodeproj -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build (exit 0). Then run: python3 AITest/Localization/translate_catalog.py  (to translate the 2 new alert strings), then Clean Build Folder.\par
+\par
+Manual test (device language = ENGLISH):\par
+1. Settings > Language > Tamil -> "Restart to apply" alert -> reopen app.\par
+2. After reopen: ENTIRE app is Tamil, INCLUDING Inventory Health (\u0b9a\u0bb0\u0b95\u0bcd\u0b95\u0bc1 \u0ba8\u0bbf\u0bb2\u0bc8), Needs Attention (\u0b95\u0bb5\u0ba9\u0bae\u0bcd \u0ba4\u0bc7\u0bb5\u0bc8), the Go Pro strip, Sales Performance, and all String(localized:) labels \u2014 no English left (except data/brand).\par
+3. Switch to Arabic -> reopen -> RTL + Arabic everywhere.\par
+4. Switch back to System Default -> reopen -> follows the iPhone language.\par
+\par
+Update automation_results.rtf: S25 \emdash  Reliable language switch (relaunch) [COMPLETED/FAILED]; note whether swizzle/re-root were kept or removed; confirm String(localized:) labels now switch.\par
+
+
+\par
+===========================================\par
+S26 \emdash  Preserve dictated item-name language in AI extraction (Cursor Spec)\par
+===========================================\par
+Bug: dictating a NEW item in Tamil (voice count) created the item with an ENGLISH name \u2014 Claude was translating the product name. Item names are DATA and must stay in the language the user spoke (new items). Existing items should still MATCH (use the stored name).\par
+\par
+ALREADY FIXED (voice): AIInventoryService.parseVoiceTranscript prompt now has rules:\par
+  - keep "name" in the SAME language/script the user spoke (no translate/transliterate to English),\par
+  - EXCEPTION: if it clearly matches an item in the provided inventory list, return that existing item's EXACT stored name (avoid duplicates).\par
+\par
+S26-1 \emdash  Apply the SAME two rules to the other extraction prompts (consistency):\par
+  - parseInventoryImage (photo count, ~line 144), parseInventorySheet (~line 278): transcribe/keep item names in the language shown/spoken; do not translate to English; match to provided inventory when clearly the same.\par
+  - Sales/purchase parsers (parseSalesTranscript/Text/Image/PDF, parsePurchaseInvoice*): same \u2014 keep the name as written/spoken; the knownItemNames list is already passed, so instruct: prefer an exact match from knownItemNames, else keep the original-language name.\par
+  - Keep everything else (quantity/unit/category/JSON shape) unchanged.\par
+\par
+S26-2 \emdash  Resolution sanity (no code change unless needed):\par
+  - VoiceInventoryView / SaleEntryReviewView resolve the parsed name against existing items by fuzzy match. With names now in the spoken language, confirm a spoken Tamil name that IS an existing English item still resolves via the knownItems hint (Claude returns the English stored name for matches). If duplicates appear for obvious matches, strengthen the match hint in the prompt (list is already provided).\par
+\par
+BUILD VERIFICATION (S26): xcodebuild -project AITest.xcodeproj -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build (exit 0).\par
+\par
+Manual test (device, dictate in Tamil):\par
+1. Speak a NEW item name in Tamil + qty -> the review row shows the item name in TAMIL (as spoken), not English.\par
+2. Speak an EXISTING English item's product (in Tamil or English) -> it resolves/updates the existing English item (no duplicate).\par
+3. Same check for photo/sheet if a Tamil-labelled item is captured.\par
+\par
+Update automation_results.rtf: S26 \emdash  preserve item-name language [COMPLETED/FAILED]; note which extractors updated; confirm new Tamil item keeps Tamil name.\par
+
+
+\par
+\emdash  S26 ADDENDUM: Photo Inventory naming (CEO decision 2026-07-27) \emdash \par
+Decision: generic/unbranded items -> name in the app language (native script); branded/packaged goods -> keep the on-label name EXACTLY as printed (do not translate brands).\par
+ALREADY IMPLEMENTED (build-verify only):\par
+- AIInventoryService.identifyProduct: new appLanguageCode param; branded name kept as printed; a LANGUAGE rule appended when appLanguageCode is a non-English code (name generic items in that language, keep brands/label text verbatim).\par
+- ImageInventoryView: passes appLanguageCode: LocalizationManager.shared.currentCode (mirrors voice).\par
+Cursor: also apply the SAME behaviour to parseInventorySheet (photo of a written/printed list) \u2014 keep printed names as written, and for handwritten generic items follow the app language; brands stay as printed. Build must be green.\par
+Manual test (app language Tamil): photo of loose produce -> Tamil name (e.g. \u0ba4\u0b95\u0bcd\u0b95\u0bbe\u0bb3\u0bbf); photo of a branded pack (Maggi/Heinz) -> brand name as printed (English). Matches existing items where applicable.\par
+Note: photo naming follows the IN-APP override (currentCode). If we later want device-language users covered too, switch both voice + photo to effectiveLocale together (separate consistency tweak).\par
+
+
+\par
+===========================================\par
+S27 \emdash  EDIT / DELETE past sales & movements (with 7-day window) (Cursor Spec)\par
+===========================================\par
+Goal: let users FIX mistaken sales/movement entries. Phase 1 = DELETE/REVERSE (ship first). Phase 2 = in-place EDIT (fast-follow, spec at bottom). From BOTH the Sales list and the Movements list. Time-limited to protect current stock + historical reports.\par
+\par
+WHY the window: deleting/editing a sale REVERSES stock. Reversing an OLD entry corrupts current inventory (item has been recounted/sold many times since) and rewrites past reports. So entries are editable/deletable only for a short recent period.\par
+\par
+CONFIG: add `enum EditPolicy \{ static let windowDays = 7 \}` (Constants.swift). An entry is editable/deletable only if Date().timeIntervalSince(record.createdAt) <= windowDays*86400. (Use createdAt = when entered.) Older \u2192 locked (read-only). Keep it a single constant so it can be tuned / moved to Settings later.\par
+\par
+CRITICAL RULES: safeSave(context:); **insert the ActivityEvent BEFORE any modelContext.delete**; never isPro=true; no free-trial; new UI strings via catalog (then run translate_catalog.py); Firestore sync every touched record.\par
+\par
+\emdash  PHASE 1: DELETE / REVERSE (ship now) \emdash \par
+\par
+ITEM S27-1 \emdash  SaleEvent delete/reverse helper\par
+Add SaleHelpers.reverseSale(_ sale: SaleEvent, modelContext:):\par
+1. Guard within window (else no-op / caller hides the action).\par
+2. If sale.item != nil:\par
+   - Insert ActivityEvent "SaleReversed" (BEFORE deletes): itemName, storageName, quantityBefore = item.currentQuantity, quantityAfter = item.currentQuantity + sale.quantitySold; sync activity.\par
+   - item.currentQuantity += sale.quantitySold; item.updatedAt = now; FirestoreManager.syncItem(item).\par
+3. Delete the linked movement: find InventoryMovement where linkedSaleEventId == sale.id -> modelContext.delete + Firestore delete.\par
+4. Delete the SaleEvent -> modelContext.delete + Firestore delete.\par
+5. safeSave(context: "ReverseSale").\par
+- If sale.item == nil (item deleted): skip stock change; still delete sale + linked movement + audit.\par
+\par
+ITEM S27-2 \emdash  InventoryMovement delete/reverse helper\par
+Add SaleHelpers.reverseMovement(_ m: InventoryMovement, modelContext:):\par
+- If m.linkedSaleEventId != nil: BLOCK \u2014 this movement belongs to a sale; caller shows "Part of a sale \u2014 edit from the Sales list." Do not delete independently (avoids double-reversal).\par
+- Standalone movement (manual purchase/adjustment/waste), within window:\par
+   - Insert ActivityEvent "MovementReversed" first.\par
+   - Reverse stock: IN -> item.currentQuantity -= m.quantity; OUT -> += m.quantity (guard item != nil); updatedAt; syncItem.\par
+   - Delete movement -> modelContext.delete + Firestore delete. safeSave.\par
+\par
+ITEM S27-3 \emdash  UI: Sales list + Movements list\par
+- SalesView: tap a sale row -> SaleDetailView (new) showing full sale + a red "Delete / Reverse" button (only if within window; else a "Locked \u2014 entered more than 7 days ago" note). Confirmation alert: "Reverse this sale? The stock will be added back." Also add swipeActions delete on the row (same guard + confirm).\par
+- MovementsListView: tap a row -> MovementDetailView (new) with Delete (standalone only; linked-to-sale rows show the "edit from Sales" note). Same window guard + confirm.\par
+- After delete: dismiss, show a toast, list refreshes (SwiftData @Query auto-updates).\par
+\par
+ITEM S27-4 \emdash  Firestore delete + analytics + localization\par
+- Ensure FirestoreManager has deleteSale(id)/deleteMovement(id) (add if missing, mirror existing delete/sync patterns).\par
+- Analytics: add StoqlyEvent.saleReversed / movementReversed (or reuse) and fire on success.\par
+- New strings (Delete/Reverse, confirm messages, "Locked\u2026" note) -> catalog; run translate_catalog.py after build; then rebuild (per brief localization rule).\par
+\par
+\emdash  PHASE 2: IN-PLACE EDIT (fast-follow, implement after Phase 1 verified) \emdash \par
+- SaleDetailView -> "Edit": form for quantity, pricePerUnit, occurredAt, notes (reuse QuickSaleSheet fields). Same window guard.\par
+- On save: delta = newQty - oldQty; item.currentQuantity -= delta (guard negative -> reuse S15 negative-stock warning); update SaleEvent fields; update the linked InventoryMovement (quantity/pricePerUnit/occurredAt); ActivityEvent "SaleEdited" (before changes captured); syncItem/syncSale/syncMovement; safeSave.\par
+- MovementDetailView edit (standalone): same delta pattern on stock, update movement, audit, sync.\par
+\par
+BUILD VERIFICATION (S27): xcodebuild -project AITest.xcodeproj -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build (exit 0).\par
+\par
+Manual test:\par
+1. Record a sale today -> item stock drops. Delete/reverse it -> stock returns to original; sale + its movement gone from lists/reports; ActivityEvent logged.\par
+2. Reverse a standalone purchase movement -> stock decreases by that qty; audit logged.\par
+3. A movement linked to a sale -> Delete blocked with the "edit from Sales" note.\par
+4. An entry older than 7 days -> no Delete action; shows "Locked" note.\par
+5. Delete a sale whose item was since deleted -> record removed, no crash, no stock change.\par
+6. Firestore: reversed sale/movement removed on another signed-in device after sync.\par
+\par
+Update automation_results.rtf: S27 \emdash  edit/delete entries + 7-day window [COMPLETED/FAILED]; note Phase 1 (delete) done, Phase 2 (edit) status; confirm stock reverses correctly + linked movement handled.\par
+
+
+\par
+===========================================\par
+S28 \emdash  FIX: photo fluid measurement broke under non-English app language (Cursor Spec)\par
+===========================================\par
+Regression: with app language = Tamil, Photo Inventory fluid mode stopped reading fill level / remaining volume. Cause: the S26 LANGUAGE instruction in AIInventoryService.identifyProduct told Claude to use the app language, so it also returned "unit"/"remainingVolume" in Tamil (e.g. "~325 \u0bae\u0bbf\u0bb2\u0bbf"). ImageInventoryView detects the liquid unit by checking the English substrings "ml"/"l" (lines ~524, ~574), so localized units failed those checks -> no fill/volume.\par
+\par
+ALREADY FIXED (build-verify): identifyProduct LANGUAGE block now scopes localization to the "name" field ONLY and explicitly keeps unit/fillPercent/remainingVolume/category in standard English/numeric form.\par
+\par
+S28-1 \emdash  Apply the same guard to the other AI extractors (defensive consistency):\par
+  - parseVoiceTranscript, parseInventoryImage/identifyProduct (done), parseInventorySheet: wherever an app-language instruction exists, add "keep unit/quantity/category in standard English/numeric form; only the item NAME follows the app language." Units must stay pcs/kg/g/L/mL etc. so downstream parsing/matching works.\par
+  - (Optional hardening) In ImageInventoryView fluid detection (~lines 524, 574): also accept a numeric value even if the unit word isn't English \u2014 e.g. detect digits + any "l"/"litre"/"\u0bae\u0bbf\u0bb2\u0bbf" \u2014 but the prompt fix is the primary remedy.\par
+\par
+BUILD VERIFICATION (S28): xcodebuild -project AITest.xcodeproj -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build (exit 0).\par
+\par
+Manual test (app language Tamil):\par
+1. Photo of a half-full labelled bottle with Fluid Mode ON -> fill % and remaining volume show correctly; unit is mL/L.\par
+2. The item NAME is still in Tamil for generic items / kept as printed for brands.\par
+3. Repeat in English -> unchanged.\par
+\par
+Update automation_results.rtf: S28 \emdash  fluid-mode language fix [COMPLETED/FAILED]; note extractors updated; confirm fill%/volume works under Tamil.\par
+\par
+\par
+===========================================\par
+S29 \emdash  META SKADNETWORK IDs \emdash  Add missing Meta/Facebook keys to Info.plist (Cursor Spec)\par
+===========================================\par
+\par
+Sprint goal: Add all required Meta (Facebook) SKAdNetworkIdentifier entries to AITest/Info.plist so that Stoqly App Install campaigns run correctly in Meta Ads Manager.\par
+\par
+BACKGROUND:\par
+Stoqly already has SKAdNetworkItems in Info.plist with ~50 entries (AdMob + others).\par
+Meta requires their own SKAdNetwork IDs to be present for iOS 14.5+ attribution of App Install ads.\par
+Several Meta keys are already present. Add only the ones listed below that are missing.\par
+\par
+ITEM S29-1 \emdash  Add missing Meta SKAdNetwork IDs to Info.plist:\par
+\par
+Open AITest/Info.plist. Locate the <key>SKAdNetworkItems</key> <array> block.\par
+Check which of the following Meta-required IDs are NOT already present and add them as new <dict> entries in the same format as existing ones:\par
+\par
+Meta SKAdNetwork IDs to ensure are present:\par
+  v9wttpbfk9.skadnetwork\par
+  n38lu8286q.skadnetwork\par
+  22mmun2rn5.skadnetwork\par
+  4dzt52r2t5.skadnetwork\par
+  8s468mfl3y.skadnetwork\par
+  klf5c3l5u5.skadnetwork\par
+  yclnxrl5pm.skadnetwork\par
+  8c4e2ghe7u.skadnetwork\par
+  hs6bdukanm.skadnetwork\par
+  44jx6755aq.skadnetwork\par
+  4fzdc2evr5.skadnetwork\par
+  prcb7njmu6.skadnetwork\par
+  m8dbwejr1n.skadnetwork\par
+  7rz58n8ntl.skadnetwork\par
+  5lm9lj6jb7.skadnetwork\par
+  ejvt5xe6j7.skadnetwork\par
+  a8cz6cu7e5.skadnetwork\par
+  dzg6xy7pwj.skadnetwork\par
+  y5ghdn5j9k.skadnetwork\par
+  nu4557a4je.skadnetwork\par
+  6xzpu9s2p8.skadnetwork\par
+  f73kdq92p3.skadnetwork\par
+  zmvfpc5aq8.skadnetwork\par
+  24t9a8vmlk.skadnetwork\par
+  gvmwg8q7h5.skadnetwork\par
+\par
+Format for each new entry:\par
+<dict>\par
+    <key>SKAdNetworkIdentifier</key>\par
+    <string>XXXX.skadnetwork</string>\par
+</dict>\par
+\par
+Do NOT remove or modify any existing SKAdNetworkIdentifier entries. Only add the missing ones.\par
+Do NOT change any other part of Info.plist.\par
+\par
+BUILD VERIFICATION (S29):\par
+xcodebuild -project AITest.xcodeproj -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build (exit 0).\par
+Verify Info.plist still valid XML: xmllint --noout AITest/Info.plist (no errors).\par
+\par
+Manual check: Open Info.plist in Xcode -> SKAdNetworkItems array should contain all Meta IDs listed above.\par
+\par
+Update automation_results.rtf: S29 \emdash  Meta SKAdNetwork IDs added [COMPLETED/FAILED]; list how many new entries were added; confirm build succeeds + plist valid.\par
+
+
+\par
+===========================================\par
+S29 \emdash  Facebook (Meta) SDK for App-Install ads (Cursor Spec)\par
+===========================================\par
+Goal: integrate the Facebook iOS SDK so the founder can run Meta App-Install campaigns with install + event attribution (SKAdNetwork + App Events + AEM). Founder-side Meta setup + the 3 credentials are in Stoqly_Meta_Ads_Setup.md.\par
+\par
+PREREQ (founder provides \u2014 paste into Info.plist below): FacebookAppID, FacebookClientToken, FacebookDisplayName (from the Meta app dashboard).\par
+\par
+CRITICAL RULES: never isPro=true; no free-trial; keep accessibilityIdentifiers stable; do NOT break existing AdMob/Firebase/Google-Ads SKAdNetwork setup. Credentials go in Info.plist (App ID is public; Client Token is acceptable in Info.plist per Meta docs) \u2014 NOT in Secrets.plist.\par
+\par
+ITEM S29-1 \emdash  Add the SDK (Swift Package Manager)\par
+- Xcode > File > Add Package Dependencies > https://github.com/facebook/facebook-ios-sdk (Up to Next Major from 17.0.0 or latest).\par
+- Add product **FacebookCore** to the AITest target (this pulls FBAEMKit/FBSDKCoreKit; App Events + AEM included). Do NOT need FacebookLogin unless we add FB login (we are not).\par
+\par
+ITEM S29-2 \emdash  Info.plist keys\par
+- Add:  FacebookAppID (string = App ID), FacebookClientToken (string), FacebookDisplayName (string "Stoqly").\par
+- CFBundleURLTypes already exists \u2014 ADD a URL scheme "fb<APP_ID>" (e.g. fb1234567890) as a new CFBundleURLSchemes entry (do not remove the existing Google/others).\par
+- Add LSApplicationQueriesSchemes with: fbapi, fb-messenger-share-api (create the array if absent).\par
+- SKAdNetworkItems: the app already has 50 IDs (AdMob). Ensure Meta's are present \u2014 add any missing from Meta's published list (e.g. v9wttpbfk9.skadnetwork, n38lu8286q.skadnetwork, cstr6suwn9.skadnetwork, 4fzdc2evr5.skadnetwork, f38h382jlk.skadnetwork, 424m5254lk.skadnetwork). Do NOT remove existing IDs.\par
+\par
+ITEM S29-3 \emdash  Initialize in AppDelegate (AITestApp.swift already uses @UIApplicationDelegateAdaptor)\par
+- import FacebookCore\par
+- In application(_:didFinishLaunchingWithOptions:) (AFTER FirebaseApp.configure()): \par
+    ApplicationDelegate.shared.application(application, didFinishLaunchingWithOptions: launchOptions)\par
+- Add openURL handling in the existing AppDelegate application(_:open:options:): \par
+    if ApplicationDelegate.shared.application(app, open: url, options: options) \{ return true \}\par
+  (keep the existing GIDSignIn.handle(url) \u2014 return true if either handles it).\par
+- App activation: call AppEvents.shared.activateApp() on app becoming active (or rely on autoLogAppEventsEnabled). Simplest: in the WindowGroup .onReceive didBecomeActive (already present) OR in didFinishLaunching.\par
+\par
+ITEM S29-4 \emdash  Respect ATT (tie advertiser tracking to the existing prompt)\par
+- The app has TrackingPermissionManager (ATT). AFTER the ATT decision resolves, set:\par
+    Settings.shared.isAdvertiserTrackingEnabled = (ATTrackingManager.trackingAuthorizationStatus == .authorized)\par
+- Keep Settings.shared.isAutoLogAppEventsEnabled = true (needed for install/activate). If ATT denied, advertiser tracking stays false (SKAN still works). Do this in TrackingPermissionManager after status is known.\par
+\par
+ITEM S29-5 \emdash  Log optimization events (so Meta can optimize for value, not just installs)\par
+- On successful sign-up (AuthManager, first sign-up): AppEvents.shared.logEvent(.completedRegistration).\par
+- On subscription purchase (SubscriptionManager, StoreKit purchase success): AppEvents.shared.logPurchase(amount:currency:) with the plan price + currency. (Standard Meta events; also fire the existing Amplitude events \u2014 do not remove those.)\par
+\par
+ITEM S29-6 \emdash  Privacy Manifest (REQUIRED \u2014 app has none today)\par
+- Add AITest/PrivacyInfo.xcprivacy declaring: NSPrivacyTracking = true; NSPrivacyTrackingDomains as required by Meta; NSPrivacyCollectedDataTypes for device ID / advertising data / product interaction (used for Tracking); and NSPrivacyAccessedAPITypes required-reason entries the SDK needs. The FB SDK ships its own manifest in the package \u2014 the APP manifest must still declare app-level tracking. (Also covers a pre-existing gap: the app had no privacy manifest.)\par
+- Reminder to CEO: update the App Store Connect privacy label to match (Data used to Track You).\par
+\par
+BUILD VERIFICATION (S29): xcodebuild -project AITest.xcodeproj -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build (exit 0). (SDK init won't fully exercise on simulator; verify no link/plist errors.)\par
+\par
+Manual test (real device / TestFlight):\par
+1. Launch app -> Meta Events Manager shows an "activate app"/install event from the test device within a few minutes.\par
+2. Sign up -> CompletedRegistration event appears. Purchase Pro -> Purchase event appears.\par
+3. ATT: deny -> isAdvertiserTrackingEnabled false (SKAN still works); allow -> true.\par
+4. Existing AdMob/Google-Ads + Firebase unaffected; app launches normally.\par
+\par
+Update automation_results.rtf: S29 \emdash  Meta SDK integration [COMPLETED/FAILED]; list Info.plist keys added, privacy manifest added, events wired; note events verified in Events Manager (device).\par
+
+
+\par
+\emdash  S29 CREDENTIALS (provided by CEO 2026-07-27) \u2014 exact Info.plist values \emdash \par
+Add these to AITest/Info.plist (S29-2). Client Token is OK in Info.plist per Meta docs (it is not an app secret) \u2014 do NOT put in Secrets.plist.\par
+  FacebookAppID        = 1402336171794871\par
+  FacebookClientToken  = 5957cc0c3aa1b70923109ff32a68d9fb\par
+  FacebookDisplayName  = Stoqly Smart Inventory\par
+  CFBundleURLTypes: add a CFBundleURLSchemes entry "fb1402336171794871" (new URL type; keep the existing Google/other schemes).\par
+  LSApplicationQueriesSchemes: fbapi, fb-messenger-share-api.\par
+SKAdNetworkItems: Meta's IDs are ALREADY present (4fzdc2evr5, cstr6suwn9, f38h382jlk, n38lu8286q, v9wttpbfk9) \u2014 nothing to add there.\par
+
+
+\par
+===========================================\par
+S30 \emdash  Capture the question text on ai_help_question_asked (build-verify)\par
+===========================================\par
+ALREADY DONE (verify + build):\par
+- AnalyticsManager.StoqlyEvent.aiHelpQuestionAsked now takes (question: String); properties = \{"question": <trimmed, first 500 chars>, "question_length": <Int>\}.\par
+- AIHelpChatView.askAI(): fires .aiHelpQuestionAsked(question: trimmed).\par
+- HelpCentreView.askAI(): was NOT firing the event at all \u2014 now fires .aiHelpQuestionAsked(question: trimmed) too.\par
+S30-1: build (xcodebuild -project AITest.xcodeproj -scheme SmartInventory ... exit 0). Verify in Amplitude that ai_help_question_asked carries the question text.\par
+Privacy note: question is free text -> may occasionally contain user/business info. Acceptable for a help chat; ensure the privacy policy covers analytics of support questions. Do NOT add free text to any other event.\par
+Update automation_results.rtf: S30 \emdash  ai_help_question_asked captures question [COMPLETED/FAILED].\par
+
+
+\par
+===========================================\par
+S31 \emdash  Capture ALL item fields from AI input (voice/photo/sheet) (Cursor Spec)\par
+===========================================\par
+Today SmartCount voice/photo only captures name, quantity, unit (+category/fill). Extend so that if the user mentions OTHER fields, they are captured too; if not mentioned, leave them nil (do NOT invent).\par
+- Extend ParsedInventoryItem (AIInventoryService) with optional: unitCost: Double?, sellingPrice: Double?, expiryDate: Date? (or string), sku: String?, barcode: String?, minQuantity: Double?, notes: String?.\par
+- Update the extraction JSON schema + rules in parseVoiceTranscript, identifyProduct, parseInventorySheet: add these OPTIONAL fields; instruct: "only include a field if the user clearly stated it; otherwise omit/null. Do NOT guess unit cost, price, or expiry." Keep the machine-fields-English rule (S28) for unit/category. Dates: return ISO or a clear date; app parses to Date.\par
+- parseJSONResponse: parse the new optional fields.\par
+- Review UI (VoiceInventoryView / ImageInventoryView review rows + EditItemView prefill): pre-fill any captured optional fields so the user can confirm/adjust; blank fields stay blank.\par
+- On save: persist captured fields onto InventoryItem; Firestore sync.\par
+- Test: say "add 5 kg tomato at 20 rupees cost, selling 30, expires next month" -> qty 5, unit kg, unitCost 20, sellingPrice 30, expiry set. Say just "5 kg tomato" -> only qty+unit, others blank.\par
+BUILD: xcodebuild ... SmartInventory ... exit 0.\par
+\par
+\par
+===========================================\par
+S32 \emdash  In-app Feedback form (Help & Support) (Cursor Spec)\par
+===========================================\par
+Add a simple in-app feedback form so users submit feedback without email; CEO views it in Firebase.\par
+- Settings > Help & Support (or Help Centre): add "Send Feedback" row -> FeedbackView (sheet).\par
+- Form fields: type (Picker: Bug / Idea / Question / Other), message (TextEditor, required), optional email (prefilled from AuthManager if signed in). Auto-capture (not shown or shown read-only): app version+build, iOS version, device model, locale, uid.\par
+- Submit -> write to Firestore collection feedback/\{autoId\}: \{uid, email, type, message, appVersion, iosVersion, device, locale, createdAt: serverTimestamp\}. Show success toast + dismiss. Keep the existing mailto option too (secondary).\par
+- Analytics: feedbackSubmitted(type:).\par
+- Localize all strings; run translate_catalog.py after.\par
+- FUTURE (note only, do NOT build now): a Cloud Function on feedback create -> FCM push to the CEO's device / email, so feedback reaches the phone automatically.\par
+BUILD + test: submit each type -> doc appears in Firestore feedback collection.\par
+\par
+\par
+===========================================\par
+S33 \emdash  Scheduled, aggregated, configurable notifications (Cursor + Backend Spec)\par
+===========================================\par
+Goal (per CEO): move recurring alerts from LOCAL to server-scheduled (Firebase), AGGREGATED, deep-linked, and USER-CONFIGURABLE. Replace per-item local low-stock spam.\par
+\par
+NOTIFICATION TAXONOMY (agreed classification):\par
+- INSTANT (event/Console): announcements/offers (already S15). Keep.\par
+- DAILY digest (once/day, aggregated): "N items are low on stock \u2014 tap to reorder" -> deep-link Reorder list. Optionally combine expiry: "N low, M expiring soon". \par
+- WEEKLY: business summary "This week: revenue X, sales Y" -> Reports; dead-stock nudge "N items unsold 60+ days".\par
+- MONTHLY: month-end "Time for your monthly stock count" -> Count tab; monthly report ready.\par
+\par
+ARCHITECTURE:\par
+- Store per-user prefs in Firestore users/\{uid\}/notificationPrefs: masterEnabled, lowStockDaily, expiryDaily, weeklySummary, monthlyCount, announcements (bool each) + preferredHour (0-23) + timezone.\par
+- Backend (Cloud Functions, TypeScript \u2014 CEO deploys): a SCHEDULED function (run hourly) that, for each user whose local preferredHour == now and prefs allow, queries their items (Firestore) to compute low-stock/expiry/dead-stock counts and sends ONE aggregated FCM push with data payload \{type, route, counts\}. Weekly (e.g. Mon) and monthly (last day) variants. Respect timezone + prefs; skip if counts are 0.\par
+- iOS: \par
+  - Remove/deprecate the per-item local low-stock scheduling (NotificationManager.scheduleLowStockAlert) and local daily summary; keep local as a fallback only if push disabled.\par
+  - Notification tap handler (extend S15 didReceive): route -> navigate to reorder | expiry | count | reports.\par
+  - Settings > Notifications screen: master toggle + per-category toggles + preferred time picker; writes notificationPrefs to Firestore.\par
+- Localize strings (the push copy is built server-side per user language later \u2014 for now English/or store langCode; note as follow-up).\par
+\par
+Phase 1 (ship): iOS prefs UI + tap routing + deep links + write prefs to Firestore + keep a LOCAL daily aggregated low-stock/expiry digest (on-device, once/day) as the immediate win. \par
+Phase 2: the Cloud Functions scheduled server push (needs backend deploy) replacing local.\par
+Mark clearly which phase each change is. BUILD green for Phase 1.\par
+\par
+\par
+===========================================\par
+S34 \emdash  Let user choose language at first login (Cursor Spec)\par
+===========================================\par
+- On first launch onboarding (OnboardingView, as an early step) OR immediately after first sign-in if no language chosen yet, present a language step: list the 15 languages by native name (reuse LanguagePickerView data) + "Continue".\par
+- Selecting sets LocalizationManager.setLanguage(code) (which sets AppleLanguages per S25). Since this is at first launch, apply and continue; if a relaunch is needed for full effect (S25), it's acceptable this early / or the onboarding proceeds in the chosen language for Text-based UI.\par
+- Persist a flag (e.g. @AppStorage hasChosenLanguage) so it's shown only once; users can still change later in Settings > Language.\par
+- Default highlight = device language.\par
+- Analytics: languageChosenAtOnboarding(language:).\par
+- Localize the step strings.\par
+BUILD + test: fresh install -> language step appears first -> pick Tamil -> onboarding continues in Tamil.\par
+\par
+\par
+===========================================\par
+S35 \emdash  Richer analytics context on key events (Cursor Spec)\par
+===========================================\par
+(ai_help_question_asked question capture already done in S30.) Add context properties so events explain WHAT the user was doing:\par
+- itemAdded: add source (fab|storage_detail|empty_state|barcode|ai) + input_method (manual|voice|photo|sheet|barcode|csv).\par
+- saleRecorded / smartSalesCompleted: ensure mode present (manual|voice|photo|text|csv|pdf).\par
+- screenViewed: add optional referrer (where they came from) where easy.\par
+- smartCountCompleted / identify: add captured_extra_fields: [String] (which optional fields S31 filled) to learn what users dictate.\par
+- paywallShown already has source; add trigger detail where useful.\par
+- NO free text except the ai_help question (S30). Keep IDs/enums/counts only.\par
+BUILD green. Verify a few in Amplitude carry the new props.\par
+
+
+\par
+===========================================\par
+S36 \emdash  "guest" topic to message not-signed-in users (Cursor Spec)\par
+===========================================\par
+Goal: let the CEO send a login-nudge push to users who opened the app but never signed in, from the Firebase Console (Target > Topic > guest). Firebase Console cannot target raw FCM tokens; a topic is the clean way. Their tokens aren't stored server-side today (S15 only writes token after sign-in), so a topic is required.\par
+\par
+- On app launch, once the FCM registration token exists AND the user is NOT signed in: Messaging.messaging().subscribe(toTopic: "guest").\par
+- On successful SIGN-IN (AuthManager, all methods) + on the S15 topic sync: unsubscribe(fromTopic: "guest") (and keep subscribing all_users + pro/free per S15).\par
+- On SIGN-OUT: re-subscribe "guest".\par
+- Keep it idempotent (safe to call subscribe/unsubscribe repeatedly).\par
+- Analytics: none required.\par
+BUILD green.\par
+Result the CEO gets: Firebase Console > Messaging > new campaign > Target > Topic = "guest" reaches only not-signed-in devices (that allowed notifications). Add custom data type=announcement if you also want the in-app popup (S15).\par
+Manual test: fresh install (no login) -> device subscribed to "guest"; a topic send to "guest" arrives. Sign in -> unsubscribed (a later "guest" send does NOT arrive). Sign out -> resubscribed.\par
+
+
+\par
+\par
+===========================================\par
+\par
+S37 --  Full User-Action Instrumentation (symmetric open/close + intent events)\par
+\par
+===========================================\par
+\par
+WHY: Analytics today has many "started/opened/shown/viewed" events but almost no matching "cancelled/closed/dismissed" events, and Pro-locked controls open a paywall WITHOUT logging which control triggered it. Result: when a user does add_item_started then paywall_shown then leaves, we cannot tell what they tapped or whether they abandoned the add. This spec makes every meaningful user action emit an event: open AND close, tap Add AND tap Cancel AND swipe-dismiss.\par
+\par
+All new properties are enums / ints / bools ONLY. No PII, no free text.\par
+\par
+------------------------------------------------------------\par
+PART A -- New StoqlyEvent cases (AITest/Services/AnalyticsManager.swift)\par
+------------------------------------------------------------\par
+Add these cases, name mappings, and property maps (match existing style):\par
+\par
+1. sheetOpened(sheet: String, source: String?)                 -> "sheet_opened"           props: \{sheet, source?\}\par
+2. sheetClosed(sheet: String, outcome: String, seconds: Int?)  -> "sheet_closed"           props: \{sheet, outcome, seconds?\}\par
+     outcome enum: "saved" | "cancelled" | "dismissed" | "switched_to_paywall"\par
+     (cancelled = explicit Cancel/Close/X button; dismissed = swipe-down / drag / tap-outside)\par
+3. proLockTapped(feature: String)                              -> "pro_lock_tapped"        props: \{feature\}\par
+     feature enum: "item_photo","templates","smart_sales","smart_count_ai","barcode_pro","advanced_analytics","custom_reports","multi_user","ai_help","bulk_import","remove_ads"\par
+4. formSubmitAttempted(form: String, valid: Bool, reason: String?) -> "form_submit_attempted" props: \{form, valid, reason?\}\par
+     reason enum (only when valid=false): "empty_name","no_unit","invalid_qty","no_selection"\par
+5. addItemCancelled(source: String, seconds: Int)              -> "add_item_cancelled"\par
+6. smartCountCancelled(mode: String?)                          -> "smart_count_cancelled"\par
+7. smartSalesCancelled(mode: String?)                          -> "smart_sales_cancelled"\par
+8. saleEntryCancelled(mode: String)                            -> "sale_entry_cancelled"\par
+9. purchaseEntryCancelled(mode: String)                        -> "purchase_entry_cancelled"\par
+10. swipeActionUsed(screen: String, action: String)           -> "swipe_action_used"       props: \{screen, action\}  action enum: "edit","delete","sale","reverse"\par
+11. buttonTapped(screen: String, control: String)             -> "button_tapped"           props: \{screen, control\}  (catch-all for primary/toolbar buttons not covered above)\par
+\par
+------------------------------------------------------------\par
+PART B -- Fix double paywall_shown (data quality)\par
+------------------------------------------------------------\par
+In PaywallView (Models/SubscriptionManager.swift ~line 611), paywall_shown fires from .onAppear which SwiftUI calls twice per presentation. Add @State private var didTrackShown = false and only track once:\par
+    .onAppear \{ if !didTrackShown \{ didTrackShown = true; AnalyticsManager.shared.track(.paywallShown(source: source, trigger: trigger)) \} \}\par
+Same guard pattern already used for didTrackAddItemStarted.\par
+\par
+------------------------------------------------------------\par
+PART C -- Symmetric CLOSE events for bespoke flows\par
+------------------------------------------------------------\par
+Record an openedAt = Date() when each flow's existing START event fires; compute seconds = Int(Date().timeIntervalSince(openedAt)) on close. Use a `didSave` flag so a completed flow does NOT also emit a cancel event.\par
+\par
+- AddItemView (inside StorageDetailView):\par
+    * Cancel/Close toolbar button  -> addItemCancelled(source:"storage_detail", seconds:)\par
+    * .sheet(isPresented:$showingAddItem, onDismiss:) : if !didSave -> addItemCancelled(...). (item_added remains the "saved" outcome; do NOT emit sheet_closed for add-item to avoid double counting.)\par
+    * Save tapped but guard fails (empty name / nil UOM) -> formSubmitAttempted(form:"add_item", valid:false, reason: "empty_name" or "no_unit"). On success emit formSubmitAttempted(form:"add_item", valid:true) immediately before item_added.\par
+- SmartCountView: Cancel/close (any mode) -> smartCountCancelled(mode: selectedMode). (completion stays smart_count_completed / smart_count_failed)\par
+- SmartSalesEntryView: cancel/close -> smartSalesCancelled(mode:)\par
+- Sale entry review (SaleEntryReviewView) back/cancel without commit -> saleEntryCancelled(mode:)\par
+- Purchase review (PurchaseReviewView) back/cancel without commit -> purchaseEntryCancelled(mode:)\par
+\par
+------------------------------------------------------------\par
+PART D -- Generic sheet lifecycle for un-instrumented sheets\par
+------------------------------------------------------------\par
+For EACH sheet below: fire sheetOpened(sheet:, source:) on appear; on close fire sheetClosed(sheet:, outcome:, seconds:) exactly once (guard flag). outcome = "saved" when its primary Save/Confirm succeeds, "cancelled" on Cancel/Close button, "dismissed" on interactive swipe-down via .sheet(onDismiss:) when no explicit action fired.\par
+Sheet ids (snake_case): "edit_item","edit_storage","add_storage","quick_count","full_count","quick_sale","movement","feedback","notification_settings","template_picker","invoice_import","item_detail","export","language_picker".\par
+Apply to: EditItemView, EditStorageView, AddStorageView, QuickCountView, CountItemView, QuickSaleSheet, MovementSheet, FeedbackView, NotificationSettingsView, TemplatePickerView, PurchaseInvoiceImportView, ItemDetailView, the export sheet, and the language picker. (PaywallView already has shown/dismissed/cta -- skip.)\par
+\par
+------------------------------------------------------------\par
+PART E -- Pro-lock intent (the key gap this bug exposed)\par
+------------------------------------------------------------\par
+Fire proLockTapped(feature:) the moment a Pro-locked control is tapped, BEFORE presenting the paywall, at every lock:\par
+- ItemPhotoSection "Add Item Photo"                 -> proLockTapped("item_photo")\par
+- Templates button when locked (StorageDetailView)  -> "templates"\par
+- SmartSalesEntry entry (locked)                     -> "smart_sales"\par
+- SmartCount AI modes when free                      -> "smart_count_ai"\par
+- Barcode scanner Pro                                -> "barcode_pro"\par
+- Dashboard advanced analytics / locked period       -> "advanced_analytics"\par
+- ReportsView custom reports                         -> "custom_reports"\par
+- Multi-user / team invite                           -> "multi_user"\par
+- AI help (help_chat_fab and help_chat)              -> "ai_help"\par
+- Bulk import (locked)                               -> "bulk_import"\par
+- Remove-Ads upsell chip (AdManager)                 -> "remove_ads"\par
+Guarantee: every paywall_shown is now preceded by a pro_lock_tapped identifying the driver.\par
+\par
+------------------------------------------------------------\par
+PART F -- Swipe actions and primary buttons\par
+------------------------------------------------------------\par
+- StorageDetailView item swipe actions edit/delete/sale -> swipeActionUsed(screen:"storage_detail", action:)\par
+- SalesView + MovementsListView swipe delete/reverse    -> swipeActionUsed(screen:"sales"|"movements", action:"delete"|"reverse")\par
+- Any primary toolbar action not otherwise covered      -> buttonTapped(screen:, control:)\par
+\par
+------------------------------------------------------------\par
+PART G -- Verify (Amplitude)\par
+------------------------------------------------------------\par
+- Open add-item then Cancel: add_item_started + add_item_cancelled(seconds).\par
+- Free user taps "Add Item Photo": pro_lock_tapped("item_photo") + ONE paywall_shown(source:"pro_feature") + paywall_dismissed.\par
+- Save add-item with empty name: form_submit_attempted(form:"add_item", valid:false, reason:"empty_name").\par
+- Open then swipe-dismiss Edit Item: sheet_opened("edit_item") + sheet_closed("edit_item", outcome:"dismissed").\par
+\par
+CRITICAL RULES: use existing AnalyticsManager.shared.track; fire each close event exactly once (guard flags); do NOT emit both item_added and a sheet_closed "saved" for the add-item flow (bespoke events only there); enums/ints/bools only, no PII/free text; no analytics inside loops.\par
+\par
+BUILD green: xcodebuild -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build -> exit 0, BUILD SUCCEEDED.\par
+Then update automation_results.rtf with an S37 [COMPLETED] block listing each part.\par
+\par
+\par
+===========================================\par
+\par
+S38 --  Manual-test bug fixes: voice expiry date, language live-switch (Cursor Spec)\par
+\par
+===========================================\par
+\par
+Two device-test bugs found in S31/S25 verification. (A third bug -- feedback "Missing or insufficient permissions" -- is a Firestore Security Rules change deployed from the Firebase Console by the founder, NOT a Cursor task. Rule text recorded at the bottom for reference.)\par
+\par
+------------------------------------------------------------\par
+ITEM 1 -- Voice/Photo expiry date resolves to a wrong (past) date\par
+------------------------------------------------------------\par
+BUG: User dictated "tomato expires in 5 days"; parsed expiryDate came back 2025-01-05 (over a year in the past). All other fields were correct.\par
+ROOT CAUSE: AITest/Services/AIInventoryService.swift builds the voice/photo/sheet prompts with NO current-date anchor, and the example shows a hardcoded date. With no "today", the model guesses an absolute date for relative phrases ("in 5 days", "next week") and lands on a stale/past date.\par
+\par
+FIX (AIInventoryService.swift):\par
+1. Add a helper:\par
+   private static func todayISO() -> String \{\par
+       let df = DateFormatter(); df.locale = Locale(identifier: "en_US_POSIX")\par
+       df.timeZone = .current; df.dateFormat = "yyyy-MM-dd"\par
+       return df.string(from: Date())\par
+   \}\par
+2. In parseVoiceTranscript (promptBody), in identifyProduct (photo prompt ~line 185), and in the paper-sheet prompt (~line 334), inject near the top:\par
+   "Today's date is \\(Self.todayISO()) (the device's local date)."\par
+   and add these Rules lines:\par
+   - "Resolve relative expiry expressions ('in 5 days', 'expires next week', 'end of month', 'in 2 months') to an absolute calendar date in YYYY-MM-DD, computed from today's date above."\par
+   - "A future expiry MUST be a date AFTER today. Never output a past date unless the user explicitly states the item is already expired."\par
+   - "If no expiry is mentioned, return null. Do not invent one."\par
+3. Defensive guard in parseExpiryDate(_:): after parsing, if the resulting date is more than 1 day before today AND the source was voice/photo (future-intent), keep it only if the model was explicit; otherwise it's acceptable to still return it (items can be genuinely expired). Do NOT hard-reject -- the real fix is the date anchor. (Leave parseExpiryDate returning the parsed value; the anchor prevents the bad output.)\par
+\par
+VERIFY: Voice "milk expires in 5 days" on device -> review shows today+5. "Rice expires next month" -> ~+1 month. No date said -> expiry empty.\par
+\par
+------------------------------------------------------------\par
+ITEM 2 -- Language picker should NOT require killing/restarting the app\par
+------------------------------------------------------------\par
+BUG: After picking a language, the app shows a "Restart to apply" alert and the user must force-quit for the change to fully take effect.\par
+ROOT CAUSE: The infrastructure for a live switch already exists -- root ContentView has .id(localizationManager.refreshID) + .environment(\\.locale,...) + .environment(\\.layoutDirection,...) (AITestApp.swift:82-85), and setLanguage() already bumps refreshID; AppWindowCoordinator.reRootWindow() was purpose-built to rebuild the window in the new locale. But LanguagePickerView ignores all of it and just shows showRestartAlert.\par
+\par
+FIX (AITest/Views/LanguagePickerView.swift):\par
+1. Remove @State showRestartAlert and the entire .alert(...) block and its strings usage.\par
+2. In languageRow's Button action, replace `localizationManager.setLanguage(option.code); showRestartAlert = true` with:\par
+       localizationManager.setLanguage(option.code)\par
+       AppWindowCoordinator.reRootWindow(animated: true)\par
+       // reRoot replaces the window root; the sheet is torn down with it.\par
+   (No manual dismiss needed, but a `dismiss()` before reRoot is harmless.)\par
+3. reRootWindow already reads LocalizationManager.shared for the new locale + layoutDirection, so RTL (Arabic) flips live too.\par
+4. Optional: delete now-unused catalog keys "language.restart.title" / "language.restart.message" from Localizable.xcstrings (and re-run the translator if removed).\par
+\par
+Note: OnboardingLanguageStepView already relies on the root .id(refreshID) rebuild and needs NO change (it must not reRoot mid-onboarding).\par
+\par
+VERIFY on device: Settings -> Language -> pick Tamil -> UI switches to Tamil immediately with a cross-dissolve, NO restart prompt, NO force-quit. Switch to Arabic -> layout flips RTL live. Labels that use String(localized:) also update (they re-run because the window/tree is rebuilt).\par
+\par
+------------------------------------------------------------\par
+BUILD green: xcodebuild -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build -> exit 0, BUILD SUCCEEDED.\par
+Update automation_results.rtf with an S38 [COMPLETED] block.\par
+\par
+------------------------------------------------------------\par
+FOUNDER ACTION (not Cursor) -- Firestore rule for feedback (S32):\par
+Feedback writes to top-level collection feedback/\{autoId\}; default-deny rules reject it ("Missing or insufficient permissions"). In Firebase Console -> Firestore -> Rules, add inside `match /databases/\{database\}/documents \{ ... \}`:\par
+\par
+    match /feedback/\{docId\} \{\par
+      allow create: if request.auth != null\par
+                    && request.resource.data.message is string\par
+                    && request.resource.data.message.size() > 0\par
+                    && request.resource.data.message.size() < 5000;\par
+      allow read, update, delete: if false;\par
+    \}\par
+\par
+Publish. (Signed-in users only; feedback is write-only from clients, read it in the console.) If guest/not-signed-in feedback is desired later, change the create condition to `if true` with the same field checks.\par
+\par
+\par
+===========================================\par
+\par
+S39 --  Live language switch: fix stuck String(localized:) labels, then remove restart prompt (Cursor Spec)\par
+\par
+SUPERSEDES S38 Item 2 (which was insufficient -- see WHY).\par
+\par
+===========================================\par
+\par
+WHY: Founder confirmed some labels (e.g. "Inventory Health" on the Dashboard) stay in the PREVIOUS language after an in-app language switch, which is why the "Restart to apply" prompt was kept. Root cause: the app switches language by swizzling Bundle.main (LocalizedBundle overrides localizedString(forKey:value:table:)). That swizzle is honored by Text(LocalizedStringKey) / NSLocalizedString, so plain Text("...") labels DO switch live. But String(localized:) (the iOS 15+ String.LocalizationValue API) resolves via LocalizedStringResource and BYPASSES the swizzle -- it follows the DEVICE language, so those labels stay stuck. There are 265 String(localized:) call sites. Fixing them makes the live switch complete, after which the restart prompt can be removed (root already has .id(localizationManager.refreshID) + environment locale, so a rebuild re-resolves everything).\par
+\par
+------------------------------------------------------------\par
+ITEM 1 -- Add an override-bundle-backed localized-string helper\par
+------------------------------------------------------------\par
+1. In LocalizationManager (AITest/Utilities/LocalizationManager.swift) add:\par
+     var currentBundle: Bundle \{\par
+         guard let code = currentCode,\par
+               let path = Bundle.main.path(forResource: code, ofType: "lproj")\par
+                 ?? Bundle.main.path(forResource: String(code.split(separator: "-").first ?? ""), ofType: "lproj"),\par
+               let b = Bundle(path: path)\par
+         else \{ return .main \}\par
+         return b\par
+     \}\par
+   (Reuse the same lproj-resolution logic as Bundle+Localization.localizedBundle(for:); factor it into one shared function if cleaner.)\par
+2. Add a global helper (new file AITest/Utilities/LocalizedString.swift):\par
+     import Foundation\par
+     /// Resolves against the in-app language override bundle so it follows the\par
+     /// in-app switch (unlike String(localized:), which follows the device language).\par
+     @inline(__always) func L(_ key: String, _ fallback: String) -> String \{\par
+         LocalizationManager.shared.currentBundle.localizedString(forKey: key, value: fallback, table: nil)\par
+     \}\par
+\par
+------------------------------------------------------------\par
+ITEM 2 -- Replace ALL String(localized:) UI call sites with L(...)\par
+------------------------------------------------------------\par
+Mechanically convert every String(localized:) that produces a user-facing label (all 265):\par
+  String(localized: "KEY", defaultValue: "DEFAULT")                 -> L("KEY", "DEFAULT")\par
+  String(format: String(localized: "KEY", defaultValue: "D %@"), x) -> String(format: L("KEY", "D %@"), x)\par
+  navigationTitle(String(localized: "KEY", defaultValue: "D"))      -> navigationTitle(L("KEY", "D"))\par
+  Text(String(localized: "KEY", defaultValue: "D"))                 -> Text(L("KEY", "D"))\par
+Notes:\par
+  - Drop any `comment:`/`table:` args (dev-only); keep key + defaultValue.\par
+  - Where a key has NO defaultValue in source, use the key itself as fallback: L("KEY", "KEY") -- but prefer to supply the real English string if present in the catalog.\par
+  - Do NOT touch plain Text("literal") / Text(LocalizedStringKey) -- those already switch live via the swizzle.\par
+  - Highest-count files to sweep first: SaleAndMovementDetailViews (28), DashboardView (20), FeedbackView (19), ActivityEvent (18), SubscriptionManager (14), FilteredItemListView (12), NotificationSettingsView (11), ReportsView (10), HelpCentreView (10), InventoryMovement (10). Then the rest until `grep -rn "String(localized:" AITest --include=*.swift | grep -v build` returns 0.\par
+  - Enum/model files (ActivityEvent, InventoryMovement) that expose localized display strings: make them computed (not stored) and use L(...), so they re-resolve on rebuild.\par
+\par
+------------------------------------------------------------\par
+ITEM 3 -- Remove the restart prompt; switch live\par
+------------------------------------------------------------\par
+In AITest/Views/LanguagePickerView.swift:\par
+  - Delete @State showRestartAlert and the entire .alert(...) block.\par
+  - In languageRow action: localizationManager.setLanguage(option.code); AppWindowCoordinator.reRootWindow(animated: true); dismiss()\par
+  - Delete now-unused catalog keys "language.restart.title" / "language.restart.message" from Localizable.xcstrings.\par
+setLanguage already bumps refreshID (root .id) AND we call reRootWindow -> full rebuild -> every Text(swizzle) and L(override bundle) re-resolves in the new language. RTL (Arabic) flips via the existing layoutDirection env.\par
+\par
+------------------------------------------------------------\par
+VERIFY (device, no force-quit):\par
+  - Dashboard visible in English -> Settings > Language > Tamil -> Dashboard "Inventory Health" AND all labels are Tamil immediately, NO restart prompt.\par
+  - Switch to Arabic -> layout flips RTL live.\par
+  - Switch back to English -> everything reverts. Kill+relaunch -> language persists (AppleLanguages still set).\par
+  - `grep -rn "String(localized:" AITest --include=*.swift | grep -v build` -> 0 results.\par
+BUILD green: xcodebuild -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build -> exit 0.\par
+Run the localization gate scripts (catalog_gap_check.py, localization_audit.py) -> no new gaps. Then update automation_results.rtf with S39 [COMPLETED].\par
+\par
+\par
+===========================================\par
+\par
+S40 --  Soften the in-form "Add Item Photo" Pro lock (stop suppressing add completion) (Cursor Spec)\par
+\par
+===========================================\par
+\par
+PROBLEM (data-driven): Live Amplitude (last 90 days) shows the paywall is derailing item creation.\par
+- add_item_started -> item_added = 58.6% overall; but add_item_started -> paywall_shown -> item_added is only 8.6%.\par
+- Users who hit a paywall mid-add complete the add at ~29% vs ~71% for users who do NOT hit one (~2.4x worse).\par
+- paywall_shown is 81% source=pro_feature; item_limit is only 3. The dominant driver is the in-form "Add Item Photo" (Pro) row, which today opens a FULL-SCREEN PaywallView the moment a free user taps it -- interrupting the primary task.\par
+(Small N -- treat as directional. S37 pro_lock_tapped + S38 dedup now allow clean before/after measurement.)\par
+\par
+HYPOTHESIS: Most taps on the locked photo row are low-intent curiosity. Throwing a modal paywall derails the add. A soft gate (inline hint; paywall only on explicit intent) will recover add completion while still capturing high-intent upgrades.\par
+\par
+GOAL: In the add/edit item flow, the locked photo row must NOT present a modal paywall on tap. Tap reveals a lightweight, non-blocking inline note; only an explicit "Upgrade to Pro" tap opens the paywall.\par
+\par
+------------------------------------------------------------\par
+CHANGE -- AITest/Views/Components/ItemPhotoSection.swift (freePhotoRow)\par
+------------------------------------------------------------\par
+1. Add state: @State private var showProHint = false\par
+2. freePhotoRow Button action: REMOVE `showingPaywall = true`. Keep the analytics and toggle the inline hint:\par
+       AnalyticsManager.shared.track(.proLockTapped(feature: "item_photo"))\par
+       withAnimation(.easeInOut(duration: 0.2)) \{ showProHint.toggle() \}\par
+   (Keep the row's "Pro" lock badge + subtitle exactly as-is for discoverability.)\par
+3. Inside the Section, directly AFTER the freePhotoRow button, add a non-modal inline hint that appears only when showProHint:\par
+       if showProHint \{\par
+           VStack(alignment: .leading, spacing: 8) \{\par
+               Text("Add a photo so your team can identify stock at a glance. Item photos are a Pro feature.")\par
+                   .font(.caption).foregroundColor(.secondary)\par
+                   .fixedSize(horizontal: false, vertical: true)\par
+               Button \{\par
+                   AnalyticsManager.shared.track(.upgradeCtaTapped(source: "item_photo"))\par
+                   showingPaywall = true\par
+               \} label: \{\par
+                   Text("Upgrade to Pro").font(.caption).fontWeight(.semibold)\par
+               \}\par
+               .buttonStyle(.borderedProminent).controlSize(.small)\par
+               .accessibilityIdentifier("itemPhotoUpgradeButton")\par
+           \}\par
+           .padding(.vertical, 4)\par
+           .transition(.opacity.combined(with: .move(edge: .top)))\par
+       \}\par
+4. Change the paywall presentation source from generic to a distinct high-intent source:\par
+       .sheet(isPresented: $showingPaywall) \{\par
+           PaywallView(source: "item_photo", trigger: "item_photo").sheetStyle()\par
+       \}\par
+   (Distinct source lets us separate high-intent photo upgrades from generic pro_feature paywalls and de-inflates pro_feature.)\par
+\par
+Net UX: free user taps the photo row -> inline note expands in place (add form stays open, no sheet). They can ignore it and keep adding, or tap "Upgrade to Pro" (explicit) to see the paywall.\par
+\par
+------------------------------------------------------------\par
+ANALYTICS (clean funnel for before/after)\par
+------------------------------------------------------------\par
+- Keep pro_lock_tapped(feature:"item_photo") on the row tap (already S37).\par
+- New explicit intent: upgrade_cta_tapped(source:"item_photo") on the inline Upgrade button (event already exists in StoqlyEvent).\par
+- paywall_shown will now carry source="item_photo" for this path (was "pro_feature").\par
+Funnel to watch: pro_lock_tapped(item_photo) -> upgrade_cta_tapped(item_photo) -> paywall_shown(item_photo) -> subscription_started.\par
+\par
+------------------------------------------------------------\par
+SUCCESS METRICS / GUARDRAILS (measure ~2-3 weeks post-ship)\par
+------------------------------------------------------------\par
+- PRIMARY (win): add_item_started -> item_added completion rises; the paywall-interrupted cohort no longer craters (target: interrupted completion moves toward the ~71% non-interrupted baseline).\par
+- GUARDRAIL (do-no-harm): item_photo -> subscription_started must not collapse. Fewer forced paywalls is expected and fine; explicit-intent upgrades should convert at a similar or better rate. If Pro starts from item_photo drop to ~0, revisit.\par
+- SECONDARY: total paywall_shown volume drops (curiosity taps no longer fire a modal); source=pro_feature share falls.\par
+\par
+------------------------------------------------------------\par
+SCOPE / NOTES\par
+------------------------------------------------------------\par
+- Scope S40 to the item_photo lock only (the proven offender) so the effect is measurable in isolation. Other in-form Pro locks (templates, smart_sales) can get the same soft-gate treatment in a follow-up once this is validated.\par
+- ItemPhotoSection is shared by the Add and Edit item flows; the soft gate applies to both (correct).\par
+- No data-model or gating change: photos remain Pro. Only the *presentation* of the upsell changes.\par
+\par
+CRITICAL RULES: no NavigationStack changes; keep .buttonStyle(.plain) on the row so Form doesn't intercept taps; enums/counts only in analytics.\par
+\par
+BUILD green: xcodebuild -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build -> exit 0, BUILD SUCCEEDED.\par
+Update automation_results.rtf with an S40 [COMPLETED] block.\par
+Manual test: as a FREE user, open Add Item -> tap the photo row -> an inline note appears (NO paywall sheet), add form still usable, can Save an item without interruption. Tap "Upgrade to Pro" -> paywall opens with source=item_photo.\par
+\par
+\par
+===========================================\par
+\par
+S41 --  Device-test fixes: Arabic live RTL + Gross Profit tile date range at 0 (Cursor Spec)\par
+\par
+===========================================\par
+\par
+Two bugs from device QA after S39/bug#6.\par
+\par
+------------------------------------------------------------\par
+ITEM 1 -- Arabic does not flip to RTL on in-app language switch\par
+------------------------------------------------------------\par
+BUG: Switching to Arabic updates the text (S39 works) but the layout stays left-to-right. Other languages are fine.\par
+ROOT CAUSE: The app only sets SwiftUI's .environment(\\.layoutDirection, ...) (AITestApp + AppWindowCoordinator). On an IN-APP language change (device stays LTR), that alone does not flip the live UIKit-hosted hierarchy (nav bars, hosting controller, back chevron, alignment). There is NO semanticContentAttribute set anywhere. iOS only adopts app-wide RTL when the app actually runs in Arabic (AppleLanguages) after a relaunch -- which S39 intentionally removed.\par
+\par
+FIX (AITest/Utilities/AppWindowCoordinator.swift, reRootWindow):\par
+1. Compute isRTL from the manager: let isRTL = LocalizationManager.shared.layoutDirection == .rightToLeft\par
+2. BEFORE creating the UIHostingController, force UIKit semantic direction app-wide so the freshly built tree adopts it:\par
+       UIView.appearance().semanticContentAttribute = isRTL ? .forceRightToLeft : .forceLeftToRight\par
+3. After building `hosting` and before/at assignment, also set it on the window and hosting view:\par
+       window.semanticContentAttribute = isRTL ? .forceRightToLeft : .forceLeftToRight\par
+       hosting.view.semanticContentAttribute = isRTL ? .forceRightToLeft : .forceLeftToRight\par
+4. Keep the existing .environment(\\.layoutDirection, localizationManager.layoutDirection) (SwiftUI side).\par
+5. Also call reRootWindow at first launch if the persisted language is RTL, so a saved Arafbic choice is RTL from cold start. (If not already covered by AppleLanguages at cold start, add a one-time semanticContentAttribute set in app init based on LocalizationManager.shared.layoutDirection.)\par
+Note: switching from Arabic BACK to an LTR language must reset to .forceLeftToRight (covered by step 2's ternary).\par
+\par
+VERIFY (device, live, no relaunch): Settings -> Arabic -> whole UI mirrors (nav back chevron on right, HStacks reversed, text right-aligned, tab bar mirrored). Switch to English -> reverts to LTR. Kill+relaunch in Arabic -> still RTL.\par
+\par
+------------------------------------------------------------\par
+ITEM 2 -- Gross Profit KPI tile hides the date range when value is 0\par
+------------------------------------------------------------\par
+BUG: Revenue tile always shows the selected date range (e.g. "This Month") even at 0; Gross Profit tile shows nothing at 0.\par
+ROOT CAUSE (Views/DashboardView.swift): Revenue passes deltaText: dashboardSalesPeriod.localizedTitleString (always present). Gross Profit passes deltaText: dashboardPeriodMarginText, which is nil whenever dashboardPeriodMargin is nil, and dashboardPeriodMargin returns nil when dashboardPeriodRevenue <= 0 (guard at ~line 630). DashboardCard hides the badge when deltaText is empty -> no date range on Gross Profit at 0.\par
+\par
+FIX (Views/DashboardView.swift):\par
+1. Add a computed badge that ALWAYS includes the period label and appends the margin only when available:\par
+       private var dashboardProfitBadgeText: String \{\par
+           let period = dashboardSalesPeriod.localizedTitleString\par
+           if let margin = dashboardPeriodMargin \{\par
+               return String(format: L("dashboard.marginBadge", "%1$@ . %2$.0f%% margin"), period, margin)\par
+           \}\par
+           return period\par
+       \}\par
+   (Use a middot separator in the real string; keep the existing English "margin" wording. Add "dashboard.marginBadge" to Localizable.xcstrings and run the translator, OR keep the suffix non-localized to match the previous hardcoded behavior -- either is acceptable, but the period label MUST always show.)\par
+2. Change the Gross Profit DashboardCard: deltaText: dashboardProfitBadgeText (was dashboardPeriodMarginText).\par
+3. Leave Revenue as-is. Leave deltaPositive logic as-is.\par
+\par
+VERIFY: With zero sales in the selected range, BOTH Revenue and Gross Profit tiles show the date range (e.g. "This Month"); Gross Profit shows "This Month" alone at 0 and "This Month . 32% margin" when data exists.\par
+\par
+------------------------------------------------------------\par
+BUILD green: xcodebuild -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build -> exit 0, BUILD SUCCEEDED.\par
+If a new catalog key was added, run the translator and the localization gate scripts (0 new gaps).\par
+Update automation_results.rtf with an S41 [COMPLETED] block.\par
+\par
+\par
+===========================================\par
+\par
+S42 --  Surface Help & Feedback on Profile + recurring Dashboard feedback prompt (Cursor Spec)\par
+\par
+===========================================\par
+\par
+Two product changes. Reuse existing FeedbackView (S32) and HelpCentreView -- do NOT build new feedback UI.\par
+\par
+------------------------------------------------------------\par
+ITEM 1 -- Put Help & Feedback directly on the Profile screen\par
+------------------------------------------------------------\par
+TODAY: ProfileView (Dashboard gear) "Support" section only has a single "Help & Support" button that opens a MAILTO (openHelpAndSupport). The real in-app Help Centre + Feedback form live one level deeper in Settings -> Support. That is 2+ clicks away.\par
+\par
+FIX (AITest/Views/ProfileView.swift):\par
+1. Add @State private var showFeedback = false\par
+2. Replace the single mailto "Help & Support" row in the "Support" section (around line 230-243) with THREE rows:\par
+     NavigationLink(destination: HelpCentreView()) \{\par
+         Label(L("help.faqTitle", "Help & FAQ"), systemImage: "questionmark.circle")\par
+     \}\par
+     Button \{ showFeedback = true \} label: \{\par
+         Label(L("feedback.send", "Send Feedback"), systemImage: "text.bubble")\par
+     \}\par
+     .accessibilityIdentifier("profileSendFeedbackRow")\par
+     Button(action: openHelpAndSupport) \{   // keep the email option as tertiary\par
+         Label(L("support.emailUs", "Email Support"), systemImage: "envelope")\par
+     \}\par
+3. Add near the other .sheet modifiers:\par
+     .sheet(isPresented: $showFeedback) \{ FeedbackView().sheetStyle() \}\par
+4. HelpCentreView is pushed via NavigationLink -> ProfileView must be inside a NavigationStack (it has a toolbar "Done", so it already is). If a NavigationStack is NOT present, present HelpCentreView as a .sheet instead of NavigationLink.\par
+5. Leave SettingsView -> Support section AS-IS (dual entry points are fine; do not remove).\par
+Analytics: none new required (Help Centre + Feedback already tracked). Optional: screenViewed(name:"help", referrer:"profile").\par
+\par
+------------------------------------------------------------\par
+ITEM 2 -- Recurring feedback prompt on the Dashboard (once / 60 days, non-intrusive)\par
+------------------------------------------------------------\par
+GOAL: periodically invite engaged users to share what they love / what to improve, WITHOUT nagging. Dismissible inline card, NOT a modal.\par
+\par
+A) Storage + gating (new small helper AITest/Utilities/FeedbackPromptManager.swift, or inline @AppStorage in DashboardView):\par
+   - @AppStorage("installDate") installDate: Double   // set once on first launch if 0\par
+   - @AppStorage("feedbackPromptLastShown") lastShown: Double  // 0 = never\par
+   - static let intervalDays = 60   // single place to tune (2 months)\par
+   - shouldShow == true ONLY IF ALL:\par
+       * Date.now - installDate >= 7 days  (never brand-new / first session)\par
+       * user has >= 1 item (engaged)  (use existing items query count)\par
+       * lastShown == 0  OR  Date.now - lastShown >= intervalDays days\par
+B) UI (DashboardView): a dismissible card near the top (below the KPI grid, above SmartInsights), styled like existing dashboard cards:\par
+   - Title: L("feedback.prompt.title", "Enjoying Stoqly?")\par
+   - Subtitle: L("feedback.prompt.subtitle", "Tell us what you love or what we can improve.")\par
+   - Primary button: L("feedback.prompt.cta", "Share feedback") -> present FeedbackView (.sheet)\par
+   - Dismiss "x" in the corner.\par
+C) Behavior:\par
+   - On card appear (when shouldShow): AnalyticsManager.track(.feedbackPromptShown); set lastShown = now (so it counts as shown and won't re-appear this cycle).\par
+   - Tap "Share feedback": AnalyticsManager.track(.feedbackPromptTapped); present FeedbackView. (feedbackSubmitted already fires on submit.)\par
+   - Tap dismiss: AnalyticsManager.track(.feedbackPromptDismissed); (lastShown already set -> snoozed 60 days).\par
+D) New StoqlyEvent cases (AITest/Services/AnalyticsManager.swift) -- enums/none only:\par
+   - feedbackPromptShown       -> "feedback_prompt_shown"\par
+   - feedbackPromptTapped      -> "feedback_prompt_tapped"\par
+   - feedbackPromptDismissed   -> "feedback_prompt_dismissed"\par
+E) New catalog keys (Localizable.xcstrings): feedback.prompt.title / feedback.prompt.subtitle / feedback.prompt.cta / help.faqTitle / support.emailUs -> inject + run translator (15 langs, 0 gaps).\par
+\par
+NOTE: keep it ONE card, once per 60 days; do not stack with other Dashboard nudges in the same session (if a SmartInsights nudge is already prominent, still fine -- this is a separate dismissible card). Do NOT show as a blocking modal.\par
+\par
+------------------------------------------------------------\par
+VERIFY:\par
+- Profile screen shows Help & FAQ (opens Help Centre), Send Feedback (opens form), Email Support (mailto) -- no trip through Settings needed.\par
+- Fresh install: no feedback card (install < 7 days / no items). Simulate installDate 8+ days ago AND add an item -> card appears once; tap Share feedback -> FeedbackView; dismiss -> gone; does not reappear for 60 days.\par
+- Analytics: feedback_prompt_shown/tapped/dismissed fire; feedback_submitted still fires on submit.\par
+BUILD green: xcodebuild -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build -> exit 0.\par
+Run translator + localization gate scripts (0 new gaps). Update automation_results.rtf with S42 [COMPLETED].\par
+\par
+\par
+===========================================\par
+\par
+S43 --  Pre-submission fixes: Arabic RTL, voice dismiss chain, feedback prompt visibility, Settings cleanup (Cursor Spec)\par
+\par
+===========================================\par
+\par
+Four device-QA bugs to fix before App Store submission. Nothing else in scope.\par
+\par
+------------------------------------------------------------\par
+ITEM 1 -- Arabic does not fully flip to RTL on a live switch (only the tab bar flips)\par
+------------------------------------------------------------\par
+OBSERVED: Switching to Arabic in-app flips only the bottom tab bar; the Dashboard/content stays LTR. Only killing + reopening the app makes the whole UI RTL. Other (LTR) languages switch live perfectly.\par
+ROOT CAUSE: The content is a native SwiftUI TabView. Its UITabBar picks up UIView.appearance().semanticContentAttribute, but the SwiftUI tab CONTENT does not reliably adopt a live .environment(\\.layoutDirection) change. A full RTL flip only happens at process start, when AppleLanguages=["ar"] makes the whole app RTL. Live-flipping a running native TabView is unreliable.\par
+FIX (pragmatic, App-Store-safe): only for changes that CROSS the LTR<->RTL boundary, apply on relaunch instead of live re-root. Same-direction changes keep the seamless live switch.\par
+\par
+AITest/Views/LanguagePickerView.swift, in the row action:\par
+    let wasRTL = localizationManager.layoutDirection == .rightToLeft\par
+    localizationManager.setLanguage(option.code)          // sets AppleLanguages so next cold start is correct\par
+    let nowRTL = localizationManager.layoutDirection == .rightToLeft\par
+    if wasRTL != nowRTL \{\par
+        // Crossing LTR<->RTL: native TabView can't flip live. Prompt a reopen.\par
+        showRestartAlert = true    // reintroduce a minimal alert JUST for this case\par
+    \} else \{\par
+        AppWindowCoordinator.reRootWindow(animated: true)\par
+        dismiss()\par
+    \}\par
+Reintroduce the alert (title L("language.restart.title","Restart to apply"), message L("language.restart.message","Please reopen Stoqly to finish switching the language.")) shown ONLY on the RTL-cross case; its OK button dismisses the picker. (Do NOT restore the alert for same-direction switches -- those must stay live.)\par
+Note: because setLanguage already writes AppleLanguages, the next cold launch renders full RTL (the path the founder confirmed works).\par
+\par
+VERIFY: English -> Tamil/Hindi (LTR->LTR) still switches live, no prompt. English -> Arabic (LTR->RTL) sets language + shows "reopen" prompt; after reopen the ENTIRE UI is RTL. Arabic -> English shows prompt; reopen -> full LTR.\par
+\par
+------------------------------------------------------------\par
+ITEM 2 -- Voice (and other Smart Count modes) don't dismiss Smart Count + toast after saving\par
+------------------------------------------------------------\par
+OBSERVED: After saving items via Voice Inventory, the Voice sheet closes but the Smart Count screen stays open and no toast shows. Should dismiss Smart Count and show the "items updated" toast.\par
+ROOT CAUSE: nested-sheet dismiss race. VoiceInventoryView.saveItems() calls onComplete?(count) AND dismiss() in the same run loop. In SmartCountView the child onComplete immediately calls the parent onComplete, which sets StorageDetailView.showingSmartCount=false -- dismissing the PARENT sheet while the CHILD sheet is still dismissing. iOS drops one dismissal, leaving Smart Count open and skipping the toast.\par
+FIX (sequence child-dismiss BEFORE parent-complete) in AITest/Views/SmartCountView.swift:\par
+1. Add @State private var pendingCompletionCount: Int? = nil\par
+2. For EACH of the four mode sheets (showingVoice/showingImage/showingPaper/showingCSV), change the child onComplete to only STASH the count + mark completed (do NOT call parent onComplete here):\par
+       onComplete: \{ count in\par
+           didCompleteSmartCount = true\par
+           pendingCompletionCount = count\par
+       \}\par
+   and add an onDismiss to each sheet that finishes AFTER the child is fully gone:\par
+       .sheet(isPresented: $showingVoice, onDismiss: \{ finishSmartCountIfNeeded() \}) \{ VoiceInventoryView(...) .sheetStyle() \}\par
+   (same onDismiss on showingImage/showingPaper/showingCSV)\par
+3. Add:\par
+       private func finishSmartCountIfNeeded() \{\par
+           guard let count = pendingCompletionCount else \{ return \}\par
+           pendingCompletionCount = nil\par
+           onComplete?(count)   // StorageDetailView sets showingSmartCount=false + shows toast\par
+           dismiss()            // dismiss SmartCountView itself\par
+       \}\par
+4. VoiceInventoryView/ImageInventoryView/PaperInventoryView/SmartCountCSVView keep calling onComplete?(count) then dismiss() (self-dismiss) -- that self-dismiss now triggers the parent's onDismiss, which sequences the rest. No change needed inside those views.\par
+RESULT: child sheet closes -> onDismiss -> parent onComplete (toast) -> SmartCountView dismisses. One clean chain, toast shows.\par
+\par
+VERIFY: SmartCount -> Voice -> dictate items -> Save: Voice closes, Smart Count closes, toast "N items updated" appears over Storage Detail. Repeat for Photo, Paper, CSV modes.\par
+\par
+------------------------------------------------------------\par
+ITEM 3 -- Feedback prompt never appears in testing (7-day gate) + make it testable\par
+------------------------------------------------------------\par
+CLARIFY: FeedbackPromptManager gates on minInstallDays=7 (install must be >= 7 days old) + >=1 item + 60-day interval. On a fresh install it correctly will NOT show for 7 days -- that is by design (avoid nagging new users). It renders as the dismissible card on the DASHBOARD.\par
+FIX (testability for pre-submission QA): add a Debug-only trigger so the founder can verify it now.\par
+- AITest/Utilities/FeedbackPromptManager.swift: add\par
+      static func debugForceEligible() \{\par
+          UserDefaults.standard.set(Date().timeIntervalSince1970 - Double(minInstallDays + 1) * 86_400, forKey: installDateKey)\par
+          UserDefaults.standard.set(0.0, forKey: lastShownKey)\par
+      \}\par
+- AITest/Views/SettingsView.swift Debug section (the existing "Debug --" area): add a button "Preview feedback prompt" that calls FeedbackPromptManager.debugForceEligible() and pops back to the Dashboard (or just instructs to reopen Dashboard). Guard it in the same #if DEBUG / debug-visibility used by the other Debug rows.\par
+(Keep production gate at 7 days. If the founder wants the first prompt sooner in production, change minInstallDays -- flag for decision, do not change silently.)\par
+\par
+VERIFY: Debug -> "Preview feedback prompt" -> go to Dashboard (have >=1 item) -> the feedback card appears; tapping Share feedback opens FeedbackView; dismiss snoozes 60 days.\par
+\par
+------------------------------------------------------------\par
+ITEM 4 -- Remove Help & FAQ / Send Feedback from Settings (keep only on Profile)\par
+------------------------------------------------------------\par
+AITest/Views/SettingsView.swift: delete the entire "Support" Section (the HelpCentreView NavigationLink "helpCentreRow" + the "settingsSendFeedbackRow" Send Feedback button, around lines 303-315). Remove the now-unused @State showFeedback and its .sheet \{ FeedbackView() \} IF they become unused after removal. Leave everything else in Settings intact. Help & FAQ / Send Feedback remain available on the Profile screen (S42).\par
+\par
+VERIFY: Settings no longer has a Support section; Profile still has Help & FAQ, Send Feedback, Email Support; no dead code / unused-state warnings.\par
+\par
+------------------------------------------------------------\par
+BUILD green: xcodebuild -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build -> exit 0, BUILD SUCCEEDED.\par
+No new user-facing catalog keys expected (reuses language.restart.*). If any added, run translator + gate scripts (0 gaps).\par
+Update automation_results.rtf with S43 [COMPLETED].\par
+\par
+\par
+===========================================\par
+\par
+S44 --  Fix free item-cap leak (free users can exceed 50 items/storage) (Cursor Spec)\par
+\par
+===========================================\par
+\par
+BUG (found via Amplitude): a FREE user (is_pro=false) reached 51 items in one storage (cap is 50). Timeline shows all adds via source="fab", manual, one at a time; the item_limit paywall only fired AFTER he passed 50.\par
+ROOT CAUSE:\par
+1. The cap is enforced only as a PRE-CHECK on the add/Save button using storage.items.count (a SwiftData relationship count). On iOS 26 that relationship count LAGS after an insert, so the check reads a stale (-1) count and admits one item past the limit -> 51.\par
+2. The actual write functions do NOT re-validate the cap: ItemViewModels.saveNew() (line ~212) and StorageDetailView.saveItem() (line ~826) both call modelContext.insert(item) unconditionally.\par
+3. Separate leak: the AI/bulk insert paths (VoiceInventoryView ~882, ImageInventoryView ~635/723, PaperInventoryView ~449, BulkImportView ~356) never check the item cap at all -- only AI-usage quota. A free user (with free AI trial uses) or a CSV import can exceed 50.\par
+\par
+PRINCIPLE OF FIX: enforce the cap at the point of WRITE, using a FRESH authoritative count from the modelContext (never the possibly-stale relationship array). Keep the button pre-checks for instant UX.\par
+\par
+------------------------------------------------------------\par
+ITEM 1 -- Authoritative count helper\par
+------------------------------------------------------------\par
+Add to SubscriptionManager (or a small ItemCapGuard util):\par
+   @MainActor func freeItemCapReached(storage: Storage, context: ModelContext) -> Bool \{\par
+       guard !isPro else \{ return false \}\par
+       let sid = storage.persistentModelID\par
+       let count = (try? context.fetchCount(FetchDescriptor<InventoryItem>(\par
+           predicate: #Predicate \{ $0.storage?.persistentModelID == sid \}))) ?? storage.items.count\par
+       return count >= Self.freeItemLimit\par
+   \}\par
+(Use fetchCount so it does not lag. Fallback to storage.items.count only if the fetch throws.)\par
+\par
+------------------------------------------------------------\par
+ITEM 2 -- Enforce at write in the manual add paths\par
+------------------------------------------------------------\par
+- StorageDetailView.saveItem(): after the name/uom guards and BEFORE modelContext.insert(item):\par
+    if SubscriptionManager.shared.freeItemCapReached(storage: storage, context: modelContext) \{\par
+        showingItemLimitPaywall = true\par
+        return\par
+    \}\par
+- ItemViewModels.saveNew(): after resolving `storage`, BEFORE modelContext.insert(item):\par
+    if SubscriptionManager.shared.freeItemCapReached(storage: storage, context: modelContext) \{\par
+        return false   // change saveNew() to return Bool (false = capped)\par
+    \}\par
+  Update ItemListView Save handler to present showingItemLimitPaywall when saveNew() returns false (instead of relying only on the stale pre-check). Keep the pre-check too.\par
+\par
+------------------------------------------------------------\par
+ITEM 3 -- Enforce in AI/bulk insert paths (partial insert up to the cap)\par
+------------------------------------------------------------\par
+For non-Pro users, in each insert loop (VoiceInventoryView, ImageInventoryView, PaperInventoryView, BulkImportView), before inserting each NEW item (updates to existing items are fine), stop creating new items once the storage reaches freeItemLimit:\par
+   - Track a running count starting from the authoritative fetchCount for that storage.\par
+   - If about to exceed the cap, skip remaining NEW items and set a `skippedDueToCap` count.\par
+   - After the loop, if skippedDueToCap > 0, show the item_limit paywall (or a toast: "You've hit the Free limit of 50 items in this storage. Upgrade to Pro to add more.") Insert only up to the cap.\par
+   (Existing-item updates from a count do NOT count against the cap.)\par
+\par
+------------------------------------------------------------\par
+NOTES\par
+------------------------------------------------------------\par
+- Do not delete or modify existing over-limit data (e.g., the 51st item already saved). This only prevents future over-limit inserts.\par
+- freeItemLimit stays 50. canAddItem() (pre-check) stays for button-level UX.\par
+- Empty-state "Add Item" button in StorageDetailView (no pre-check) is now also safe because saveItem() enforces at write.\par
+\par
+VERIFY:\par
+- Free user with 49 items -> add 1 -> 50 OK -> add again -> item_limit paywall, stays at 50 (never 51), even if tapping quickly on iOS 26.\par
+- Free user Voice/Photo/Paper count that would push a storage over 50 -> inserts up to 50, shows the cap paywall/toast, does not exceed.\par
+- Free user Bulk CSV import into a storage near the cap -> stops at 50, reports skipped.\par
+- Pro user -> unlimited, no cap paywall.\par
+BUILD green: xcodebuild -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build -> exit 0.\par
+Update automation_results.rtf with S44 [COMPLETED].\par
+\par
+\par
+===========================================\par
+\par
+S45 --  AI/bulk overflow: let the user choose which new items to keep (Cursor Spec)\par
+\par
+===========================================\par
+\par
+CHANGES S44-3 behavior. S44 already enforces the 50-item/storage free cap at write (fetchCount-based), and for AI/bulk it currently auto-inserts new items up to 50 and SILENTLY SKIPS the leftovers + shows the item_limit paywall. Replace that silent auto-skip with a user-controlled selection at the review screen, so nothing disappears without the user's choice.\par
+\par
+Scope: the REVIEW screens of Voice / Photo / Paper counts AND the Bulk CSV/XLSX import preview. Non-Pro only (Pro = unlimited, no banner, everything selected/saved).\par
+\par
+Definitions:\par
+- authoritativeCount = SubscriptionManager fetchCount of InventoryItem for the target storage (already added in S44-1).\par
+- remainingSlots = max(0, freeItemLimit - authoritativeCount).\par
+- Classify each parsed review row as UPDATE (matches an existing item by name/sku/barcode) or NEW (creates an item).\par
+\par
+Behavior:\par
+1. UPDATES always apply and do NOT count against the cap; not deselectable (optionally grouped under "Will update").\par
+2. NEW rows get an individual selection toggle. When newCount > remainingSlots, default the first \{remainingSlots\} selected, the rest DEselected.\par
+3. Banner shown only when newCount > remainingSlots:\par
+   "Free plan: 50 items per storage. You can add \{remainingSlots\} more here. Deselect items, or upgrade to Pro to add them all."  + [Upgrade to Pro] -> PaywallView(source:"item_limit", trigger:"item_cap_bulk").\par
+4. Live counter near Save: "\{selectedNew\}/\{remainingSlots\} new items selected".\par
+5. Disable Save while selectedNew > remainingSlots. If remainingSlots == 0: all NEW rows unselectable (greyed), banner "You're at the 50-item limit for this storage. Upgrade to Pro to add new items." UPDATES still save.\par
+6. On Save: apply ALL updates + ONLY the selected NEW items (guaranteed <= cap). Keep item_added per new item; optionally track deselected/skipped count.\par
+\par
+Localization: add the banner + counter strings to Localizable.xcstrings and run the translator (0 gaps).\par
+\par
+VERIFY:\par
+- Free user, storage has 46 items, voice-counts 20 new -> banner "add 4 more"; 4 preselected; Save disabled until selectedNew<=4; save adds 4 new + all updates; toggling selection works; Upgrade opens paywall.\par
+- Storage at 50 -> NEW rows unselectable; UPDATES still save.\par
+- Bulk CSV import into a near-full storage -> same selection UX in its preview.\par
+- Pro -> no banner, all selected, unlimited.\par
+BUILD green: xcodebuild -scheme SmartInventory -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build -> exit 0.\par
+Update automation_results.rtf with S45 [COMPLETED].\par
+\par
+\par
+===========================================\par
+\par
+S46 --  Fix ITMS-91064 (app privacy manifest tracking/domains mismatch) + anomaly audit (Cursor Spec)\par
+\par
+===========================================\par
+\par
+ROOT CAUSE (confirmed): AITest/PrivacyInfo.xcprivacy has NSPrivacyTracking=true but NSPrivacyTrackingDomains is EMPTY. Apple's rule is bidirectional: if NSPrivacyTracking=true you MUST list >=1 tracking domain (the ITMS-91064 message text is misleadingly one-directional). The empty array was introduced earlier to stop an FBSDK debug crash; that is what caused the App Store rejection of builds 6 and 7.\par
+\par
+APPLY THE FIX:\par
+- Keep NSPrivacyTracking=true (correct: app uses ATT + Meta App Events + AdMob + analytics; collected-data types are flagged as used for tracking).\par
+- Set NSPrivacyTrackingDomains to the app's REAL tracking domain(s) -- verify which the app actually connects to before choosing. Likely accurate candidates for this stack: "app-measurement.com" (Firebase/GA4), the AdMob ad/conversion domain(s), and/or Amplitude endpoints. Pick the ones the app genuinely hits.\par
+- CRITICAL: Do NOT list facebook.com or ANY facebook subdomain (e.g. ep1.facebook.com) in the APP manifest. FBSDK pre-declares its own facebook tracking domains in FBSDK's OWN manifest; duplicating them in the app manifest re-triggers the FBSDK domain-error DEBUG crash we fixed earlier. Apple aggregates domains across all manifests, so Meta is already covered by FBSDK's manifest. (If Meta's domain MUST be in the app manifest for some reason, also set FBSDKCoreKit Settings.shared.isDomainErrorEnabled=false before SDK init -- but the preferred fix is simply to list a non-facebook tracking domain.)\par
+- Remember: any domain listed here becomes ATT-gated (connections blocked until the user grants tracking), so only list genuine tracking domains.\par
+\par
+ALSO ANALYSE FOR ANOMALIES (report findings; do not guess):\par
+1. Enumerate the exact tracking domains the app connects to (from the integrated SDKs + their endpoints) so the listed domain(s) are accurate, not assumed.\par
+2. Consistency: Device ID / Product Interaction / Purchase History are marked NSPrivacyCollectedDataTypeTracking=true. Confirm that matches the app's real data use AND matches the App Store Connect privacy "nutrition label". If the app does NOT actually use these for cross-app tracking, the alternative is NSPrivacyTracking=false + those tracking flags false + empty domains -- but only if that's truthful. Recommend which is correct.\par
+3. Bundling: confirm AITest/PrivacyInfo.xcprivacy is actually a member/resource of the SmartInventory app target and lands at the .app ROOT when built (a prior build showed NO app-root PrivacyInfo.xcprivacy -- verify this is fixed). Confirm there is exactly ONE app-level manifest (no stale/duplicate copies).\par
+4. Source control: the file is currently UNTRACKED in git (git status shows "?? AITest/PrivacyInfo.xcprivacy"). Commit it so clean/CI builds include the corrected manifest.\par
+5. Required-reason APIs: verify NSPrivacyAccessedAPITypes is complete (UserDefaults CA92.1 present; check whether the app also needs entries for File timestamp, System boot time, Disk space, or Active keyboard reasons).\par
+6. Facebook SDK version: Package.resolved still pins facebook-ios-sdk 17.4.0 (the intended 18.x update never applied -- likely the SPM version rule is pinned). This is UNRELATED to ITMS-91064; flag whether to actually update it or leave it, and note that updating won't fix this rejection.\par
+\par
+VERIFY (post-fix, before uploading):\par
+- Clean build + archive. Inspect the archived app's manifests:\par
+    ARCHIVE=$(ls -dt ~/Library/Developer/Xcode/Archives/*/*.xcarchive | head -1)\par
+    APP=$(ls -d "$ARCHIVE/Products/Applications/"*.app)\par
+    find "$APP" -name "*.xcprivacy" | while read f; do echo "== $\{f#$APP/\} =="; plutil -extract NSPrivacyTracking raw "$f" 2>/dev/null; plutil -extract NSPrivacyTrackingDomains json "$f" 2>/dev/null; done\par
+  Confirm the app-root PrivacyInfo.xcprivacy now shows tracking=true + a NON-empty, non-facebook domain list, and NO manifest has a domains/tracking mismatch.\par
+- Bump to Build 8 and re-submit.\par

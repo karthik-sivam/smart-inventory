@@ -22,7 +22,12 @@ struct ActivityEventRow: View {
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                 if let actor = event.performedBy, !actor.isEmpty {
-                    Text("by \(actor)")
+                    Text(
+                        String(
+                            format: L("by %@", "by %@"),
+                            actor
+                        )
+                    )
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
@@ -54,8 +59,6 @@ struct ActivityEventRow: View {
 
 extension Date {
     var relativeFormatted: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: self, relativeTo: Date())
+        AppLocaleFormatting.relativeString(from: self)
     }
 }

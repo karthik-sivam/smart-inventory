@@ -176,12 +176,25 @@ private struct ExpiryItemRow: View {
         guard let expiry = item.nearestExpiryDate else { return "" }
         if expiry < Date() {
             let days = Calendar.current.dateComponents([.day], from: expiry, to: Date()).day ?? 0
-            return days == 0 ? "Expired today" : "Expired \(days)d ago"
+            if days == 0 {
+                return L("Expired today", "Expired today")
+            }
+            return String(
+                format: L("Expired %lldd ago", "Expired %lldd ago"),
+                days
+            )
         }
         let days = Calendar.current.dateComponents([.day], from: Date(), to: expiry).day ?? 0
-        if days == 0 { return "Expires today" }
-        if days == 1 { return "1 day left" }
-        return "\(days) days left"
+        if days == 0 {
+            return L("Expires today", "Expires today")
+        }
+        if days == 1 {
+            return L("1 day left", "1 day left")
+        }
+        return String(
+            format: L("%lld days left", "%lld days left"),
+            days
+        )
     }
 
     /// Fraction 0–1 representing urgency (1 = expired/today, 0 = 30 days out)

@@ -11,9 +11,11 @@ import CoreSpotlight
 import Firebase
 import FirebaseAuth
 import FirebaseMessaging
+import FirebaseInAppMessaging
 import GoogleSignIn
 import UserNotifications
 import FirebaseFirestore
+import FacebookCore
 
 // MARK: - Add these Firebase packages in Xcode (they're already in firebase-ios-sdk):
 //   Project → Package Dependencies → firebase-ios-sdk → already added ✓
@@ -63,6 +65,7 @@ struct SmartInventoryApp: App {
     @StateObject private var trackingManager = TrackingPermissionManager.shared
     @StateObject private var notificationManager = NotificationManager.shared
     @StateObject private var teamManager = TeamManager.shared
+    @StateObject private var localizationManager = LocalizationManager.shared
 
     // MARK: - App Scene
 
@@ -76,7 +79,24 @@ struct SmartInventoryApp: App {
                 .environmentObject(trackingManager)
                 .environmentObject(notificationManager)
                 .environmentObject(teamManager)
+                .environmentObject(localizationManager)
+                .environment(\.locale, localizationManager.effectiveLocale())
+                .environment(\.layoutDirection, localizationManager.layoutDirection)
+                .id(localizationManager.refreshID)
+                .onAppear {
+                    AppWindowCoordinator.register(
+                        modelContainer: sharedModelContainer,
+                        currencyManager: currencyManager
+                    )
+                }
                 .onOpenURL { url in
+                    if ApplicationDelegate.shared.application(
+                        UIApplication.shared,
+                        open: url,
+                        options: [:]
+                    ) {
+                        return
+                    }
                     // Handle Google Sign-In redirect URLs
                     GIDSignIn.sharedInstance.handle(url)
                 }
@@ -92,6 +112,7 @@ struct SmartInventoryApp: App {
                     await subscriptionManager.applyManualProGrantIfNeeded()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                    MetaAppEvents.activateApp()
                     // Re-fetch manual grant + StoreKit when returning to foreground so
                     // revoked/expired manualProUntil clears Pro without requiring relaunch.
                     Task { await subscriptionManager.applyManualProGrantIfNeeded() }
@@ -111,6 +132,7 @@ struct SmartInventoryApp: App {
 
 extension Notification.Name {
     static let spotlightItemSelected = Notification.Name("stoqly.spotlightItemSelected")
+    static let stoqlyAnnouncement = Notification.Name("stoqly.announcement")
 }
 
 // MARK: - AppDelegate
@@ -128,6 +150,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // 1. Firebase — must be first
         FirebaseApp.configure()
+
+        // 2. Meta (Facebook) SDK — App Events + AEM for install campaigns
+        ApplicationDelegate.shared.application(
+            application,
+            didFinishLaunchingWithOptions: launchOptions
+        )
+        MetaAppEvents.configureAutoLogging()
 
         // Enable offline persistence so writes queue locally when offline
         // and sync automatically when connectivity is restored.
@@ -169,6 +198,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         print("🔥 Firebase configured. Crashlytics active (debug symbols uploaded on archive).")
         #endif
 
+        if Auth.auth().currentUser == nil {
+            FCMTopicManager.syncGuestTopicIfNeeded()
+        }
+
         // 4. Firestore — persistence configured immediately after FirebaseApp.configure() above.
 
         return true
@@ -180,6 +213,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         open url: URL,
         options: [UIApplication.OpenURLOptionsKey: Any] = [:]
     ) -> Bool {
+        if ApplicationDelegate.shared.application(app, open: url, options: options) {
+            return true
+        }
         return GIDSignIn.sharedInstance.handle(url)
     }
 
@@ -209,6 +245,33 @@ extension AppDelegate: MessagingDelegate {
         #if DEBUG
         print("📲 FCM token refreshed: \(fcmToken)")
         #endif
+        Task { @MainActor in
+            FCMTopicManager.syncRegistrationIfSignedIn(token: fcmToken)
+            FCMTopicManager.syncGuestTopicIfNeeded()
+        }
+    }
+}
+
+private extension AppDelegate {
+    nonisolated func postAnnouncementIfNeeded(from userInfo: [AnyHashable: Any]) {
+        guard (userInfo["type"] as? String) == "announcement" else { return }
+        let title = userInfo["title"] as? String ?? userInfo["gcm.notification.title"] as? String ?? ""
+        let message = userInfo["message"] as? String ?? userInfo["gcm.notification.body"] as? String ?? ""
+        let urlString = userInfo["url"] as? String
+        guard !title.isEmpty || !message.isEmpty else { return }
+        Task { @MainActor in
+            var payload: [AnyHashable: Any] = [
+                "type": "announcement",
+                "title": title,
+                "message": message
+            ]
+            if let urlString { payload["url"] = urlString }
+            NotificationCenter.default.post(
+                name: .stoqlyAnnouncement,
+                object: nil,
+                userInfo: payload
+            )
+        }
     }
 }
 
@@ -218,6 +281,31 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        postAnnouncementIfNeeded(from: notification.request.content.userInfo)
         completionHandler([.banner, .badge, .sound])
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        postAnnouncementIfNeeded(from: userInfo)
+        postNotificationRouteIfNeeded(from: userInfo)
+        completionHandler()
+    }
+}
+
+private extension AppDelegate {
+    nonisolated func postNotificationRouteIfNeeded(from userInfo: [AnyHashable: Any]) {
+        guard let route = userInfo["route"] as? String, !route.isEmpty else { return }
+        Task { @MainActor in
+            NotificationCenter.default.post(
+                name: NotificationRoute.notificationName,
+                object: nil,
+                userInfo: ["route": route]
+            )
+        }
     }
 }

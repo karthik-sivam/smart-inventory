@@ -33,11 +33,21 @@ struct MovementSheet: View {
                 .padding(.horizontal)
                 .padding(.bottom, 24)
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Add Movement")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") { saveMovement() }
@@ -73,14 +83,14 @@ struct MovementSheet: View {
             if direction == "IN" {
                 Picker("Type", selection: $movementTypeIn) {
                     ForEach(MovementTypeIn.allCases, id: \.self) { type in
-                        Text(type.rawValue).tag(type)
+                        Text(type.localizedLabel).tag(type)
                     }
                 }
                 .pickerStyle(.menu)
             } else {
                 Picker("Type", selection: $movementTypeOut) {
                     ForEach(MovementTypeOut.allCases, id: \.self) { type in
-                        Text(type.rawValue).tag(type)
+                        Text(type.localizedLabel).tag(type)
                     }
                 }
                 .pickerStyle(.menu)
@@ -119,7 +129,7 @@ struct MovementSheet: View {
         }
     }
 
-    private var priceSectionTitle: String {
+    private var priceSectionTitle: LocalizedStringKey {
         if direction == "IN" && movementTypeIn == .purchase {
             return "Purchase Price per Unit"
         }
