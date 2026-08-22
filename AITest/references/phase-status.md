@@ -171,7 +171,7 @@ Added directly to `StorageDetailView.swift`:
 Before any App Store submission:
 
 - [ ] **Revert `SubscriptionManager.isPro` to `false`** (currently `true` for testing)
-- [ ] **Remove debug prints** in `BarcodeEnrichmentService.swift` (`print("[Enrichment]...")`)
+- [x] **Remove debug prints** in `BarcodeEnrichmentService.swift` (`print("[Enrichment]...")`) — none remain (iOS-A2)
 - [ ] Run full Maestro suite — all flows pass (or known failures documented)
 - [ ] Manual test on physical device (not just simulator)
 - [ ] Verify Firestore security rules are production-ready

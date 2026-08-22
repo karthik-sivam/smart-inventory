@@ -523,4 +523,13 @@
 \bullet Facebook SDK: Package.resolved still 17.4.0 because SPM rule is upToNextMajor from 17.0.0 (18.x will not apply). Leave pinned; updating does not fix ITMS-91064.\par
 \bullet Build number bumped to 8 (MARKETING_VERSION stays 1.4).\par
 \bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b iOS-A2 \emdash Remove BarcodeEnrichmentService debug prints}\par
+[COMPLETED WITH ISSUES]\par
+\bullet iOS-A2: BarcodeEnrichmentService debug prints removed. Enrichment verified. Maestro suite: not green.\par
+\bullet AITest/Services/BarcodeEnrichmentService.swift already had zero print("[Enrichment]...") / debugPrint / NSLog (M6-3). No os_log conversion \emdash nothing useful to convert; adding logs would be a behavior change.\par
+\bullet Struck pre-ship debt in CLAUDE.md and AITest/references/phase-status.md.\par
+\bullet Enrichment E2E (live): Open Food Facts hit 3017620422003 (Nutella) \to EnrichedProduct; miss 8900000000000 \to nil (OFF not found + UPCItemDB INVALID_UPC). XCTest BarcodeEnrichmentServiceTests both passed.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \emdash exit 0, BUILD SUCCEEDED (only allowed warning: appintentsmetadataprocessor).\par
+\bullet Maestro: maestro test maestro/run_all.yaml failed before barcode flows. Pre-existing: (1) flows 93\endash 102 invalid YAML (`tapOn: "..."\\n    optional: true`); (2) 01_onboarding permission-sheet race on iOS 26.3; (3) later driver 127.0.0.1:7001 connect failure. Not caused by this change. Barcode-related flows 08/25/40/51/53 were not independently green.\par
 }
