@@ -8,6 +8,7 @@ import UIKit
 struct ItemPhotoSection: View {
     @Binding var selectedPhotoData: Data?
     let existingPhotoURL: String?
+    var showsSectionContainer: Bool = true
     @State private var pickerItem: PhotosPickerItem? = nil
     @State private var thumbnailImage: Image? = nil
     @State private var showingPaywall = false
@@ -15,36 +16,47 @@ struct ItemPhotoSection: View {
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
 
     var body: some View {
-        Section(header: Text("Photo")) {
-            if subscriptionManager.isPro {
-                proPhotoRow
-            } else {
-                freePhotoRow
-                if showProHint {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Add a photo so your team can identify stock at a glance. Item photos are a Pro feature.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Button {
-                            AnalyticsManager.shared.track(.upgradeCtaTapped(source: "item_photo"))
-                            showingPaywall = true
-                        } label: {
-                            Text("Upgrade to Pro")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        .accessibilityIdentifier("itemPhotoUpgradeButton")
-                    }
-                    .padding(.vertical, 4)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+        Group {
+            if showsSectionContainer {
+                Section(header: Text("Photo")) {
+                    photoContent
                 }
+            } else {
+                photoContent
             }
         }
         .sheet(isPresented: $showingPaywall) {
             PaywallView(source: "item_photo", trigger: "item_photo").sheetStyle()
+        }
+    }
+
+    @ViewBuilder
+    private var photoContent: some View {
+        if subscriptionManager.isPro {
+            proPhotoRow
+        } else {
+            freePhotoRow
+            if showProHint {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Add a photo so your team can identify stock at a glance. Item photos are a Pro feature.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        AnalyticsManager.shared.track(.upgradeCtaTapped(source: "item_photo"))
+                        showingPaywall = true
+                    } label: {
+                        Text("Upgrade to Pro")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .accessibilityIdentifier("itemPhotoUpgradeButton")
+                }
+                .padding(.vertical, 4)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
     }
 

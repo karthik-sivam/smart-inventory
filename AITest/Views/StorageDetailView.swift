@@ -264,7 +264,9 @@ struct StorageDetailView: View {
             searchText = ""
             selectedCategory = nil
         }) {
-            AddItemView(storage: storage)
+            NavigationStack {
+                AddItemView(storage: storage)
+            }
                 .sheetStyle()
         }
         .sheet(isPresented: $showingEditStorage) {
@@ -272,7 +274,9 @@ struct StorageDetailView: View {
                 .sheetStyle()
         }
         .sheet(item: $showingEditItem) { item in
-            EditItemView(item: item)
+            NavigationStack {
+                EditItemView(item: item)
+            }
                 .sheetStyle()
         }
         .sheet(isPresented: $showingItemLimitPaywall) {
@@ -515,6 +519,7 @@ struct AddItemView: View {
     @State private var minQuantity = ""
     @State private var maxQuantity = ""
     @State private var unitCost = ""
+    @State private var sellingPrice = ""
     @State private var selectedUOM: UOM?
     @State private var category = "Uncategorised"
     @State private var hasExpiryDate = false
@@ -531,6 +536,7 @@ struct AddItemView: View {
     @State private var didSaveAddItem = false
     @State private var didEmitAddItemClose = false
     @State private var showingItemLimitPaywall = false
+    @State private var isShowingMoreDetails = false
 
     enum Field: Hashable {
         case name, description, sku, barcode
@@ -539,15 +545,72 @@ struct AddItemView: View {
     @FocusState private var focusedField: Field?
 
     var body: some View {
-        NavigationStack {
-            Form {
-                ItemPhotoSection(
-                    selectedPhotoData: $selectedPhotoData,
-                    existingPhotoURL: nil
-                )
+        Form {
+            Section(header: Text("Primary")) {
+                TextField("Item Name", text: $name)
+                    .focused($focusedField, equals: .name)
+                    .accessibilityIdentifier("itemNameField")
 
-                if subscriptionManager.isPro && !templates.isEmpty && teamManager.canEdit {
-                    Section {
+                HStack {
+                    Text("Quantity")
+                    Spacer()
+                    TextField("0", text: $currentQuantity)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 100)
+                        .focused($focusedField, equals: .currentQuantity)
+                        .accessibilityLabel("Current Quantity")
+                        .accessibilityIdentifier("currentQuantityInput")
+                }
+
+                HStack {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(hex: storage.color) ?? .blue)
+                        .frame(width: 20, height: 20)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(storage.name)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        if !storage.location.isEmpty {
+                            Text(storage.location)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Spacer()
+                }
+
+            }
+
+            Section {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isShowingMoreDetails.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("More details")
+                            .fontWeight(.semibold)
+                        if let photoSummaryText {
+                            Text(photoSummaryText)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.secondary.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                        Spacer()
+                        Image(systemName: isShowingMoreDetails ? "chevron.up" : "chevron.down")
+                            .foregroundColor(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                .accessibilityIdentifier("moreDetailsButton")
+
+                if isShowingMoreDetails {
+                    if subscriptionManager.isPro && !templates.isEmpty && teamManager.canEdit {
                         Button {
                             showingTemplatePicker = true
                         } label: {
@@ -555,13 +618,9 @@ struct AddItemView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.accentColor)
                         }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                }
 
-                Section(header: Text("Item Information")) {
-                    TextField("Item Name", text: $name)
-                        .focused($focusedField, equals: .name)
-                        .accessibilityIdentifier("itemNameField")
                     TextField("Description (Optional)", text: $description, axis: .vertical)
                         .lineLimit(3)
                         .focused($focusedField, equals: .description)
@@ -577,6 +636,7 @@ struct AddItemView: View {
                                     .font(.title3)
                                     .foregroundColor(.stoqlyPrimary)
                             }
+                            .buttonStyle(PlainButtonStyle())
                         }
                     }
                     if isEnriching {
@@ -586,45 +646,12 @@ struct AddItemView: View {
                                 .font(.caption).foregroundColor(.secondary)
                         }
                     }
-                }
-
-                Section(header: Text("Category")) {
                     Picker("Category", selection: $category) {
                         ForEach(InventoryItem.predefinedCategories, id: \.self) { cat in
                             Text(cat).tag(cat)
                         }
                     }
                     .pickerStyle(.navigationLink)
-                }
-
-                Section(header: Text("Expiry")) {
-                    Toggle("Has Expiry Date", isOn: $hasExpiryDate.animation(.easeInOut(duration: 0.2)))
-                    if hasExpiryDate {
-                        DatePicker(
-                            "Expiry Date",
-                            selection: $expiryDate,
-                            in: Date()...,
-                            displayedComponents: .date
-                        )
-                        Text("You'll get a notification 3 days before this item expires.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                Section(header: Text("Quantity & Pricing")) {
-                    HStack {
-                        Text("Current Quantity")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        TextField("0", text: $currentQuantity)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: 100)
-                            .focused($focusedField, equals: .currentQuantity)
-                            .accessibilityLabel("Current Quantity")
-                            .accessibilityIdentifier("currentQuantityInput")
-                    }
 
                     HStack {
                         HStack(spacing: 4) {
@@ -661,58 +688,57 @@ struct AddItemView: View {
                         .keyboardType(.decimalPad)
                         .focused($focusedField, equals: .unitCost)
                         .accessibilityIdentifier("unitCostInput")
-                }
 
-                Section(header: Text("Storage Location")) {
-                    HStack {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color(hex: storage.color) ?? .blue)
-                            .frame(width: 20, height: 20)
+                    TextField("Selling Price", text: $sellingPrice)
+                        .keyboardType(.decimalPad)
+                        .focused($focusedField, equals: .unitCost)
+                        .accessibilityIdentifier("addItemSellingPrice")
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(storage.name)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-
-                            if !storage.location.isEmpty {
-                                Text(storage.location)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-
-                        Spacer()
+                    Toggle("Has Expiry Date", isOn: $hasExpiryDate.animation(.easeInOut(duration: 0.2)))
+                    if hasExpiryDate {
+                        DatePicker(
+                            "Expiry Date",
+                            selection: $expiryDate,
+                            in: Date()...,
+                            displayedComponents: .date
+                        )
+                        Text("You'll get a notification 3 days before this item expires.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
+
+                    ItemPhotoSection(
+                        selectedPhotoData: $selectedPhotoData,
+                        existingPhotoURL: nil,
+                        showsSectionContainer: false
+                    )
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Add Item")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden(true)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        emitAddItemCancelledIfNeeded()
-                        dismiss()
-                    }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .navigationTitle("Add Item")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Cancel") {
+                    emitAddItemCancelledIfNeeded()
+                    dismiss()
                 }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        saveItem()
-                    } label: {
-                        Text("Save")
-                            .accessibilityIdentifier("addItemSaveButton")
-                    }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Save") {
+                    saveItem()
                 }
-
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        focusedField = nil
-                    }
-                    .accessibilityLabel("Done")
+                .disabled(!canSave)
+                .accessibilityIdentifier("addItemSaveButton")
+            }
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    focusedField = nil
                 }
+                .accessibilityLabel("Done")
             }
         }
         .sheet(isPresented: $showingTemplatePicker) {
@@ -835,9 +861,21 @@ struct AddItemView: View {
         AnalyticsManager.shared.track(.addItemCancelled(source: "storage_detail", seconds: seconds))
     }
 
+    private var canSave: Bool {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let quantity = Double(currentQuantity.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return false
+        }
+        return quantity.isFinite && quantity >= 0
+    }
+
+    private var photoSummaryText: String? {
+        selectedPhotoData == nil ? nil : "1 photo"
+    }
+
     private func saveItem() {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else {
+        guard canSave, let quantity = Double(currentQuantity) else {
             AnalyticsManager.shared.track(.formSubmitAttempted(form: "add_item", valid: false, reason: "empty_name"))
             return
         }
@@ -851,12 +889,15 @@ struct AddItemView: View {
         }
         AnalyticsManager.shared.track(.formSubmitAttempted(form: "add_item", valid: true, reason: nil))
 
+        // TODO(iOS-B2): fire item_create_completed{entry_source, duration_ms}
+        //               via AmplitudeManager helper.
+
         let item = InventoryItem(
             name: trimmedName,
             description: description,
             sku: sku,
             barcode: barcode,
-            currentQuantity: Double(currentQuantity) ?? 0,
+            currentQuantity: quantity,
             minQuantity: Double(minQuantity) ?? 0,
             maxQuantity: Double(maxQuantity) ?? 0,
             unitCost: Double(unitCost) ?? 0,
@@ -866,12 +907,13 @@ struct AddItemView: View {
             uom: uom
         )
         item.createdFromTemplateId = sourceTemplateId
+        item.sellingPrice = Double(sellingPrice) ?? 0
         modelContext.insert(item)
 
         // If the item was created with an expiry date and non-zero quantity,
         // record the initial stock as a batch so all expiry dates are tracked
         // consistently in the Batches section.
-        let initialQty = Double(currentQuantity) ?? 0
+        let initialQty = quantity
         if hasExpiryDate, let expiry = item.expiryDate, initialQty > 0 {
             let initialBatch = InventoryBatch(
                 quantity: initialQty,
@@ -882,7 +924,7 @@ struct AddItemView: View {
             modelContext.insert(initialBatch)
         }
 
-        modelContext.safeSave(context: "addItemToStorage")
+        modelContext.safeSave(context: "AddItem")
 
         AnalyticsManager.shared.track(.itemAdded(
             category: item.category,
@@ -908,7 +950,7 @@ struct AddItemView: View {
                 do {
                     let url = try await FirestoreManager.shared.uploadItemPhoto(photoData, itemId: itemId)
                     item.photoURL = url
-                    modelContext.safeSave(context: "save photoURL after upload")
+                    modelContext.safeSave(context: "AddItem")
                     FirestoreManager.shared.syncItem(item)
                 } catch {
                     print("Photo upload failed: \(error.localizedDescription)")
@@ -1293,7 +1335,9 @@ struct ItemDetailView: View {
                 .sheetStyle()
         }
         .sheet(isPresented: $showingEditItem) {
-            EditItemView(item: item)
+            NavigationStack {
+                EditItemView(item: item)
+            }
                 .sheetStyle()
         }
         .sheet(isPresented: $showingQuickSale) {
@@ -2303,4 +2347,4 @@ struct CountFirstTimeTipsView: View {
     return StorageDetailView(storage: storage)
         .environmentObject(CurrencyManager())
         .modelContainer(for: [Storage.self, InventoryItem.self, UOM.self, InventoryCount.self], inMemory: true)
-} 
+}
