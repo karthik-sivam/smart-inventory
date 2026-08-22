@@ -83,6 +83,7 @@ final class SmartSalesCSVViewModel: ObservableObject {
                 itemName: value(row, .itemName),
                 quantitySold: Double(value(row, .quantity)) ?? 0,
                 pricePerUnit: Double(value(row, .pricePerUnit)) ?? 0,
+                confidence: 0.95,
                 notes: value(row, .notes)
             )
         }.filter { !$0.itemName.isEmpty }

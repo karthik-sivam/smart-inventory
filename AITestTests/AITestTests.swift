@@ -342,7 +342,7 @@ final class SmartInventoryTests: XCTestCase {
     }
 
     func testApplyFallbackPriceIfNeededSkipsWhenEdited() {
-        var row = ParsedSaleRow(itemName: "X", quantitySold: 1, pricePerUnit: 0, priceWasEdited: true)
+        var row = ParsedSaleRow(itemName: "X", quantitySold: 1, pricePerUnit: 0, confidence: 0.95, priceWasEdited: true)
         let item = InventoryItem(name: "X", sku: "5", currentQuantity: 1, unitCost: 9)
         item.sellingPrice = 15
         SaleHelpers.applyFallbackPriceIfNeeded(&row, from: item)
@@ -350,11 +350,26 @@ final class SmartInventoryTests: XCTestCase {
     }
 
     func testApplyFallbackPriceIfNeededPrefillsFromItem() {
-        var row = ParsedSaleRow(itemName: "Y", quantitySold: 2, pricePerUnit: 0)
+        var row = ParsedSaleRow(itemName: "Y", quantitySold: 2, pricePerUnit: 0, confidence: 0.95)
         let item = InventoryItem(name: "Y", sku: "6", currentQuantity: 2, unitCost: 4)
         item.lastPurchasePrice = 7
         SaleHelpers.applyFallbackPriceIfNeeded(&row, from: item)
         XCTAssertEqual(row.pricePerUnit, 7)
+    }
+
+    func testParsedSaleRowDTOPreservesClaudeConfidence() throws {
+        let json = #"[{"itemName":"Tea","quantitySold":2,"pricePerUnit":15,"notes":"","confidence":0.87}]"#
+        let dto = try XCTUnwrap(JSONDecoder().decode([ParsedSaleRowDTO].self, from: Data(json.utf8)).first)
+
+        XCTAssertEqual(dto.confidence, 0.87, accuracy: 0.0001)
+        XCTAssertEqual(dto.toParsedSaleRow().confidence, 0.87, accuracy: 0.0001)
+    }
+
+    func testParsedSaleRowDTOLegacyResponseUsesMidrangeConfidence() throws {
+        let json = #"[{"itemName":"Tea","quantitySold":2,"pricePerUnit":15,"notes":""}]"#
+        let dto = try XCTUnwrap(JSONDecoder().decode([ParsedSaleRowDTO].self, from: Data(json.utf8)).first)
+
+        XCTAssertEqual(dto.confidence, 0.5, accuracy: 0.0001)
     }
 
     func testNegativeStockMessagesOnlyForNegativeItems() {

@@ -375,6 +375,6 @@ struct SaleReviewRow: View {
 
 private extension ParsedSaleRow {
     static func defaultValue<T>(for keyPath: WritableKeyPath<ParsedSaleRow, T>) -> T {
-        ParsedSaleRow(itemName: "", quantitySold: 0, pricePerUnit: 0)[keyPath: keyPath]
+        ParsedSaleRow(itemName: "", quantitySold: 0, pricePerUnit: 0, confidence: 0.4)[keyPath: keyPath]
     }
 }
