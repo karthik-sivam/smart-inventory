@@ -16,7 +16,7 @@ struct AuthView: View {
             ZStack {
                 // Background gradient
                 LinearGradient(
-                    gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.purple.opacity(0.8)]),
+                    gradient: Gradient(colors: [Color("AuthGradientTop"), Color("AuthGradientBottom")]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -73,7 +73,11 @@ struct AuthView: View {
                                 HStack {
                                     if authManager.isLoading {
                                         ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                            .progressViewStyle(
+                                                CircularProgressViewStyle(
+                                                    tint: isFormValid ? Color.white : Color(.label)
+                                                )
+                                            )
                                             .scaleEffect(0.8)
                                     } else {
                                         Image(systemName: isSignUp ? "person.badge.plus" : "arrow.right.circle.fill")
@@ -82,11 +86,13 @@ struct AuthView: View {
                                     Text(authManager.isLoading ? "Please wait..." : (isSignUp ? "Sign Up" : "Sign In"))
                                         .fontWeight(.semibold)
                                 }
-                                .foregroundColor(.white)
+                                .foregroundColor(isFormValid ? Color.white : Color(.label))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 16)
                                 .background(
-                                    isFormValid ? Color.green : Color.gray
+                                    isFormValid
+                                        ? Color("AuthPrimaryButtonBackground")
+                                        : Color(.systemGray2)
                                 )
                                 .cornerRadius(12)
                             }
@@ -96,16 +102,16 @@ struct AuthView: View {
                             HStack {
                                 Rectangle()
                                     .frame(height: 1)
-                                    .foregroundColor(.white.opacity(0.3))
+                                    .foregroundColor(.white.opacity(0.6))
                                 
                                 Text("OR")
                                     .font(.caption)
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(.white.opacity(0.8))
                                     .padding(.horizontal, 16)
                                 
                                 Rectangle()
                                     .frame(height: 1)
-                                    .foregroundColor(.white.opacity(0.3))
+                                    .foregroundColor(.white.opacity(0.6))
                             }
                             
                             // Google Sign In Button — adaptive card so it works in dark mode
@@ -113,33 +119,37 @@ struct AuthView: View {
                                 HStack {
                                     if authManager.isLoading {
                                         ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle(tint: .primary))
+                                            .progressViewStyle(CircularProgressViewStyle(tint: Color(.label)))
                                             .scaleEffect(0.8)
                                     } else {
                                         Image(systemName: "globe")
                                             .font(.title2)
-                                            .foregroundColor(.blue)
+                                            .foregroundColor(Color(.link))
                                     }
                                     
                                     Text(authManager.isLoading ? "Please wait..." : "Continue with Google")
                                         .fontWeight(.semibold)
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(Color(.label))
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 16)
-                                .background(Color(.systemBackground))
+                                .background(Color(.secondarySystemBackground))
                                 .cornerRadius(12)
-                                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(.separator), lineWidth: 1)
+                                )
+                                .shadow(color: Color(.separator).opacity(0.35), radius: 2, x: 0, y: 1)
                             }
                             .disabled(authManager.isLoading)
 
                             // "OR" divider before Apple button
                             HStack {
-                                Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.3))
+                                Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.6))
                                 Text("OR")
-                                    .font(.caption).foregroundColor(.white.opacity(0.7))
+                                    .font(.caption).foregroundColor(.white.opacity(0.8))
                                     .padding(.horizontal, 16)
-                                Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.3))
+                                Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.6))
                             }
 
                             // Sign in with Apple — required by App Store guideline 4.8
@@ -177,7 +187,7 @@ struct AuthView: View {
                         // Toggle Sign In/Sign Up
                         VStack(spacing: 12) {
                             Divider()
-                                .background(Color.white.opacity(0.3))
+                                .background(Color.white.opacity(0.6))
                             
                             Button(action: { isSignUp.toggle() }) {
                                 HStack {
@@ -255,21 +265,37 @@ struct AuthTextField: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .foregroundColor(.gray)
+                .foregroundColor(Color(.secondaryLabel))
                 .frame(width: 20)
             
             if isSecure {
-                SecureField(placeholder, text: $text)
+                SecureField(
+                    "",
+                    text: $text,
+                    prompt: Text(placeholder).foregroundColor(Color(.secondaryLabel))
+                )
+                .foregroundColor(Color(.label))
+                .tint(Color.accentColor)
             } else {
-                TextField(placeholder, text: $text)
+                TextField(
+                    "",
+                    text: $text,
+                    prompt: Text(placeholder).foregroundColor(Color(.secondaryLabel))
+                )
+                    .foregroundColor(Color(.label))
+                    .tint(Color.accentColor)
                     .keyboardType(.emailAddress)
                     .autocapitalization(.none)
             }
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(.separator), lineWidth: 1)
+        )
+        .shadow(color: Color(.separator).opacity(0.35), radius: 2, x: 0, y: 1)
     }
 }
 
@@ -294,7 +320,7 @@ struct ForgotPasswordView: View {
                     
                     Text("Enter your email address and we'll send you a link to reset your password.")
                         .font(.body)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(.secondaryLabel))
                         .multilineTextAlignment(.center)
                 }
                 .padding(.top, 50)
@@ -312,7 +338,13 @@ struct ForgotPasswordView: View {
                     HStack {
                         if authManager.isLoading {
                             ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .progressViewStyle(
+                                    CircularProgressViewStyle(
+                                        tint: authManager.validateEmail(email)
+                                            ? Color.white
+                                            : Color(.label)
+                                    )
+                                )
                                 .scaleEffect(0.8)
                         } else {
                             Image(systemName: "paperplane.fill")
@@ -321,11 +353,17 @@ struct ForgotPasswordView: View {
                         Text(authManager.isLoading ? "Sending..." : "Send Reset Link")
                             .fontWeight(.semibold)
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(
+                        authManager.validateEmail(email)
+                            ? Color.white
+                            : Color(.label)
+                    )
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(
-                        authManager.validateEmail(email) ? Color.blue : Color.gray
+                        authManager.validateEmail(email)
+                            ? Color("AuthResetButtonBackground")
+                            : Color(.systemGray2)
                     )
                     .cornerRadius(12)
                 }
@@ -370,4 +408,4 @@ struct ForgotPasswordView: View {
 
 #Preview {
     AuthView()
-} 
+}
