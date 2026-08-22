@@ -127,6 +127,10 @@ env:
 - runFlow: flows/101_smart_sales_csv_mapping.yaml
 - runFlow: flows/102_sale_total_hierarchy.yaml
 
+# ── iOS-A5 confidence review UX ─────────────────
+- runFlow: flows/82_smart_count_auto_accept.yaml
+- runFlow: flows/83_smart_sales_auto_accept.yaml
+
 # ── Paywall flows (manual — need seeded data) ────
 # - runFlow: flows/17_paywall_storage_limit.yaml
 # - runFlow: flows/18_paywall_item_limit.yaml

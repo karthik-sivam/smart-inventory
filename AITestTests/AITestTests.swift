@@ -365,11 +365,11 @@ final class SmartInventoryTests: XCTestCase {
         XCTAssertEqual(dto.toParsedSaleRow().confidence, 0.87, accuracy: 0.0001)
     }
 
-    func testParsedSaleRowDTOLegacyResponseUsesMidrangeConfidence() throws {
+    func testParsedSaleRowDTORequiresConfidence() {
         let json = #"[{"itemName":"Tea","quantitySold":2,"pricePerUnit":15,"notes":""}]"#
-        let dto = try XCTUnwrap(JSONDecoder().decode([ParsedSaleRowDTO].self, from: Data(json.utf8)).first)
-
-        XCTAssertEqual(dto.confidence, 0.5, accuracy: 0.0001)
+        XCTAssertThrowsError(
+            try JSONDecoder().decode([ParsedSaleRowDTO].self, from: Data(json.utf8))
+        )
     }
 
     func testNegativeStockMessagesOnlyForNegativeItems() {

@@ -18,7 +18,7 @@ struct SmartSalesEntryView: View {
                 VStack(spacing: 16) {
                     headerSection
                     modeCards
-                    if !subscriptionManager.isPro { proUpsellBanner }
+                    if !canUseSmartSales { proUpsellBanner }
                     Spacer(minLength: 40)
                 }
                 .padding(.horizontal)
@@ -100,7 +100,7 @@ struct SmartSalesEntryView: View {
     }
 
     private func openSaleMode(_ mode: String, action: () -> Void) {
-        guard subscriptionManager.isPro else {
+        guard canUseSmartSales else {
             showingPaywall = true
             return
         }
@@ -116,7 +116,7 @@ struct SmartSalesEntryView: View {
         accessibilityId: String,
         action: @escaping () -> Void
     ) -> some View {
-        let isPro = subscriptionManager.isPro
+        let isPro = canUseSmartSales
         return Button(action: isPro ? action : { showingPaywall = true }) {
             HStack(spacing: 16) {
                 ZStack {
@@ -147,6 +147,10 @@ struct SmartSalesEntryView: View {
         }
         .buttonStyle(PlainButtonStyle())
         .accessibilityIdentifier("smartSalesMode_\(accessibilityId)")
+    }
+
+    private var canUseSmartSales: Bool {
+        subscriptionManager.isPro || SmartReviewFixture.isSmartSalesEnabled
     }
 
     private var proUpsellBanner: some View {
