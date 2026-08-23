@@ -523,4 +523,12 @@
 \bullet Facebook SDK: Package.resolved still 17.4.0 because SPM rule is upToNextMajor from 17.0.0 (18.x will not apply). Leave pinned; updating does not fix ITMS-91064.\par
 \bullet Build number bumped to 8 (MARKETING_VERSION stays 1.4).\par
 \bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b iOS-F8 \emdash SmartCount + SmartSales entry chips on manual screens}\par
+[COMPLETED]\par
+\bullet iOS-F8: SmartCount + SmartSales entry chips added to Add Item and Sales manual entry. Free-tier quota-aware; Pro always visible. TODO left for SmartPurchase chip when iOS-C1 lands.\par
+\bullet Add Item chip on AddItemView + AddItemToStorageView (actual add flows) and EditItemView only when isAddFlow; hidden in Edit mode.\par
+\bullet Sales chip on QuickSaleSheet (manual sale form). Session-only X dismiss. Analytics: ai_entry_chip_shown / ai_entry_chip_tapped.\par
+\bullet Files: AIEntryChip.swift, AIUsageManager.swift, AnalyticsManager.swift, StorageDetailView.swift, ItemListView.swift, EditItemView.swift, QuickSaleSheet.swift, Localizable.xcstrings, AITestTests.swift\par
+\bullet Build: Swift compile OK (SmartInventory.app produced). Post-build Crashlytics upload-symbols script failed (env/sandbox, not code).\par
 }

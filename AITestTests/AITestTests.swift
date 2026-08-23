@@ -374,6 +374,81 @@ final class SmartInventoryTests: XCTestCase {
         XCTAssertEqual(storage.totalValue, 22, accuracy: 0.001)
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // MARK: - iOS-F8: AI entry chip visibility
+    // ──────────────────────────────────────────────────────────────────────
+
+    func testAIEntryChipHiddenAfterSessionDismiss() {
+        XCTAssertFalse(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartCount,
+                isPro: false,
+                dismissedThisSession: true,
+                hasSmartCountQuotaRemaining: true
+            )
+        )
+        XCTAssertFalse(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartSales,
+                isPro: true,
+                dismissedThisSession: true,
+                hasSmartCountQuotaRemaining: true
+            )
+        )
+    }
+
+    func testAIEntryChipHiddenForFreeUserWhenSmartCountQuotaExhausted() {
+        XCTAssertFalse(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartCount,
+                isPro: false,
+                dismissedThisSession: false,
+                hasSmartCountQuotaRemaining: false
+            )
+        )
+    }
+
+    func testAIEntryChipVisibleForFreeUserWithSmartCountQuota() {
+        XCTAssertTrue(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartCount,
+                isPro: false,
+                dismissedThisSession: false,
+                hasSmartCountQuotaRemaining: true
+            )
+        )
+    }
+
+    func testAIEntryChipSmartSalesAlwaysVisibleUnlessDismissed() {
+        XCTAssertTrue(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartSales,
+                isPro: false,
+                dismissedThisSession: false,
+                hasSmartCountQuotaRemaining: false
+            )
+        )
+        XCTAssertTrue(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartSales,
+                isPro: true,
+                dismissedThisSession: false,
+                hasSmartCountQuotaRemaining: false
+            )
+        )
+    }
+
+    func testAIEntryChipAlwaysVisibleForProOnSmartCount() {
+        XCTAssertTrue(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartCount,
+                isPro: true,
+                dismissedThisSession: false,
+                hasSmartCountQuotaRemaining: false
+            )
+        )
+    }
+
     func testSaleEventRevenueUsesPriceTimesQty() {
         let sale = SaleEvent(
             item: nil,

@@ -531,6 +531,7 @@ struct AddItemView: View {
     @State private var didSaveAddItem = false
     @State private var didEmitAddItemClose = false
     @State private var showingItemLimitPaywall = false
+    @State private var showingSmartCount = false
 
     enum Field: Hashable {
         case name, description, sku, barcode
@@ -545,6 +546,10 @@ struct AddItemView: View {
                     selectedPhotoData: $selectedPhotoData,
                     existingPhotoURL: nil
                 )
+
+                AIEntryChip(feature: .smartCount, screen: "add_item", style: .formSection) {
+                    showingSmartCount = true
+                }
 
                 if subscriptionManager.isPro && !templates.isEmpty && teamManager.canEdit {
                     Section {
@@ -732,6 +737,9 @@ struct AddItemView: View {
         .sheet(isPresented: $showingItemLimitPaywall) {
             PaywallView(source: "item_limit", trigger: "item_cap")
                 .sheetStyle()
+        }
+        .sheet(isPresented: $showingSmartCount) {
+            SmartCountView(preselectedStorage: storage).sheetStyle()
         }
         .onAppear {
             addItemOpenedAt = Date()

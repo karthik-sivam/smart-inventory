@@ -20,6 +20,7 @@ struct EditItemView: View {
     @State private var templateToastMessage: String? = nil
     @State private var selectedPhotoData: Data? = nil
     @State private var showingBarcodeScanner = false
+    @State private var showingSmartCount = false
     /// Stashes the scanned code while the fullScreenCover dismisses; applied
     /// in `onDismiss` so we don't mutate `formVM.barcode` in the same render
     /// pass that toggles `showingBarcodeScanner`.
@@ -39,6 +40,12 @@ struct EditItemView: View {
                     selectedPhotoData: $selectedPhotoData,
                     existingPhotoURL: formVM.existingPhotoURL
                 )
+
+                if isAddFlow {
+                    AIEntryChip(feature: .smartCount, screen: "add_item", style: .formSection) {
+                        showingSmartCount = true
+                    }
+                }
 
                 Section(header: Text("Item Information")) {
                     TextField("Item Name", text: $formVM.name)
@@ -378,6 +385,9 @@ struct EditItemView: View {
             .onAppear {
                 AnalyticsManager.shared.track(.barcodeScanInitiated)
             }
+        }
+        .sheet(isPresented: $showingSmartCount) {
+            SmartCountView().sheetStyle()
         }
         .toast(message: $templateToastMessage)
     }

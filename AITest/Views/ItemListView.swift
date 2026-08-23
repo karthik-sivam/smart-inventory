@@ -532,6 +532,7 @@ struct AddItemToStorageView: View {
     /// drop the value or cascade-dismiss the parent sheet).
     @State private var pendingScannedBarcode: String?
     @State private var didTrackAddItemStarted = false
+    @State private var showingSmartCount = false
 
     init(initialBarcode: String = "") {
         self.initialBarcode = initialBarcode
@@ -554,6 +555,10 @@ struct AddItemToStorageView: View {
                                 .foregroundColor(.accentColor)
                         }
                     }
+                }
+
+                AIEntryChip(feature: .smartCount, screen: "add_item", style: .formSection) {
+                    showingSmartCount = true
                 }
 
                 Section(header: Text("Item Information")) {
@@ -756,6 +761,9 @@ struct AddItemToStorageView: View {
         .sheet(isPresented: $showingItemLimitPaywall) {
             PaywallView(source: "item_limit", trigger: "item_cap")
                 .sheetStyle()
+        }
+        .sheet(isPresented: $showingSmartCount) {
+            SmartCountView(preselectedStorage: formVM.selectedStorage).sheetStyle()
         }
         .onAppear {
             if !didTrackAddItemStarted {

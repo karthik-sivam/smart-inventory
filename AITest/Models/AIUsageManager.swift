@@ -54,6 +54,15 @@ final class AIUsageManager: ObservableObject {
         return max(0, AIUsageManager.freeLimit - usageThisMonth(type))
     }
 
+    /// True when the user can still run at least one Smart Count AI mode
+    /// (voice, photo, or sheet — CSV shares the sheet quota) this month.
+    func hasSmartCountQuotaRemaining(isPro: Bool) -> Bool {
+        if isPro { return true }
+        return canUse(.voice, isPro: false)
+            || canUse(.image, isPro: false)
+            || canUse(.paper, isPro: false)
+    }
+
     func recordUse(_ type: FeatureType) {
         let key = storageKey(type)
         let current = UserDefaults.standard.integer(forKey: key)

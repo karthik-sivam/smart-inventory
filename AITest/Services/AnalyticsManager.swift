@@ -207,6 +207,8 @@ enum StoqlyEvent {
     case purchaseEntryCancelled(mode: String)
     case swipeActionUsed(screen: String, action: String)
     case buttonTapped(screen: String, control: String)
+    case aiEntryChipShown(screen: String, feature: String)
+    case aiEntryChipTapped(screen: String, feature: String)
 
     // MARK: Event name + properties
 
@@ -310,6 +312,8 @@ enum StoqlyEvent {
         case .purchaseEntryCancelled:     return "purchase_entry_cancelled"
         case .swipeActionUsed:            return "swipe_action_used"
         case .buttonTapped:               return "button_tapped"
+        case .aiEntryChipShown:           return "ai_entry_chip_shown"
+        case .aiEntryChipTapped:          return "ai_entry_chip_tapped"
         }
     }
 
@@ -471,6 +475,9 @@ enum StoqlyEvent {
             return ["screen": screen, "action": action]
         case .buttonTapped(let screen, let control):
             return ["screen": screen, "control": control]
+        case .aiEntryChipShown(let screen, let feature),
+             .aiEntryChipTapped(let screen, let feature):
+            return ["screen": screen, "feature": feature]
         }
     }
 }

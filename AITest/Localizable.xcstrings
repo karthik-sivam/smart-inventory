@@ -9053,6 +9053,17 @@
         }
       }
     },
+    "add_item.ai_chip.smart_count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Or scan a shelf with Smart Count →"
+          }
+        }
+      }
+    },
     "Adjust by" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11426,6 +11437,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "本月还剩 %1$d 次语音盘点%2$@"
+          }
+        }
+      }
+    },
+    "ai_chip.dismiss.a11y_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dismiss"
           }
         }
       }
@@ -74699,6 +74721,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "销售总额"
+          }
+        }
+      }
+    },
+    "sales_manual.ai_chip.smart_sales" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Or scan a bill with Smart Sales →"
           }
         }
       }
