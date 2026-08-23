@@ -536,4 +536,26 @@ free sandbox: [list]. Maestro suite: green.}\par
 \bullet Manual counts / manual sales remain free.\par
 \bullet Maestro suite: FAILED at flow 01 (app backgrounded to SpringBoard during XCTest driver; not an isPro regression). Re-run maestro test maestro/run_all.yaml on a dedicated sim when no other agent holds the device.\par
 \bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped.\par
+\par
+{\b iOS-F3: Paywall auto-dismiss from ItemPhotoSection fixed. Root cause:
+`.sheet` was attached to a Form `Section` with two children (lock row +
+Upgrade hint), so SwiftUI presented two sheets at once and iOS dismissed
+immediately. Compounded by nested sheet (Edit/Add already `.sheet` +
+`.sheetStyle()` detents from ItemDetailView) and SubscriptionManager
+publish on PaywallView.loadProducts(). Fix: `.fullScreenCover` on the
+single lock-row identity; no `.sheetStyle()`. 5 back-to-back opens:
+compile-verified; dedicated-sim QA tap pending. No regression to other
+paywall sources.}\par
+[COMPLETED]\par
+\bullet ItemPhotoSection.swift: moved paywall off Section `.sheet` onto
+freePhotoRow `.fullScreenCover`; source/trigger remain item_photo\par
+\bullet PaywallView S37-B didTrackShown guard untouched; Templates / Bulk
+Import / cap-gate `.sheet` paths unchanged\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0,
+BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor
+metadata extraction skipped.\par
+\bullet Device 5x: Maestro could not reach Dashboard on the occupied sim
+(Total Storages not visible after launch — same class of blocker as
+iOS-A1). Identity fix is compile-verified; 5 back-to-back opens need a
+dedicated free-sandbox tap (QA handoff below).\par
 }
