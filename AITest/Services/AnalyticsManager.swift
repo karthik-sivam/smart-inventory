@@ -1,5 +1,7 @@
 import Foundation
 import AmplitudeSwift
+import Network
+import UIKit
 
 // MARK: - AnalyticsManager
 //
@@ -23,10 +25,23 @@ final class AnalyticsManager: @unchecked Sendable {
 
     // MARK: - Singleton
     static let shared = AnalyticsManager()
-    private init() {}
+    private init() {
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            self?.isOffline = path.status != .satisfied
+        }
+        pathMonitor.start(queue: pathQueue)
+        Task { @MainActor [weak self] in
+            self?.cachedDeviceClass = Self.deviceClassOnMain()
+        }
+    }
 
     private var amplitude: Amplitude?
     private var isConfigured = false
+    private let fallbackSessionId = UUID().uuidString
+    private let pathMonitor = NWPathMonitor()
+    private let pathQueue = DispatchQueue(label: "stoqly.analytics.path")
+    private var isOffline = false
+    private var cachedDeviceClass = "phone"
 
     // MARK: - Configure (call once in AppDelegate, after FirebaseApp.configure())
 
@@ -76,11 +91,51 @@ final class AnalyticsManager: @unchecked Sendable {
     // MARK: - Track
 
     func track(_ event: StoqlyEvent) {
+        var props = event.properties
+        for (key, value) in standardProperties() {
+            if props[key] == nil {
+                props[key] = value
+            }
+        }
+        #if DEBUG
+        if event.isAdLifecycleEvent {
+            // TODO(iOS-F4): remove this debug print after CEO sees the first Amplitude reads
+            NSLog("📊 [iOS-F4] Amplitude event: \(event.name) \(props)")
+        }
+        #endif
         guard isConfigured else { return }
         amplitude?.track(
             eventType: event.name,
-            eventProperties: event.properties
+            eventProperties: props
         )
+    }
+
+    // MARK: - Standard properties (docs/event-taxonomy.md)
+
+    private func standardProperties() -> [String: Any] {
+        [
+            "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
+            "platform": "ios",
+            "is_offline": isOffline,
+            "device_class": cachedDeviceClass,
+            "session_id": sessionIdString
+        ]
+    }
+
+    private var sessionIdString: String {
+        if let amplitude {
+            return String(amplitude.getSessionId())
+        }
+        return fallbackSessionId
+    }
+
+    @MainActor
+    private static func deviceClassOnMain() -> String {
+        switch UIDevice.current.userInterfaceIdiom {
+        case .pad: return "tablet"
+        case .phone: return "phone"
+        default: return "other"
+        }
     }
 }
 
@@ -208,6 +263,14 @@ enum StoqlyEvent {
     case swipeActionUsed(screen: String, action: String)
     case buttonTapped(screen: String, control: String)
 
+    // ── AdMob lifecycle (iOS-F4) ───────────────────────────────────────────────
+    case adRequested(unitId: String, format: String, sourceScreen: String, isPro: Bool, suppressed: Bool)
+    case adLoaded(unitId: String, format: String, latencyMs: Int)
+    case adFailedToLoad(unitId: String, format: String, errorCode: Int, errorDomain: String, errorLocalized: String)
+    case adImpression(unitId: String, format: String, sourceScreen: String)
+    case adClicked(unitId: String, format: String, sourceScreen: String)
+    case adDismissed(unitId: String, format: String, dwellMs: Int)
+
     // MARK: Event name + properties
 
     var name: String {
@@ -310,6 +373,13 @@ enum StoqlyEvent {
         case .purchaseEntryCancelled:     return "purchase_entry_cancelled"
         case .swipeActionUsed:            return "swipe_action_used"
         case .buttonTapped:               return "button_tapped"
+
+        case .adRequested:                return "ad_requested"
+        case .adLoaded:                   return "ad_loaded"
+        case .adFailedToLoad:             return "ad_failed_to_load"
+        case .adImpression:               return "ad_impression"
+        case .adClicked:                  return "ad_clicked"
+        case .adDismissed:                return "ad_dismissed"
         }
     }
 
@@ -471,6 +541,41 @@ enum StoqlyEvent {
             return ["screen": screen, "action": action]
         case .buttonTapped(let screen, let control):
             return ["screen": screen, "control": control]
+
+        case .adRequested(let unitId, let format, let sourceScreen, let isPro, let suppressed):
+            return [
+                "unit_id": unitId,
+                "format": format,
+                "source_screen": sourceScreen,
+                "is_pro": isPro,
+                "suppressed": suppressed
+            ]
+        case .adLoaded(let unitId, let format, let latencyMs):
+            return ["unit_id": unitId, "format": format, "latency_ms": latencyMs]
+        case .adFailedToLoad(let unitId, let format, let errorCode, let errorDomain, let errorLocalized):
+            return [
+                "unit_id": unitId,
+                "format": format,
+                "error_code": errorCode,
+                "error_domain": errorDomain,
+                "error_localized": errorLocalized
+            ]
+        case .adImpression(let unitId, let format, let sourceScreen):
+            return ["unit_id": unitId, "format": format, "source_screen": sourceScreen]
+        case .adClicked(let unitId, let format, let sourceScreen):
+            return ["unit_id": unitId, "format": format, "source_screen": sourceScreen]
+        case .adDismissed(let unitId, let format, let dwellMs):
+            return ["unit_id": unitId, "format": format, "dwell_ms": dwellMs]
+        }
+    }
+
+    /// AdMob lifecycle events that get a temporary DEBUG console dump (iOS-F4).
+    var isAdLifecycleEvent: Bool {
+        switch self {
+        case .adRequested, .adLoaded, .adFailedToLoad, .adImpression, .adClicked, .adDismissed:
+            return true
+        default:
+            return false
         }
     }
 }

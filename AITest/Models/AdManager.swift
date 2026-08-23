@@ -59,6 +59,13 @@ class AdManager: NSObject, ObservableObject {
     private let minTimeBetweenAds: TimeInterval = 300  // 5 minutes between ads
     private let actionsBeforeAd = 2                    // Show ad every 2 workflow actions
 
+    /// Last screen/event that triggered a banner mount (for ad_* source_screen).
+    var bannerSourceScreen: String = "banner_overlay"
+    private var interstitialSourceScreen: String = "app_launch"
+    private var lastInterstitialUnitID: String = ""
+    private var interstitialRequestStartedAt: Date?
+    private var interstitialPresentedAt: Date?
+
     // MARK: - Enums
 
     enum AdType {
@@ -148,6 +155,12 @@ class AdManager: NSObject, ObservableObject {
         completionCount += 1
         if shouldShowAdNow() {
             currentAdType = determineAdType(for: event)
+            let screen = sourceScreenName(for: event)
+            if currentAdType == .banner {
+                bannerSourceScreen = screen
+            } else {
+                interstitialSourceScreen = screen
+            }
             loadAndShowAd()
         }
         #endif
@@ -190,18 +203,24 @@ class AdManager: NSObject, ObservableObject {
     private func preloadInterstitialAd() {
         #if !targetEnvironment(simulator)
         let unitID = isLiveBuild ? interstitialAdUnitID : testInterstitialUnitID
+        lastInterstitialUnitID = unitID
+        interstitialRequestStartedAt = Date()
+        emitAdRequested(unitID: unitID, format: "interstitial", sourceScreen: interstitialSourceScreen)
         let request = GADRequest()
         GADInterstitialAd.load(withAdUnitID: unitID, request: request) { [weak self] ad, error in
             let wrapped = ad.map { SendableAd(value: $0) }
-            let errorMsg = error?.localizedDescription
+            let nsError = error as NSError?
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                if let errorMsg {
-                    print("AdMob: Interstitial preload failed — \(errorMsg)")
+                if let nsError {
+                    print("AdMob: Interstitial preload failed — \(nsError.localizedDescription)")
+                    self.emitAdFailedToLoad(unitID: unitID, format: "interstitial", error: nsError)
                     return
                 }
+                let latency = self.latencyMs(since: self.interstitialRequestStartedAt)
                 self.interstitialAd = wrapped?.value
                 self.interstitialAd?.fullScreenContentDelegate = self
+                self.emitAdLoaded(unitID: unitID, format: "interstitial", latencyMs: latency)
                 print("AdMob: Interstitial preloaded and ready.")
             }
         }
@@ -214,20 +233,26 @@ class AdManager: NSObject, ObservableObject {
         adLoadError = nil
 
         let unitID = isLiveBuild ? interstitialAdUnitID : testInterstitialUnitID
+        lastInterstitialUnitID = unitID
+        interstitialRequestStartedAt = Date()
+        emitAdRequested(unitID: unitID, format: "interstitial", sourceScreen: interstitialSourceScreen)
         let request = GADRequest()
         GADInterstitialAd.load(withAdUnitID: unitID, request: request) { [weak self] ad, error in
             let wrapped = ad.map { SendableAd(value: $0) }
-            let errorMsg = error?.localizedDescription
+            let nsError = error as NSError?
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.isAdLoading = false
-                if let errorMsg {
-                    self.adLoadError = errorMsg
-                    print("AdMob: Interstitial load failed — \(errorMsg)")
+                if let nsError {
+                    self.adLoadError = nsError.localizedDescription
+                    print("AdMob: Interstitial load failed — \(nsError.localizedDescription)")
+                    self.emitAdFailedToLoad(unitID: unitID, format: "interstitial", error: nsError)
                     return
                 }
+                let latency = self.latencyMs(since: self.interstitialRequestStartedAt)
                 self.interstitialAd = wrapped?.value
                 self.interstitialAd?.fullScreenContentDelegate = self
+                self.emitAdLoaded(unitID: unitID, format: "interstitial", latencyMs: latency)
                 self.shouldShowAd = true
                 self.lastAdShown = Date()
                 self.completionCount = 0
@@ -287,8 +312,10 @@ class AdManager: NSObject, ObservableObject {
         currentAdType = type
         switch type {
         case .interstitial:
+            interstitialSourceScreen = "settings_debug"
             loadInterstitialAd()
         case .banner:
+            bannerSourceScreen = "settings_debug"
             shouldShowAd = true
         }
     }
@@ -320,6 +347,104 @@ class AdManager: NSObject, ObservableObject {
         return true   // Use live ad unit IDs in release
         #endif
     }
+
+    private func sourceScreenName(for event: CompletionEvent) -> String {
+        switch event {
+        case .storageCreated: return "storage_created"
+        case .itemAdded: return "item_added"
+        case .inventoryCountCompleted: return "inventory_count"
+        case .itemUpdated: return "item_updated"
+        case .storageUpdated: return "storage_updated"
+        case .exportCompleted: return "export"
+        case .barcodeScanned: return "barcode_scan"
+        case .bulkImportCompleted: return "bulk_import"
+        }
+    }
+
+    private func latencyMs(since start: Date?) -> Int {
+        guard let start else { return 0 }
+        return Int(Date().timeIntervalSince(start) * 1000)
+    }
+
+    /// Dashboard / ItemList call this on appear. Fires `ad_requested` so Amplitude
+    /// can distinguish entitlement suppression from actual AdMob fill. Does not
+    /// change whether a banner is mounted.
+    func noteBannerOpportunity(sourceScreen: String) {
+        let suppressed = !SubscriptionManager.shared.shouldShowAds
+        emitAdRequested(unitID: bannerAdUnitID, format: "banner", sourceScreen: sourceScreen)
+        printAdDecisionTree(sourceScreen: sourceScreen, format: "banner", suppressed: suppressed)
+        #if DEBUG && targetEnvironment(simulator)
+        if !suppressed {
+            // Simulator never calls the GMA SDK; emit failed_to_load so the
+            // Xcode console probe has a complete request → result pair.
+            emitAdFailedToLoad(
+                unitID: bannerAdUnitID,
+                format: "banner",
+                error: NSError(
+                    domain: "simulator",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "AdMob SDK is skipped on simulator"]
+                )
+            )
+        }
+        #endif
+    }
+
+    func emitAdRequested(unitID: String, format: String, sourceScreen: String) {
+        AnalyticsManager.shared.track(.adRequested(
+            unitId: unitID,
+            format: format,
+            sourceScreen: sourceScreen,
+            isPro: SubscriptionManager.shared.isPro,
+            suppressed: !SubscriptionManager.shared.shouldShowAds
+        ))
+    }
+
+    func emitAdLoaded(unitID: String, format: String, latencyMs: Int) {
+        AnalyticsManager.shared.track(.adLoaded(unitId: unitID, format: format, latencyMs: latencyMs))
+    }
+
+    func emitAdFailedToLoad(unitID: String, format: String, error: NSError) {
+        AnalyticsManager.shared.track(.adFailedToLoad(
+            unitId: unitID,
+            format: format,
+            errorCode: error.code,
+            errorDomain: error.domain,
+            errorLocalized: error.localizedDescription
+        ))
+    }
+
+    func emitAdImpression(unitID: String, format: String, sourceScreen: String) {
+        AnalyticsManager.shared.track(.adImpression(unitId: unitID, format: format, sourceScreen: sourceScreen))
+    }
+
+    func emitAdClicked(unitID: String, format: String, sourceScreen: String) {
+        AnalyticsManager.shared.track(.adClicked(unitId: unitID, format: format, sourceScreen: sourceScreen))
+    }
+
+    func emitAdDismissed(unitID: String, format: String, dwellMs: Int) {
+        AnalyticsManager.shared.track(.adDismissed(unitId: unitID, format: format, dwellMs: dwellMs))
+    }
+
+    private func printAdDecisionTree(sourceScreen: String, format: String, suppressed: Bool) {
+        #if DEBUG
+        let mounted = shouldShowAd && currentAdType == .banner
+        NSLog("📊 [iOS-F4] Ad decision tree source=%@ format=%@ isInitialized=%d isPro=%d hasRemovedAds=%d shouldShowAds=%d suppressed=%d shouldShowAd=%d currentAdType=%@ bannerMounted=%d completionCount=%d attResolved=%d attAuthorized=%d",
+              sourceScreen,
+              format,
+              isInitialized,
+              SubscriptionManager.shared.isPro,
+              SubscriptionManager.shared.hasRemovedAds,
+              SubscriptionManager.shared.shouldShowAds,
+              suppressed,
+              shouldShowAd,
+              String(describing: currentAdType),
+              mounted,
+              completionCount,
+              TrackingPermissionManager.shared.hasResolved,
+              TrackingPermissionManager.shared.isAuthorized)
+        #endif
+    }
 }
 
 // MARK: - GADFullScreenContentDelegate
@@ -328,15 +453,17 @@ class AdManager: NSObject, ObservableObject {
 @MainActor
 extension AdManager: @preconcurrency GADFullScreenContentDelegate {
     func adDidDismissFullScreenContent(_ ad: GADFullScreenPresentingAd) {
+        let dwell = latencyMs(since: interstitialPresentedAt)
+        interstitialPresentedAt = nil
+        emitAdDismissed(unitID: lastInterstitialUnitID, format: "interstitial", dwellMs: dwell)
         shouldShowAd = false
         preloadInterstitialAd()
         print("AdMob: Ad dismissed — preloading next.")
     }
 
     func ad(_ ad: GADFullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
-        // Auto-dismiss the cover silently — don't leave adLoadError set because
-        // it persists across the dismiss and causes the NEXT ad cycle to immediately
-        // show "Ad unavailable" before even attempting to present.
+        let nsError = error as NSError
+        emitAdFailedToLoad(unitID: lastInterstitialUnitID, format: "interstitial", error: nsError)
         shouldShowAd = false
         adLoadError = nil
         interstitialAd = nil
@@ -345,7 +472,16 @@ extension AdManager: @preconcurrency GADFullScreenContentDelegate {
     }
 
     func adWillPresentFullScreenContent(_ ad: GADFullScreenPresentingAd) {
+        interstitialPresentedAt = Date()
         print("AdMob: Ad presenting full screen.")
+    }
+
+    func adDidRecordImpression(_ ad: GADFullScreenPresentingAd) {
+        emitAdImpression(unitID: lastInterstitialUnitID, format: "interstitial", sourceScreen: interstitialSourceScreen)
+    }
+
+    func adDidRecordClick(_ ad: GADFullScreenPresentingAd) {
+        emitAdClicked(unitID: lastInterstitialUnitID, format: "interstitial", sourceScreen: interstitialSourceScreen)
     }
 }
 #endif
@@ -354,24 +490,91 @@ extension AdManager: @preconcurrency GADFullScreenContentDelegate {
 
 struct BannerAdView: UIViewRepresentable {
     let adUnitID: String
+    var sourceScreen: String = "banner_overlay"
 
     #if !targetEnvironment(simulator)
+    func makeCoordinator() -> Coordinator {
+        Coordinator(adUnitID: adUnitID, sourceScreen: sourceScreen)
+    }
+
     func makeUIView(context: Context) -> GADBannerView {
         let banner = GADBannerView(adSize: GADAdSizeBanner)
         banner.adUnitID = adUnitID
-        // Use the key window's root view controller (non-deprecated approach)
+        banner.delegate = context.coordinator
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
             banner.rootViewController = root
         }
+        context.coordinator.requestedAt = Date()
+        AdManager.shared.emitAdRequested(unitID: adUnitID, format: "banner", sourceScreen: sourceScreen)
         banner.load(GADRequest())
         return banner
     }
 
     func updateUIView(_ uiView: GADBannerView, context: Context) {}
 
+    final class Coordinator: NSObject, GADBannerViewDelegate {
+        let adUnitID: String
+        let sourceScreen: String
+        var requestedAt = Date()
+        var presentedAt: Date?
+
+        init(adUnitID: String, sourceScreen: String) {
+            self.adUnitID = adUnitID
+            self.sourceScreen = sourceScreen
+        }
+
+        func bannerViewDidReceiveAd(_ bannerView: GADBannerView) {
+            let latency = Int(Date().timeIntervalSince(requestedAt) * 1000)
+            Task { @MainActor [adUnitID] in
+                AdManager.shared.emitAdLoaded(unitID: adUnitID, format: "banner", latencyMs: latency)
+            }
+        }
+
+        func bannerView(_ bannerView: GADBannerView, didFailToReceiveAdWithError error: Error) {
+            let nsError = error as NSError
+            Task { @MainActor [adUnitID] in
+                AdManager.shared.emitAdFailedToLoad(unitID: adUnitID, format: "banner", error: nsError)
+            }
+        }
+
+        func bannerViewDidRecordImpression(_ bannerView: GADBannerView) {
+            Task { @MainActor [adUnitID, sourceScreen] in
+                AdManager.shared.emitAdImpression(unitID: adUnitID, format: "banner", sourceScreen: sourceScreen)
+            }
+        }
+
+        func bannerViewDidRecordClick(_ bannerView: GADBannerView) {
+            Task { @MainActor [adUnitID, sourceScreen] in
+                AdManager.shared.emitAdClicked(unitID: adUnitID, format: "banner", sourceScreen: sourceScreen)
+            }
+        }
+
+        func bannerViewWillPresentScreen(_ bannerView: GADBannerView) {
+            presentedAt = Date()
+        }
+
+        func bannerViewDidDismissScreen(_ bannerView: GADBannerView) {
+            let dwell = presentedAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? 0
+            presentedAt = nil
+            Task { @MainActor [adUnitID] in
+                AdManager.shared.emitAdDismissed(unitID: adUnitID, format: "banner", dwellMs: dwell)
+            }
+        }
+    }
+
     #else
     func makeUIView(context: Context) -> UIView {
+        AdManager.shared.emitAdRequested(unitID: adUnitID, format: "banner", sourceScreen: sourceScreen)
+        AdManager.shared.emitAdFailedToLoad(
+            unitID: adUnitID,
+            format: "banner",
+            error: NSError(
+                domain: "simulator",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "AdMob SDK is skipped on simulator"]
+            )
+        )
         let view = UIView()
         view.backgroundColor = UIColor.systemGray5
         let label = UILabel()
@@ -490,7 +693,7 @@ struct RealAdIntegrationView<Content: View>: View {
             if adManager.shouldShowAd && adManager.currentAdType == .banner {
                 VStack {
                     Spacer()
-                    BannerAdView(adUnitID: adManager.bannerAdUnitID)
+                    BannerAdView(adUnitID: adManager.bannerAdUnitID, sourceScreen: adManager.bannerSourceScreen)
                         .frame(height: 50)
                         .padding(.bottom, 90) // clear the custom tab bar
                 }

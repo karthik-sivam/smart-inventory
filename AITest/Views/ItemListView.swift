@@ -380,6 +380,7 @@ struct ItemListView: View {
         }
         .onAppear {
             viewModel.bind(modelContext: modelContext, items: items, storages: storages)
+            AdManager.shared.noteBannerOpportunity(sourceScreen: "ItemList")
         }
         .onChange(of: items) { _, newItems in
             viewModel.updateItems(newItems)
