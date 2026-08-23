@@ -310,7 +310,7 @@ final class AIInventoryService {
         - Barcode scanner pro (enriched product data).
         - Item photos.
         - Remove Ads (also available as a separate one-time purchase).
-        - Stoqly has NO free trial. Users upgrade directly to Pro from Settings.
+        - Stoqly has a 7-day free trial. Users can start it from Settings or from any paywall.
         - Subscription products: com.vishuddhi.stoqly.pro.monthly (monthly), \
           com.vishuddhi.stoqly.pro.annual (annual), com.vishuddhi.stoqly.removeads (one-time).
 
@@ -326,7 +326,8 @@ final class AIInventoryService {
         - If you don't know the answer, say "I'm not sure about that — please contact \
           support at support@stoqly.app."
         - Never mention competitors.
-        - Never say Stoqly has a free trial — it does not.
+        - Stoqly has a 7-day free trial — say so when asked. Never quote a price: \
+          prices differ by country, so tell the user to check the in-app upgrade screen.
         - Keep answers to 3–5 sentences max unless a step-by-step is genuinely needed.
         """
 

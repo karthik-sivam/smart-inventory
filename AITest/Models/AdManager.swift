@@ -14,7 +14,7 @@ import GoogleMobileAds
  - CSV export
  - Basic dashboard
 
- Pro Tier ($4.99/mo or $39.99/yr):
+ Pro Tier (7-day free trial, then the StoreKit localized price):
  1. Cloud Sync & Backup       — Firestore real-time sync, multi-device
  2. Unlimited Storages        — Remove 5-storage free limit
  3. Advanced Analytics        — Trend charts, detailed reports

@@ -523,4 +523,31 @@
 \bullet Facebook SDK: Package.resolved still 17.4.0 because SPM rule is upToNextMajor from 17.0.0 (18.x will not apply). Leave pinned; updating does not fix ITMS-91064.\par
 \bullet Build number bumped to 8 (MARKETING_VERSION stays 1.4).\par
 \bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+\b iOS-F1 - Real 7-day free trial (Firestore + StoreKit + Amplitude) [COMPLETED WITH ISSUES]\b0\par
+\par
+iOS-F1: 7-day free trial live. Firestore manualProUntil integrated with StoreKit trial lifecycle. Amplitude trial_* events wired. Paywall copy uses localizedPriceString throughout. LLM system prompt updated.\par
+\par
+\b What was done\b0\par
+\bullet SmartInventory.storekit: verified introductoryOffer is FreeTrial period=1 periodUnit=Week (7 days) on BOTH monthly and annual - already correct, no duration change needed. Fixed product IDs, which were com.vishuddhi.smartinventory.* while the code requests com.vishuddhi.stoqly.*; the scheme loads this file, so loadProducts() could never match it. Removed hardcoded "~$1.92/month" from the annual description.\par
+\bullet SubscriptionManager.swift: removed "(no free trial)" header text and all $2.99/$22.99/$3.99 comment prices; added a "PRICING IS NEVER HARDCODED" note. Added isTrialActive (published), trialEndsAt (computed, non-nil only during a trial), isEligibleForTrial, currentPlanLabel. Renamed isOnProTrial -> isTrialActive. Added reconcileTrialLifecycle(), an edge-triggered reconciler that compares StoreKit state against locally persisted state so each trial_* event fires exactly once despite refreshPurchaseStatus() running on launch, foreground and every Transaction.updates delivery.\par
+\bullet FirestoreManager.swift: added setManualProUntil(_:) and clearManualProUntil(ifMatching:). No new Firestore field - manualProUntil reused per spec.\par
+\bullet AnalyticsManager.swift: added trial_started{plan, ends_at, source}, trial_converted{plan, days_used}, trial_cancelled{plan, days_used}, trial_expired{plan} to the StoqlyEvent taxonomy. paywall_shown, paywall_cta_tapped and subscription_started were NOT modified.\par
+\bullet PaywallView (in SubscriptionManager.swift): added TrialHeaderBanner "7-day free trial - cancel anytime" above the plan buttons, "Then %@/month" / "Then %@/year" subtitles on each plan card, and the auto-renew legal line. Every price comes from product.displayPrice.\par
+\bullet AIInventoryService.swift: both "no free trial" system-prompt lines replaced with the 7-day trial wording; added an instruction never to quote a price since prices vary by storefront.\par
+\bullet Localizable.xcstrings: added paywall.trial.header, paywall.trial.subtitle_monthly, paywall.trial.subtitle_yearly, paywall.trial.legal in en + all 14 shipped languages. Machine-drafted, state=needs_review, each carrying a TODO(i18n) comment for the manual translator queue. Diff is additive only (384 insertions, 0 deletions).\par
+\bullet AdManager.swift: scrubbed stale "$4.99/mo or $39.99/yr" tier comment.\par
+\par
+\b Design decisions worth knowing\b0\par
+\bullet The trial banner and "Then ..." subtitles render ONLY when StoreKit reports isEligibleForIntroOffer. Apple's guidance is to merchandise an intro offer only when the customer can actually redeem it; showing "7-day free trial" to someone who already used it would be a false claim and a trust-debt item.\par
+\bullet clearManualProUntil is guarded: it clears only when the stored value matches the date this device wrote for the trial. manualProUntil is ALSO the support/admin comp field, so an unguarded clear would silently revoke a human-granted comp when a trial ended. setManualProUntil likewise only ever extends, never shortens, an existing grant.\par
+\bullet trial_cancelled and trial_expired are deliberately distinct moments, so a cancelled trial emits both: cancelled fires when willAutoRenew flips false (intent, still inside the window, the only point a save-offer could work), expired fires when the window actually closes. Confirm this matches how the funnel should read.\par
+\par
+\b Verification - read this before treating the feature as shipped\b0\par
+\bullet Build: exit 0, BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor warning.\par
+\bullet Paywall rendering VERIFIED on iPhone 17 Pro simulator: trial banner sits above the plan buttons, subtitles read "Then $39.99/year" and "Then $4.99/month", legal line present, all prices from displayPrice. (Positive path was rendered by temporarily forcing eligibility in a throwaway build; that patch was reverted and the final build re-verified.)\par
+\bullet Grep VERIFIED: zero hardcoded price strings remain in Swift or in Localizable.xcstrings. Only remaining numeric literal is unitCost: 15.99 in an EditItemView SwiftUI preview, which is a sample item cost, not a subscription price.\par
+\bullet NOT VERIFIED - the purchase lifecycle. Launching via simctl bypasses the scheme's StoreKit configuration file, so the app hit real App Store Connect data instead of SmartInventory.storekit. No sandbox purchase was made: the simulator is signed into a live account and a purchase would have written manualProUntil to that real user document. So trial_started / trial_converted / trial_expired firing, the manualProUntil write, and the isPro flip on force-expire are all UNTESTED end to end. These must be run from Xcode (Run with the storekit config attached) or on a real sandbox account.\par
+\bullet BLOCKER FOUND - against live App Store Connect products, isEligibleForTrial resolved FALSE, so the banner did not render. Real ASC prices are $4.99/mo and $39.99/yr, which match neither SmartInventory.storekit ($2.99/$22.99) nor CLAUDE.md. Either the 7-day introductory offer is not configured on the live products in App Store Connect, or the signed-in Apple ID has already consumed it. This needs the CEO to check App Store Connect: if the intro offer is missing there, this feature is inert in production no matter what the client code does.\par
+\bullet Pro-gated features unaffected: all gates still read SubscriptionManager.isPro, which is unchanged in meaning - trial users are Pro via the same isPro path.\par
 }

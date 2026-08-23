@@ -62315,6 +62315,390 @@
         }
       }
     },
+    "paywall.trial.header" : {
+      "comment" : "Paywall: 7-day free trial banner shown above the plan buttons. TODO(i18n): machine-drafted, pending human translator review.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "تجربة مجانية لمدة 7 أيام — يمكنك الإلغاء في أي وقت"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "7 Tage kostenlos testen — jederzeit kündbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "7-day free trial — cancel anytime"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prueba gratis de 7 días: cancela cuando quieras"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Essai gratuit de 7 jours — annulable à tout moment"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "7 दिन का मुफ़्त ट्रायल — कभी भी रद्द करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Uji coba gratis 7 hari — batalkan kapan saja"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "7日間の無料トライアル — いつでもキャンセル可能"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "7 ದಿನಗಳ ಉಚಿತ ಟ್ರಯಲ್ — ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "7 ദിവസത്തെ സൗജന്യ ട്രയൽ — എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Teste grátis de 7 dias — cancele quando quiser"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "7 дней бесплатно — отмена в любой момент"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "7 நாள் இலவச சோதனை — எப்போது வேண்டுமானாலும் ரத்து செய்யலாம்"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "7 రోజుల ఉచిత ట్రయల్ — ఎప్పుడైనా రద్దు చేసుకోవచ్చు"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "7 天免费试用 — 随时可取消"
+          }
+        }
+      }
+    },
+    "paywall.trial.legal" : {
+      "comment" : "Paywall: auto-renew legal disclosure under the plan buttons. TODO(i18n): machine-drafted, pending human translator review.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "يتجدد تلقائيًا. يمكنك الإلغاء في أي وقت من إعدادات App Store."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Verlängert sich automatisch. Jederzeit in den App-Store-Einstellungen kündbar."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Renews automatically. Cancel any time in App Store settings."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se renueva automáticamente. Cancela cuando quieras en los ajustes de App Store."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Renouvellement automatique. Annulable à tout moment dans les réglages de l'App Store."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "अपने आप नवीनीकृत होता है। App Store सेटिंग्स में कभी भी रद्द करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Diperpanjang otomatis. Batalkan kapan saja di pengaturan App Store."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "自動的に更新されます。App Store の設定からいつでもキャンセルできます。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಸ್ವಯಂಚಾಲಿತವಾಗಿ ನವೀಕರಣಗೊಳ್ಳುತ್ತದೆ. App Store ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "സ്വയമേവ പുതുക്കപ്പെടും. App Store ക്രമീകരണങ്ങളിൽ എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Renova automaticamente. Cancele quando quiser nos ajustes da App Store."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Продлевается автоматически. Отменить можно в любой момент в настройках App Store."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "தானாகப் புதுப்பிக்கப்படும். App Store அமைப்புகளில் எப்போது வேண்டுமானாலும் ரத்து செய்யலாம்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "స్వయంచాలకంగా పునరుద్ధరించబడుతుంది. App Store సెట్టింగ్‌లలో ఎప్పుడైనా రద్దు చేసుకోవచ్చు."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "自动续订。可随时在 App Store 设置中取消。"
+          }
+        }
+      }
+    },
+    "paywall.trial.subtitle_monthly" : {
+      "comment" : "Paywall: price after the free trial ends. %@ is the StoreKit localized price — keep the placeholder, never a literal amount or currency symbol. TODO(i18n): machine-drafted, pending human translator review.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ثم %@/شهر"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Danach %@/Monat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Then %@/month"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Luego %@/mes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Puis %@/mois"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "फिर %@/माह"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lalu %@/bulan"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "その後 %@/月"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ನಂತರ %@/ತಿಂಗಳು"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "പിന്നീട് %@/മാസം"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Depois %@/mês"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Затем %@/месяц"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "பிறகு %@/மாதம்"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "తర్వాత %@/నెల"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "之后 %@/月"
+          }
+        }
+      }
+    },
+    "paywall.trial.subtitle_yearly" : {
+      "comment" : "Paywall: price after the free trial ends. %@ is the StoreKit localized price — keep the placeholder, never a literal amount or currency symbol. TODO(i18n): machine-drafted, pending human translator review.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ثم %@/سنة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Danach %@/Jahr"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Then %@/year"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Luego %@/año"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Puis %@/an"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "फिर %@/वर्ष"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lalu %@/tahun"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "その後 %@/年"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ನಂತರ %@/ವರ್ಷ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "പിന്നീട് %@/വർഷം"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Depois %@/ano"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Затем %@/год"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "பிறகு %@/ஆண்டு"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "తర్వాత %@/సంవత్సరం"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "之后 %@/年"
+          }
+        }
+      }
+    },
     "pcs" : {
       "comment" : "A placeholder text for the unit field in the inventory item form.",
       "extractionState" : "manual",

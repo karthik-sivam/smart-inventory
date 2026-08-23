@@ -274,6 +274,56 @@ class FirestoreManager: ObservableObject {
         }
     }
 
+    /// Mirrors an active StoreKit free trial into `manualProUntil` (iOS-F1).
+    ///
+    /// `manualProUntil` is deliberately reused rather than adding a trial-specific
+    /// field: it is already the one field every client reads as "grant Pro until",
+    /// and the Firestore schema rule for this project is additive-only.
+    ///
+    /// Writes only when it would *extend* the grant, so a longer support-issued comp
+    /// is never shortened by a 7-day trial starting underneath it.
+    func setManualProUntil(_ date: Date) async {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let ref = db.collection("users").document(uid)
+        do {
+            let existing = (try? await ref.getDocument())?
+                .data()?["manualProUntil"] as? Timestamp
+            if let existing, existing.dateValue() >= date {
+                // An existing grant already runs at least as long — leave it alone.
+                return
+            }
+            try await ref.setData(
+                ["manualProUntil": Timestamp(date: date)],
+                merge: true
+            )
+        } catch {
+            print("[Firestore] Failed to write manualProUntil: \(error.localizedDescription)")
+        }
+    }
+
+    /// Rolls back a trial's `manualProUntil` when the trial ends, converts, or is refunded.
+    ///
+    /// Clears only when the stored value still matches what the trial wrote. If support
+    /// extended the grant in the meantime, or a different device wrote a longer window,
+    /// the stored value differs and we leave it untouched — a trial ending must never
+    /// revoke a comp somebody deliberately granted.
+    func clearManualProUntil(ifMatching written: Date) async {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let ref = db.collection("users").document(uid)
+        do {
+            guard let stored = (try await ref.getDocument())
+                .data()?["manualProUntil"] as? Timestamp else { return }
+            // Second granularity is enough; Firestore round-trips ms.
+            guard abs(stored.dateValue().timeIntervalSince(written)) < 1 else {
+                print("[Firestore] manualProUntil differs from the trial value — leaving it.")
+                return
+            }
+            try await ref.updateData(["manualProUntil": FieldValue.delete()])
+        } catch {
+            print("[Firestore] Failed to clear manualProUntil: \(error.localizedDescription)")
+        }
+    }
+
     /// Fetches manualProUntil from Firestore. Returns true if a valid future date exists.
     func fetchManualProGrant() async -> Bool {
         guard let uid = Auth.auth().currentUser?.uid else { return false }

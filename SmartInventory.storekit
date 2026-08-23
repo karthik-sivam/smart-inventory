@@ -7,12 +7,12 @@
       "internalID" : "E3F4A5B6-C7D8-4E9F-0A1B-2C3D4E5F6A7B",
       "localizations" : [
         {
-          "description" : "Remove all ads from Smart Inventory forever. One-time purchase — no subscription.",
+          "description" : "Remove all ads from Stoqly forever. One-time purchase — no subscription.",
           "displayName" : "Remove Ads",
           "locale" : "en_US"
         }
       ],
-      "productID" : "com.vishuddhi.smartinventory.removeads",
+      "productID" : "com.vishuddhi.stoqly.removeads",
       "referenceName" : "Remove Ads"
     }
   ],
@@ -38,10 +38,10 @@
       "localizations" : [
         {
           "locale" : "en_US",
-          "name" : "Smart Inventory Pro"
+          "name" : "Stoqly Pro"
         }
       ],
-      "name" : "Smart Inventory Pro",
+      "name" : "Stoqly Pro",
       "subscriptions" : [
         {
           "adHocOffers" : [],
@@ -65,7 +65,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.vishuddhi.smartinventory.pro.monthly",
+          "productID" : "com.vishuddhi.stoqly.pro.monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "Pro Monthly",
           "subscriptionGroupID" : "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
@@ -88,12 +88,12 @@
           },
           "localizations" : [
             {
-              "description" : "Best value. All Pro features for the price of ~$1.92/month. Save 36% vs monthly.",
+              "description" : "Best value. All Pro features, billed once a year.",
               "displayName" : "Pro Annual",
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.vishuddhi.smartinventory.pro.annual",
+          "productID" : "com.vishuddhi.stoqly.pro.annual",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "Pro Annual",
           "subscriptionGroupID" : "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
