@@ -10,7 +10,7 @@ env:
     text: "Dismiss"
     optional: true
 - extendedWaitUntil:
-    visible: "Total Storages"
+    visible: "Inventory Health"
     timeout: 12000
     optional: true
 - runFlow:
@@ -27,5 +27,5 @@ env:
       visible: "Welcome back"
     file: signin_credentials.yaml
 - extendedWaitUntil:
-    visible: "Total Storages"
+    visible: "Inventory Health"
     timeout: 90000

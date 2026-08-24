@@ -557,12 +557,14 @@ final class AIInventoryService {
     private static let salesSystemPrompt = """
     You are a sales log parser for an inventory management app. Extract sale items from the input. \
     Return ONLY a valid JSON array. Each object: {"itemName": string, "quantitySold": number, \
-    "pricePerUnit": number (0 if unknown), "notes": string}. No markdown, no explanation — just the JSON array.
+    "pricePerUnit": number (0 if unknown), "notes": string, "confidence": number}. \
+    No markdown, no explanation — just the JSON array.
 
     Item-name rules:
     - KEEP "itemName" in the SAME language/script the user spoke or wrote it — do NOT translate product names into English.
     - If an inventory list is provided and the item clearly matches one, use that inventory item's EXACT stored name.
     - Only use the spoken/written name for items that do not match the inventory list.
+    - "confidence" 0.0-1.0 indicates how confident you are about that row's item name and quantity extraction.
     """
 
     private static let purchaseSystemPrompt = """
