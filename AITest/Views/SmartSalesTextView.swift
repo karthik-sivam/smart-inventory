@@ -77,6 +77,32 @@ struct SmartSalesTextView: View {
                 .frame(maxWidth: .infinity)
                 .accessibilityIdentifier("smartSalesParseButton")
 
+#if DEBUG
+            if SmartReviewFixture.isSmartSalesEnabled {
+                Button("Load Test Sales Fixture") {
+                    parsedRows = [
+                        ParsedSaleRow(
+                            itemName: "Low Stock Item",
+                            quantitySold: 2,
+                            pricePerUnit: 5,
+                            confidence: 0.93,
+                            notes: "Maestro high-confidence fixture"
+                        ),
+                        ParsedSaleRow(
+                            itemName: "Low Stock Item",
+                            quantitySold: 1,
+                            pricePerUnit: 4,
+                            confidence: 0.41,
+                            notes: "Maestro low-confidence fixture"
+                        )
+                    ]
+                    step = .review
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("smartSalesLoadReviewFixture")
+            }
+#endif
+
             Spacer()
         }
         .padding()

@@ -1,0 +1,36 @@
+# iOS-A5 — SmartCount mixed-confidence auto-accept review
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
+---
+- runFlow: 00_signin_helper.yaml
+- launchApp:
+    arguments:
+      SmartCountReviewFixture: true
+- extendedWaitUntil:
+    visible: "Inventory Health"
+    timeout: 90000
+- runFlow: open_test_warehouse.yaml
+- tapOn:
+    id: "smart-count-button"
+- assertVisible: "Smart Count"
+- tapOn: "Photo Inventory"
+- assertVisible:
+    id: "smartCountLoadReviewFixture"
+- tapOn:
+    id: "smartCountLoadReviewFixture"
+- assertVisible: "1 items auto-accepted"
+- assertVisible: "Needs review"
+- assertVisible: "Low Stock Item"
+- tapOn: "Confirm"
+- assertVisible: "Confirmed"
+- tapOn:
+    id: "smartCountReviewSaveButton"
+- runFlow:
+    when:
+      visible: "Profile"
+    commands:
+      - tapOn: "Done"
+- runFlow: open_test_warehouse.yaml
+- assertVisible: "Low Stock Item"

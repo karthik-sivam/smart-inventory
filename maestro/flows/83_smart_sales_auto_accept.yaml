@@ -1,0 +1,41 @@
+# iOS-A5 — SmartSales mixed-confidence auto-accept review
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
+---
+- runFlow: 00_signin_helper.yaml
+- launchApp:
+    arguments:
+      SmartSalesReviewFixture: true
+- extendedWaitUntil:
+    visible: "Inventory Health"
+    timeout: 90000
+- tapOn: "Sales"
+- tapOn:
+    id: "salesEmptySmartEntryButton"
+    optional: true
+- tapOn:
+    id: "smartSalesEntryToolbarButton"
+    optional: true
+- assertVisible: "Smart Sales Entry"
+- tapOn:
+    id: "smartSalesMode_text"
+    optional: true
+- tapOn:
+    text: "Text"
+    optional: true
+- assertVisible:
+    id: "smartSalesLoadReviewFixture"
+- tapOn:
+    id: "smartSalesLoadReviewFixture"
+- assertVisible: "1 items auto-accepted"
+- assertVisible: "Needs review"
+- assertVisible: "Low Stock Item"
+- tapOn: "Confirm"
+- assertVisible: "Confirmed"
+- tapOn:
+    id: "smartSalesReviewSaveButton"
+- extendedWaitUntil:
+    visible: "Low Stock Item"
+    timeout: 30000

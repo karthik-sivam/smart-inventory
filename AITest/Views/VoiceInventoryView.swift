@@ -1147,10 +1147,7 @@ struct EditableItemRow: View {
                     capSelectionToggle
                 }
 
-                // Confidence dot
-                Circle()
-                    .fill(item.confidence >= 0.8 ? Color.stoqlySuccess : Color.stoqlyWarning)
-                    .frame(width: 8, height: 8)
+                SmartConfidenceChip(confidence: item.confidence)
 
                 TextField("Item name", text: $item.name)
                     .font(.subheadline).fontWeight(.medium)
@@ -1167,7 +1164,10 @@ struct EditableItemRow: View {
                 HStack {
                     Text("Qty")
                         .font(.caption).foregroundColor(.secondary)
-                    TextField("0", value: $item.quantity, format: .number)
+                    TextField("0", text: Binding(
+                        get: { item.quantity?.smartFormatted ?? "" },
+                        set: { item.quantity = Double($0.replacingOccurrences(of: ",", with: ".")) }
+                    ))
                         .font(.caption)
                         .keyboardType(.decimalPad)
                         .frame(width: 60)
@@ -1185,15 +1185,6 @@ struct EditableItemRow: View {
                 }
 
                 Spacer()
-
-                if item.confidence < 0.75 {
-                    Text("Low confidence")
-                        .font(.caption2)
-                        .foregroundColor(.stoqlyWarning)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.stoqlyWarningTint)
-                        .cornerRadius(4)
-                }
             }
 
             if let fill = item.fillPercent {

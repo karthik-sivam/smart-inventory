@@ -37,6 +37,11 @@ struct ImageInventoryView: View {
 
     // Multi-product results (shelf scan — any count including 1)
     @State private var parsedItems: [EditableItem] = []
+    @State private var isAutoAcceptedExpanded = false
+    @State private var isReviewAllDetected = false
+    @State private var manualReviewIDs: Set<UUID> = []
+    @State private var reviewResolutions: [UUID: SmartReviewResolution] = [:]
+    @State private var startedWithOnlyAutoAccepted = false
 
     // Single-product form fields (used when exactly 1 product found)
     @State private var parsedItem: ParsedInventoryItem?
@@ -67,11 +72,50 @@ struct ImageInventoryView: View {
     }
 
     private var canSaveShelfItems: Bool {
-        isStorageSelected && ItemCapReview.canSave(
-            items: parsedItems,
+        isStorageSelected && !acceptedItemsForSave.isEmpty && allReviewItemsResolved && ItemCapReview.canSave(
+            items: acceptedItemsForSave,
             remainingSlots: remainingItemSlots,
             isPro: subscriptionManager.isPro
         )
+    }
+
+    private var autoAcceptedItems: [EditableItem] {
+        parsedItems.filter {
+            $0.confidence >= SmartCountConfig.autoAcceptThreshold && !manualReviewIDs.contains($0.id)
+        }
+    }
+
+    private var itemsNeedingReview: [EditableItem] {
+        parsedItems.filter {
+            $0.confidence < SmartCountConfig.autoAcceptThreshold || manualReviewIDs.contains($0.id)
+        }
+    }
+
+    private var acceptedItems: [EditableItem] {
+        parsedItems.filter { item in
+            let resolution = reviewResolution(for: item.id)
+            if resolution == .dismissed { return false }
+            if item.confidence >= SmartCountConfig.autoAcceptThreshold,
+               !manualReviewIDs.contains(item.id) {
+                return true
+            }
+            return resolution == .confirmed
+        }
+    }
+
+    private var acceptedItemsForSave: [EditableItem] {
+        acceptedItems.filter { item in
+            guard !item.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+            if subscriptionManager.isPro || !item.isNew { return true }
+            return item.isSelectedForAdd
+        }
+    }
+
+    private var allReviewItemsResolved: Bool {
+        itemsNeedingReview.allSatisfy {
+            let resolution = reviewResolution(for: $0.id)
+            return resolution == .confirmed || resolution == .dismissed
+        }
     }
 
     private var canSaveSingleItem: Bool {
@@ -175,6 +219,16 @@ struct ImageInventoryView: View {
 
                 storagePickerSection
 
+#if DEBUG
+                if SmartReviewFixture.isSmartCountEnabled {
+                    Button("Load Test Shelf Fixture") {
+                        loadSmartCountReviewFixture()
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("smartCountLoadReviewFixture")
+                }
+#endif
+
                 Toggle(isOn: $fluidMode) {
                     Label("Measuring fluid level", systemImage: "drop.fill")
                         .font(.subheadline)
@@ -271,11 +325,7 @@ struct ImageInventoryView: View {
 
     @ViewBuilder
     private var reviewView: some View {
-        if isShelfScan {
-            shelfScanReviewView
-        } else {
-            singleItemReviewView
-        }
+        shelfScanReviewView
     }
 
     // ── Single product ──────────────────────────────────────────────────────
@@ -430,30 +480,64 @@ struct ImageInventoryView: View {
                         }
                     }
 
+                    if isReviewAllDetected {
+                        Section("All detected items") {
+                            ForEach(parsedItems) { item in
+                                smartCountReviewRow(item)
+                            }
+                        }
+                    } else {
+                        Section {
+                            Button {
+                                withAnimation { isAutoAcceptedExpanded.toggle() }
+                            } label: {
+                                HStack {
+                                    Label(
+                                        "\(autoAcceptedItems.count) items auto-accepted",
+                                        systemImage: "checkmark.circle.fill"
+                                    )
+                                    .foregroundColor(.green)
+                                    Spacer()
+                                    Image(systemName: isAutoAcceptedExpanded ? "chevron.up" : "chevron.down")
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("smartCountAutoAcceptedSection")
+
+                            if isAutoAcceptedExpanded {
+                                ForEach(autoAcceptedItems) { item in
+                                    SmartAutoAcceptedRow(
+                                        name: item.name,
+                                        quantity: item.quantity ?? 0,
+                                        unitSymbol: item.unitSymbol,
+                                        confidence: item.confidence,
+                                        onEdit: { moveToReview(item.id) }
+                                    )
+                                }
+                            }
+                        }
+
+                        Section("Needs review") {
+                            if itemsNeedingReview.isEmpty {
+                                Label("No items need review", systemImage: "checkmark.seal.fill")
+                                    .font(.subheadline)
+                                    .foregroundColor(.green)
+                            } else {
+                                ForEach(itemsNeedingReview) { item in
+                                    smartCountReviewRow(item)
+                                }
+                            }
+                        }
+                    }
+
                     Section {
-                        ForEach($parsedItems) { $item in
-                            EditableItemRow(
-                                item: $item,
-                                selectedStorage: selectedStorage,
-                                isPro: subscriptionManager.isPro,
-                                remainingSlots: remainingItemSlots
-                            )
+                        Button("Review all detected items") {
+                            isReviewAllDetected = true
                         }
-                        .onDelete { parsedItems.remove(atOffsets: $0) }
-                    } header: {
-                        HStack {
-                            Text(
-                                String(
-                                    format: L("image.productsFound", "%1$d product%2$@ found"),
-                                    parsedItems.count,
-                                    parsedItems.count == 1 ? "" : "s"
-                                )
-                            )
-                            Spacer()
-                            Text("Swipe to remove")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .accessibilityIdentifier("smartCountReviewAllLink")
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -466,33 +550,167 @@ struct ImageInventoryView: View {
                             remainingSlots: remainingItemSlots
                         )
                     }
-                    HStack(spacing: 12) {
-                        Button("Re-take") { resetCapture() }
-                            .font(.subheadline)
-                            .foregroundColor(.stoqlyPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Color.stoqlyPrimaryTint)
-                            .cornerRadius(AppTheme.radiusMd)
 
-                        Button(
-                            String(
-                                format: L("image.saveAll", "Save All (%1$d)"),
-                                parsedItems.count
-                            )
-                        ) {
+                    if !itemsNeedingReview.isEmpty && !allReviewItemsResolved && !autoAcceptedItems.isEmpty {
+                        Button("Save auto-accepted only") {
+                            chooseOnlyAutoAcceptedItems()
                             Task { await saveAllItems() }
                         }
-                        .stoqlyButtonStyle()
-                        .frame(maxWidth: .infinity)
-                        .disabled(!canSaveShelfItems)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom, 8)
+
+                    Button(saveButtonTitle) {
+                        Task { await saveAllItems() }
+                    }
+                    .stoqlyButtonStyle()
+                    .frame(maxWidth: .infinity)
+                    .disabled(!canSaveShelfItems)
+                    .accessibilityIdentifier("smartCountReviewSaveButton")
+
+                    Button("Re-take") { resetCapture() }
+                        .font(.subheadline)
+                        .foregroundColor(.stoqlyPrimary)
                 }
+                .padding(.horizontal)
+                .padding(.bottom, 8)
             }
         }
     }
+
+    private var saveButtonTitle: String {
+        let count = acceptedItemsForSave.count
+        if startedWithOnlyAutoAccepted && itemsNeedingReview.isEmpty {
+            return "Save \(count) auto-accepted items"
+        }
+        return "Save \(count) items"
+    }
+
+    @ViewBuilder
+    private func smartCountReviewRow(_ item: EditableItem) -> some View {
+        let resolution = reviewResolution(for: item.id)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Spacer()
+                if resolution == .confirmed {
+                    Label("Confirmed", systemImage: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                } else if resolution == .dismissed {
+                    Label("Dismissed", systemImage: "xmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            EditableItemRow(
+                item: editableItemBinding(for: item),
+                selectedStorage: selectedStorage,
+                isPro: subscriptionManager.isPro,
+                remainingSlots: remainingItemSlots
+            )
+            .disabled(resolution == .dismissed)
+            .opacity(resolution == .dismissed ? 0.45 : 1)
+
+            SmartReviewActionBar(
+                resolution: resolution,
+                onConfirm: { confirmReview(item.id) },
+                onEdit: { moveToReview(item.id) },
+                onDismiss: { toggleDismissed(item.id) }
+            )
+        }
+        .accessibilityIdentifier("smartCountReviewRow_\(item.name)")
+    }
+
+    private func reviewResolution(for id: UUID) -> SmartReviewResolution {
+        reviewResolutions[id] ?? .pending
+    }
+
+    private func editableItemBinding(for fallback: EditableItem) -> Binding<EditableItem> {
+        Binding(
+            get: { parsedItems.first(where: { $0.id == fallback.id }) ?? fallback },
+            set: { newValue in
+                guard let index = parsedItems.firstIndex(where: { $0.id == fallback.id }) else { return }
+                parsedItems[index] = newValue
+                moveToReview(fallback.id)
+            }
+        )
+    }
+
+    private func moveToReview(_ id: UUID) {
+        manualReviewIDs.insert(id)
+        reviewResolutions[id] = .pending
+    }
+
+    private func confirmReview(_ id: UUID) {
+        manualReviewIDs.insert(id)
+        reviewResolutions[id] = .confirmed
+    }
+
+    private func toggleDismissed(_ id: UUID) {
+        manualReviewIDs.insert(id)
+        reviewResolutions[id] = reviewResolution(for: id) == .dismissed ? .pending : .dismissed
+    }
+
+    private func chooseOnlyAutoAcceptedItems() {
+        for item in itemsNeedingReview {
+            reviewResolutions[item.id] = .dismissed
+        }
+    }
+
+#if DEBUG
+    private func loadSmartCountReviewFixture() {
+        if selectedStorage == nil { selectedStorage = storages.first }
+        let fixture = [
+            ParsedInventoryItem(
+                name: "Low Stock Item",
+                quantity: 11,
+                unitSymbol: "pcs",
+                category: "Uncategorised",
+                notes: "Maestro high-confidence fixture",
+                confidence: 0.94,
+                fillPercent: nil,
+                remainingVolume: nil,
+                unitCost: nil,
+                sellingPrice: nil,
+                expiryDate: nil,
+                sku: nil,
+                barcode: nil,
+                minQuantity: nil
+            ),
+            ParsedInventoryItem(
+                name: "Low Stock Item",
+                quantity: 7,
+                unitSymbol: "pcs",
+                category: "Uncategorised",
+                notes: "Maestro low-confidence fixture",
+                confidence: 0.42,
+                fillPercent: nil,
+                remainingVolume: nil,
+                unitCost: nil,
+                sellingPrice: nil,
+                expiryDate: nil,
+                sku: nil,
+                barcode: nil,
+                minQuantity: nil
+            )
+        ]
+        parsedItems = fixture.map(EditableItem.init(from:))
+        parsedItems.applyNameMatching(in: selectedStorage)
+        parsedItems.applyDefaultCapSelection(
+            remainingSlots: remainingItemSlots,
+            isPro: subscriptionManager.isPro
+        )
+        manualReviewIDs = []
+        reviewResolutions = [:]
+        isAutoAcceptedExpanded = false
+        isReviewAllDetected = false
+        startedWithOnlyAutoAccepted = fixture.allSatisfy {
+            $0.confidence >= SmartCountConfig.autoAcceptThreshold
+        }
+        step = .review
+    }
+#endif
 
     // MARK: - Step 4: Saving
 
@@ -561,6 +779,11 @@ struct ImageInventoryView: View {
         capturedImage = nil
         parsedItem = nil
         parsedItems = []
+        manualReviewIDs = []
+        reviewResolutions = [:]
+        isAutoAcceptedExpanded = false
+        isReviewAllDetected = false
+        startedWithOnlyAutoAccepted = false
         matchedExistingItem = nil
         editableFillPercent = nil
         editableRemainingVolume = nil
@@ -630,6 +853,13 @@ struct ImageInventoryView: View {
                     ),
                     isPro: subscriptionManager.isPro
                 )
+                manualReviewIDs = []
+                reviewResolutions = [:]
+                isAutoAcceptedExpanded = false
+                isReviewAllDetected = false
+                startedWithOnlyAutoAccepted = items.allSatisfy {
+                    $0.confidence >= SmartCountConfig.autoAcceptThreshold
+                }
 
                 // Also set single-product form fields for the 1-item path
                 let parsed = items.first
@@ -737,7 +967,10 @@ struct ImageInventoryView: View {
             modelContext.insert(event)
         }
 
-        modelContext.safeSave(context: "ImageInventorySingleSave")
+        guard modelContext.safeSave(context: "SmartCountAccept") else {
+            errorMessage = L("image.saveFailed", "Couldn't save your inventory changes. Please try again.")
+            return
+        }
         let extraFields = parsedItem.map { EditableItem(from: $0).capturedExtraFieldNames }
         AnalyticsManager.shared.track(.smartCountCompleted(
             mode: "photo",
@@ -752,11 +985,9 @@ struct ImageInventoryView: View {
 
     private func saveAllItems() async {
         guard let storage = selectedStorage else { return }
+        let itemsToSave = acceptedItemsForSave
+        guard !itemsToSave.isEmpty else { return }
         step = .saving
-
-        let itemsToSave = parsedItems.filter {
-            !$0.name.trimmingCharacters(in: .whitespaces).isEmpty
-        }
         var runningCount = SubscriptionManager.shared.itemCount(in: storage, context: modelContext)
         var appliedCount = 0
 
@@ -828,7 +1059,15 @@ struct ImageInventoryView: View {
             }
         }
 
-        modelContext.safeSave(context: "ImageInventoryShelfSave")
+        guard modelContext.safeSave(context: "SmartCountAccept") else {
+            errorMessage = L("image.saveFailed", "Couldn't save your inventory changes. Please try again.")
+            step = .review
+            return
+        }
+
+        // TODO(iOS-B2): fire smart_count_review_completed{auto_accepted,
+        //               user_confirmed, duration_ms, entry_source} via
+        //               AmplitudeManager helper.
 
         AnalyticsManager.shared.track(.smartCountCompleted(
             mode: "photo",
