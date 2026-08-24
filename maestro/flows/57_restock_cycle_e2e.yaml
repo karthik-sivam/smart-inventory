@@ -9,6 +9,11 @@ env:
 - tapOn:
     text: "Add Item"
 - extendedWaitUntil:
+    visible: "More details"
+    timeout: 10000
+- tapOn:
+    id: "moreDetailsButton"
+- extendedWaitUntil:
     visible: "SKU (Optional)"
     timeout: 10000
 - tapOn: "Item Name"

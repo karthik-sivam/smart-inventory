@@ -499,4 +499,4 @@ extension Color {
 #Preview {
     StorageListView()
         .modelContainer(for: [Storage.self, InventoryItem.self, UOM.self, InventoryCount.self], inMemory: true)
-} 
+}

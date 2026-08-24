@@ -25,6 +25,7 @@ struct EditItemView: View {
     /// pass that toggles `showingBarcodeScanner`.
     @State private var pendingScannedBarcode: String?
     @State private var usePercentThreshold = false
+    @State private var isShowingMoreDetails = false
 
     init(item: InventoryItem, isAddFlow: Bool = false, source: String = "fab") {
         self.item = item
@@ -33,18 +34,69 @@ struct EditItemView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            Form {
-                ItemPhotoSection(
-                    selectedPhotoData: $selectedPhotoData,
-                    existingPhotoURL: formVM.existingPhotoURL
-                )
+        Form {
+            Section(header: Text("Primary")) {
+                TextField("Item Name", text: $formVM.name)
+                    .accessibilityIdentifier("itemNameField")
 
-                Section(header: Text("Item Information")) {
-                    TextField("Item Name", text: $formVM.name)
+                HStack {
+                    Text("Quantity")
+                    Spacer()
+                    TextField("0", text: $formVM.currentQuantity)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityLabel("Current Quantity")
+                        .accessibilityIdentifier("editItemCurrentQty")
+                }
+
+                Picker("Storage", selection: $formVM.selectedStorage) {
+                    Text("Select Storage").tag(nil as Storage?)
+                    ForEach(storages, id: \.id) { storage in
+                        HStack {
+                            Circle()
+                                .fill(Color(hex: storage.color) ?? .blue)
+                                .frame(width: 12, height: 12)
+                            Text(storage.name)
+                        }
+                        .tag(storage as Storage?)
+                    }
+                }
+                .pickerStyle(MenuPickerStyle())
+
+            }
+
+            Section {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isShowingMoreDetails.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("More details")
+                            .fontWeight(.semibold)
+                        if let photoSummaryText {
+                            Text(photoSummaryText)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.secondary.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                        Spacer()
+                        Image(systemName: isShowingMoreDetails ? "chevron.up" : "chevron.down")
+                            .foregroundColor(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                .accessibilityIdentifier("moreDetailsButton")
+
+                if isShowingMoreDetails {
                     TextField("Description (Optional)", text: $formVM.description, axis: .vertical)
                         .lineLimit(3)
                     TextField("SKU", text: $formVM.sku)
+
                     HStack {
                         TextField("Barcode (Optional)", text: $formVM.barcode)
                         if formVM.barcode.isEmpty {
@@ -53,30 +105,108 @@ struct EditItemView: View {
                                     .font(.title3)
                                     .foregroundColor(.stoqlyPrimary)
                             }
+                            .buttonStyle(PlainButtonStyle())
                         }
                     }
-                    // Phase 3 — Smart barcode lookup loading indicator.
+
                     if formVM.isEnriching {
                         HStack(spacing: 8) {
-                            ProgressView()
-                                .scaleEffect(0.8)
+                            ProgressView().scaleEffect(0.8)
                             Text("Looking up product...")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                     }
-                }
 
-                Section(header: Text("Category")) {
                     Picker("Category", selection: $formVM.category) {
                         ForEach(InventoryItem.predefinedCategories, id: \.self) { cat in
                             Text(cat).tag(cat)
                         }
                     }
                     .pickerStyle(.navigationLink)
-                }
 
-                Section(header: Text("Expiry")) {
+                    HStack {
+                        Text("Unit Cost")
+                        Spacer()
+                        TextField("0.00", text: $formVM.unitCost)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .accessibilityIdentifier("editItemUnitCost")
+                    }
+                    HStack {
+                        Text("Selling Price")
+                        Spacer()
+                        TextField("0.00", text: $formVM.sellingPrice)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .accessibilityLabel("Selling price per unit")
+                            .accessibilityIdentifier("editItemSellingPrice")
+                    }
+                    HStack {
+                        Text("Last Purchase Price")
+                        Spacer()
+                        TextField("0.00", text: $formVM.lastPurchasePrice)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .accessibilityIdentifier("editItemLastPurchasePrice")
+                    }
+                    if let sp = Double(formVM.sellingPrice), sp > 0 {
+                        let cost = Double(formVM.unitCost) ?? 0
+                        let margin = (sp - cost) / sp * 100
+                        HStack {
+                            Text(cost > sp ? "Selling below cost" : String(format: "Margin: %.0f%%", margin))
+                                .font(.caption)
+                                .foregroundColor(cost > sp ? .red : margin >= 30 ? .green : margin >= 10 ? .orange : .red)
+                            Spacer()
+                        }
+                    }
+
+                    HStack {
+                        Text("Minimum Quantity")
+                        Spacer()
+                        TextField("0", text: $formVM.minQuantity)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .accessibilityIdentifier("editItemMinQty")
+                    }
+                    HStack {
+                        Text("Maximum Quantity")
+                        Spacer()
+                        TextField("0", text: $formVM.maxQuantity)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .accessibilityIdentifier("editItemMaxQty")
+                    }
+
+                    Toggle("Use percentage threshold", isOn: $usePercentThreshold)
+                        .onChange(of: usePercentThreshold) { _, enabled in
+                            if !enabled { formVM.reorderPercentage = 0 }
+                        }
+                    if usePercentThreshold {
+                        let maxQ = Double(formVM.maxQuantity) ?? 0
+                        if maxQ > 0 {
+                            HStack {
+                                Text("Reorder at")
+                                Slider(value: $formVM.reorderPercentage, in: 5...75, step: 5)
+                                Text("\(Int(formVM.reorderPercentage))% of max")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } else {
+                            Text("Set a Max Qty above to use percentage threshold.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Picker("Unit of Measure (UOM)", selection: $formVM.selectedUOM) {
+                        Text("Select UOM").tag(nil as UOM?)
+                        ForEach(uoms, id: \.id) { uom in
+                            Text("\(uom.name) (\(uom.symbol))").tag(uom as UOM?)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+
                     Toggle("Has Expiry Date", isOn: $formVM.hasExpiryDate.animation(.easeInOut(duration: 0.2)))
                     if formVM.hasExpiryDate {
                         DatePicker(
@@ -94,120 +224,13 @@ struct EditItemView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                }
 
-                Section(header: Text("Storage & UOM")) {
-                    Picker("Storage", selection: $formVM.selectedStorage) {
-                        Text("Select Storage").tag(nil as Storage?)
-                        ForEach(storages, id: \.id) { storage in
-                            HStack {
-                                Circle()
-                                    .fill(Color(hex: storage.color) ?? .blue)
-                                    .frame(width: 12, height: 12)
-                                Text(storage.name)
-                            }
-                            .tag(storage as Storage?)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                    
-                    Picker("Unit of Measure (UOM)", selection: $formVM.selectedUOM) {
-                        Text("Select UOM").tag(nil as UOM?)
-                        ForEach(uoms, id: \.id) { uom in
-                            Text("\(uom.name) (\(uom.symbol))").tag(uom as UOM?)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                }
-                
-                Section(header: Text("Quantities")) {
-                    HStack {
-                        Text("Current Quantity")
-                        Spacer()
-                        TextField("0.0", text: $formVM.currentQuantity)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .accessibilityIdentifier("editItemCurrentQty")
-                    }
-                    
-                    HStack {
-                        Text("Minimum Quantity")
-                        Spacer()
-                        TextField("0.0", text: $formVM.minQuantity)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .accessibilityIdentifier("editItemMinQty")
-                    }
-                    
-                    HStack {
-                        Text("Maximum Quantity")
-                        Spacer()
-                        TextField("0.0", text: $formVM.maxQuantity)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .accessibilityIdentifier("editItemMaxQty")
-                    }
+                    ItemPhotoSection(
+                        selectedPhotoData: $selectedPhotoData,
+                        existingPhotoURL: formVM.existingPhotoURL,
+                        showsSectionContainer: false
+                    )
 
-                    Toggle("Use percentage threshold", isOn: $usePercentThreshold)
-                        .onChange(of: usePercentThreshold) { _, enabled in
-                            if !enabled { formVM.reorderPercentage = 0 }
-                        }
-                    if usePercentThreshold {
-                        let maxQ = Double(formVM.maxQuantity) ?? 0
-                        if maxQ > 0 {
-                            HStack {
-                                Text("Reorder at")
-                                Slider(value: $formVM.reorderPercentage, in: 5...75, step: 5)
-                                Text("\(Int(formVM.reorderPercentage))% of max")
-                                    .font(.caption).foregroundColor(.secondary)
-                            }
-                        } else {
-                            Text("Set a Max Qty above to use percentage threshold.")
-                                .font(.caption).foregroundColor(.secondary)
-                        }
-                    }
-                }
-                
-                Section(header: Text("Cost")) {
-                    HStack {
-                        Text("Unit Cost")
-                        Spacer()
-                        TextField("0.00", text: $formVM.unitCost)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .accessibilityIdentifier("editItemUnitCost")
-                    }
-                    HStack {
-                        Text("Last Purchase Price")
-                        Spacer()
-                        TextField("0.00", text: $formVM.lastPurchasePrice)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .accessibilityIdentifier("editItemLastPurchasePrice")
-                    }
-                    HStack {
-                        Text("Selling Price")
-                        Spacer()
-                        TextField("0.00", text: $formVM.sellingPrice)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .accessibilityLabel("Selling price per unit")
-                            .accessibilityIdentifier("editItemSellingPrice")
-                    }
-                    if let sp = Double(formVM.sellingPrice), sp > 0 {
-                        let cost = Double(formVM.unitCost) ?? 0
-                        let margin = sp > 0 ? (sp - cost) / sp * 100 : 0
-                        HStack {
-                            Text(cost > sp ? "Selling below cost" : String(format: "Margin: %.0f%%", margin))
-                                .font(.caption)
-                                .foregroundColor(cost > sp ? .red : margin >= 30 ? .green : margin >= 10 ? .orange : .red)
-                            Spacer()
-                        }
-                    }
-                }
-                
-                Section(header: Text("Stock Status")) {
-                    // Out of stock is computed from current quantity — use the button below to set quantity to zero.
                     HStack {
                         Text("Stock Status")
                         Spacer()
@@ -219,33 +242,27 @@ struct EditItemView: View {
                         showMarkOutOfStockConfirm = true
                     }
                     .disabled((Double(formVM.currentQuantity) ?? 0) <= 0)
-                }
-                
-                Section(header: Text("Item Statistics")) {
+
                     HStack {
                         Text("Total Value")
                         Spacer()
                         Text(currencyManager.formatPrice(item.totalValue))
                             .fontWeight(.medium)
                     }
-                    
                     HStack {
                         Text("Last Updated")
                         Spacer()
                         Text(item.updatedAt.formatted(date: .abbreviated, time: .shortened))
                             .fontWeight(.medium)
                     }
-                    
                     HStack {
                         Text("Created")
                         Spacer()
                         Text(item.createdAt.formatted(date: .abbreviated, time: .omitted))
                             .fontWeight(.medium)
                     }
-                }
 
-                if subscriptionManager.isPro && teamManager.canEdit {
-                    Section {
+                    if subscriptionManager.isPro && teamManager.canEdit {
                         Button {
                             let template = ItemTemplate(
                                 name: formVM.name,
@@ -265,66 +282,46 @@ struct EditItemView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.accentColor)
                         }
+                        .buttonStyle(PlainButtonStyle())
                         .frame(maxWidth: .infinity)
                     }
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Edit Item")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .navigationTitle("Edit Item")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Cancel") { dismiss() }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Save") {
+                    saveItem()
                 }
-
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        UIApplication.shared.sendAction(
-                            #selector(UIResponder.resignFirstResponder),
-                            to: nil, from: nil, for: nil
-                        )
-                    }
-                }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        formVM.saveEdits(to: item)
-                        UINotificationFeedbackGenerator().notificationOccurred(.success)
-                        if let photoData = selectedPhotoData {
-                            let capturedItem = item
-                            let ctx = modelContext
-                            Task {
-                                do {
-                                    let url = try await FirestoreManager.shared.uploadItemPhoto(
-                                        photoData, itemId: capturedItem.id
-                                    )
-                                    capturedItem.photoURL = url
-                                    ctx.safeSave(context: "save photoURL after upload")
-                                    FirestoreManager.shared.syncItem(capturedItem)
-                                } catch {
-                                    print("Photo upload failed: \(error.localizedDescription)")
-                                }
-                            }
-                        }
-                        dismiss()
-                    }
-                    .disabled(!formVM.canSaveEdit)
+                .disabled(!formVM.canSaveEdit)
+                .accessibilityIdentifier("editItemSaveButton")
+            }
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil, from: nil, for: nil
+                    )
                 }
             }
-            .navigationBarBackButtonHidden(true)
-            .confirmationDialog(
-                "Set current quantity to zero? This marks the item as out of stock.",
-                isPresented: $showMarkOutOfStockConfirm,
-                titleVisibility: .visible
-            ) {
-                Button("Set quantity to 0", role: .destructive) {
-                    formVM.currentQuantity = "0"
-                }
-                Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Set current quantity to zero? This marks the item as out of stock.",
+            isPresented: $showMarkOutOfStockConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Set quantity to 0", role: .destructive) {
+                formVM.currentQuantity = "0"
             }
+            Button("Cancel", role: .cancel) {}
         }
         .onAppear {
             if isAddFlow {
@@ -333,6 +330,7 @@ struct EditItemView: View {
             formVM.bind(modelContext: modelContext)
             formVM.load(from: item)
             usePercentThreshold = item.reorderPercentage > 0
+            isShowingMoreDetails = isAddFlow ? false : formVM.hasOptionalDetails
         }
         // NOTE: must be `.fullScreenCover`, not `.sheet`. Presenting a camera
         // host as a sheet-inside-a-sheet wedges the AVFoundation capture XPC
@@ -381,6 +379,37 @@ struct EditItemView: View {
         }
         .toast(message: $templateToastMessage)
     }
+
+    private var photoSummaryText: String? {
+        let photoCount = (selectedPhotoData == nil ? 0 : 1) +
+            (formVM.existingPhotoURL == nil ? 0 : 1)
+        guard photoCount > 0 else { return nil }
+        return photoCount == 1 ? "1 photo" : "\(photoCount) photos"
+    }
+
+    private func saveItem() {
+        // TODO(iOS-B2): fire item_create_completed{entry_source, duration_ms}
+        //               via AmplitudeManager helper.
+        formVM.saveEdits(to: item)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        if let photoData = selectedPhotoData {
+            let capturedItem = item
+            let ctx = modelContext
+            Task {
+                do {
+                    let url = try await FirestoreManager.shared.uploadItemPhoto(
+                        photoData, itemId: capturedItem.id
+                    )
+                    capturedItem.photoURL = url
+                    ctx.safeSave(context: "EditItem")
+                    FirestoreManager.shared.syncItem(capturedItem)
+                } catch {
+                    print("Photo upload failed: \(error.localizedDescription)")
+                }
+            }
+        }
+        dismiss()
+    }
     
     private var editStockStatusLabel: String {
         let qty = Double(formVM.currentQuantity) ?? 0
@@ -422,6 +451,8 @@ struct EditItemView: View {
         maxQuantity: 20,
         unitCost: 15.99
     )
-    return EditItemView(item: item)
+    return NavigationStack {
+        EditItemView(item: item)
+    }
         .modelContainer(for: [Storage.self, InventoryItem.self, UOM.self, InventoryCount.self], inMemory: true)
-} 
+}

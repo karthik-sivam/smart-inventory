@@ -22,7 +22,7 @@ appId: com.vishuddhi.stoqly
 - tapOn:
     text: "Add Item"
 - extendedWaitUntil:
-    visible: "SKU (Optional)"
+    visible: "More details"
     timeout: 10000
 - tapOn: "Item Name"
 - inputText: "E2E Item One"
@@ -35,7 +35,7 @@ appId: com.vishuddhi.stoqly
 - tapOn:
     text: "Add Item"
 - extendedWaitUntil:
-    visible: "SKU (Optional)"
+    visible: "More details"
     timeout: 10000
 - tapOn: "Item Name"
 - inputText: "E2E Item Two"

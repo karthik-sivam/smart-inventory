@@ -261,7 +261,9 @@ struct ItemListView: View {
             .navigationBarHidden(true)
         }
         .sheet(isPresented: $showingAddItem) {
-            AddItemToStorageView()
+            NavigationStack {
+                AddItemToStorageView()
+            }
                 .sheetStyle()
         }
         .sheet(isPresented: $showingExport) {
@@ -278,7 +280,9 @@ struct ItemListView: View {
                 .sheetStyle()
         }
         .sheet(item: $showingEditItem) { item in
-            EditItemView(item: item)
+            NavigationStack {
+                EditItemView(item: item)
+            }
                 .sheetStyle()
         }
         .sheet(item: $showingQuickCount, onDismiss: {
@@ -343,7 +347,9 @@ struct ItemListView: View {
             .sheetStyle()
         }
         .sheet(item: $scannedBarcodeToAdd) { prefill in
-            AddItemToStorageView(initialBarcode: prefill.code)
+            NavigationStack {
+                AddItemToStorageView(initialBarcode: prefill.code)
+            }
                 .sheetStyle()
         }
         .alert("Delete Item", isPresented: Binding(
@@ -533,6 +539,9 @@ struct AddItemToStorageView: View {
     /// drop the value or cascade-dismiss the parent sheet).
     @State private var pendingScannedBarcode: String?
     @State private var didTrackAddItemStarted = false
+    @State private var selectedPhotoData: Data?
+    @State private var isShowingMoreDetails = false
+    @State private var showingAddStorage = false
 
     init(initialBarcode: String = "") {
         self.initialBarcode = initialBarcode
@@ -543,10 +552,74 @@ struct AddItemToStorageView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            Form {
-                if subscriptionManager.isPro && !templates.isEmpty && teamManager.canEdit {
-                    Section {
+        Form {
+            Section(header: Text("Primary")) {
+                TextField("Item Name", text: $formVM.name)
+                    .accessibilityIdentifier("itemNameField")
+
+                HStack {
+                    Text("Quantity")
+                    Spacer()
+                    TextField("0", text: $formVM.currentQuantity)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityLabel("Current Quantity")
+                        .accessibilityIdentifier("currentQuantityInput")
+                }
+
+                Picker("Storage", selection: $formVM.selectedStorage) {
+                    Text("Select Storage").tag(nil as Storage?)
+                    ForEach(storages, id: \.id) { storage in
+                        HStack {
+                            Circle()
+                                .fill(Color(hex: storage.color) ?? .blue)
+                                .frame(width: 12, height: 12)
+                            Text(storage.name)
+                        }
+                        .tag(storage as Storage?)
+                    }
+                }
+                .pickerStyle(MenuPickerStyle())
+
+                Button {
+                    showingAddStorage = true
+                } label: {
+                    Label("Add Storage", systemImage: "plus.circle")
+                        .foregroundColor(.accentColor)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+            }
+
+            Section {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isShowingMoreDetails.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("More details")
+                            .fontWeight(.semibold)
+                        if let photoSummaryText {
+                            Text(photoSummaryText)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.secondary.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                        Spacer()
+                        Image(systemName: isShowingMoreDetails ? "chevron.up" : "chevron.down")
+                            .foregroundColor(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                .accessibilityIdentifier("moreDetailsButton")
+
+                if isShowingMoreDetails {
+                    if subscriptionManager.isPro && !templates.isEmpty && teamManager.canEdit {
                         Button {
                             showingTemplatePicker = true
                         } label: {
@@ -554,12 +627,9 @@ struct AddItemToStorageView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.accentColor)
                         }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                }
 
-                Section(header: Text("Item Information")) {
-                    TextField("Item Name", text: $formVM.name)
-                        .accessibilityIdentifier("itemNameField")
                     TextField("Description (Optional)", text: $formVM.description, axis: .vertical)
                         .lineLimit(3)
                     TextField("SKU (Optional)", text: $formVM.sku)
@@ -572,6 +642,7 @@ struct AddItemToStorageView: View {
                                     .font(.title3)
                                     .foregroundColor(.stoqlyPrimary)
                             }
+                            .buttonStyle(PlainButtonStyle())
                         }
                     }
                     // Phase 3 — Smart barcode lookup loading indicator.
@@ -584,18 +655,34 @@ struct AddItemToStorageView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                }
-
-                Section(header: Text("Category")) {
                     Picker("Category", selection: $formVM.category) {
                         ForEach(InventoryItem.predefinedCategories, id: \.self) { cat in
                             Text(cat).tag(cat)
                         }
                     }
                     .pickerStyle(.navigationLink)
-                }
 
-                Section(header: Text("Expiry")) {
+                    Picker("Unit of Measure (UOM)", selection: $formVM.selectedUOM) {
+                        Text("Select UOM").tag(nil as UOM?)
+                        ForEach(uoms, id: \.id) { uom in
+                            Text("\(uom.name) (\(uom.symbol))").tag(uom as UOM?)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+
+                    TextField("Min Quantity", text: $formVM.minQuantity)
+                        .keyboardType(.decimalPad)
+                        .accessibilityIdentifier("minQuantityInput")
+                    TextField("Max Quantity", text: $formVM.maxQuantity)
+                        .keyboardType(.decimalPad)
+                        .accessibilityIdentifier("maxQuantityInput")
+                    TextField("Unit Cost", text: $formVM.unitCost)
+                        .keyboardType(.decimalPad)
+                        .accessibilityIdentifier("unitCostInput")
+                    TextField("Selling Price", text: $formVM.sellingPrice)
+                        .keyboardType(.decimalPad)
+                        .accessibilityIdentifier("addItemSellingPrice")
+
                     Toggle("Has Expiry Date", isOn: $formVM.hasExpiryDate.animation(.easeInOut(duration: 0.2)))
                     if formVM.hasExpiryDate {
                         DatePicker(
@@ -608,52 +695,18 @@ struct AddItemToStorageView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                }
 
-                Section(header: Text("Storage & UOM")) {
-                    Picker("Storage", selection: $formVM.selectedStorage) {
-                        Text("Select Storage").tag(nil as Storage?)
-                        ForEach(storages, id: \.id) { storage in
-                            HStack {
-                                Circle()
-                                    .fill(Color(hex: storage.color) ?? .blue)
-                                    .frame(width: 12, height: 12)
-                                Text(storage.name)
-                            }
-                            .tag(storage as Storage?)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                    
-                    Picker("Unit of Measure (UOM)", selection: $formVM.selectedUOM) {
-                        Text("Select UOM").tag(nil as UOM?)
-                        ForEach(uoms, id: \.id) { uom in
-                            Text("\(uom.name) (\(uom.symbol))").tag(uom as UOM?)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                }
-                
-                Section(header: Text("Quantity & Pricing")) {
-                    TextField("Current Quantity", text: $formVM.currentQuantity)
-                        .keyboardType(.decimalPad)
-                        .accessibilityIdentifier("currentQuantityInput")
-                    
-                    TextField("Min Quantity", text: $formVM.minQuantity)
-                        .keyboardType(.decimalPad)
-                        .accessibilityIdentifier("minQuantityInput")
-                    
-                    TextField("Max Quantity", text: $formVM.maxQuantity)
-                        .keyboardType(.decimalPad)
-                        .accessibilityIdentifier("maxQuantityInput")
-                    
-                    TextField("Unit Cost", text: $formVM.unitCost)
-                        .keyboardType(.decimalPad)
+                    ItemPhotoSection(
+                        selectedPhotoData: $selectedPhotoData,
+                        existingPhotoURL: nil,
+                        showsSectionContainer: false
+                    )
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
+        }
+        .scrollDismissesKeyboard(.interactively)
             // IMPORTANT: the scanner's `.fullScreenCover` MUST be attached
-            // INSIDE the NavigationStack (here, on the Form), not as a sibling
+            // to the Form, not as a sibling
             // of `.sheet(isPresented: $showingItemLimitPaywall)` below. With
             // two presentation modifiers (a `.sheet` + a `.fullScreenCover`)
             // at the same level on this view, iOS 16/17 routes the cover's
@@ -709,6 +762,14 @@ struct AddItemToStorageView: View {
                     }
                 }
 
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        saveItem()
+                    }
+                    .disabled(!formVM.canSaveNew)
+                    .accessibilityIdentifier("addItemSaveButton")
+                }
+
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Done") {
@@ -719,27 +780,7 @@ struct AddItemToStorageView: View {
                     }
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        if SubscriptionManager.shared.canAddItem(currentItemCount: selectedStorageItemCount) {
-                            formVM.analyticsSource = initialBarcode.isEmpty ? "fab" : "barcode"
-                            formVM.analyticsInputMethod = initialBarcode.isEmpty ? "manual" : "barcode"
-                            if formVM.saveNew() {
-                                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                                dismiss()
-                            } else {
-                                showingItemLimitPaywall = true
-                            }
-                        } else {
-                            showingItemLimitPaywall = true
-                        }
-                    } label: {
-                        Text("Save")
-                            .accessibilityIdentifier("addItemSaveButton")
-                    }
-                }
             }
-        }
         .sheet(isPresented: $showingTemplatePicker) {
             TemplatePickerView(templates: templates) { selected in
                 formVM.name = selected.name
@@ -758,6 +799,12 @@ struct AddItemToStorageView: View {
             PaywallView(source: "item_limit", trigger: "item_cap")
                 .sheetStyle()
         }
+        .sheet(isPresented: $showingAddStorage) {
+            AddStorageView(onStorageAdded: { newStorage in
+                formVM.selectedStorage = newStorage
+            })
+            .sheetStyle()
+        }
         .onAppear {
             if !didTrackAddItemStarted {
                 didTrackAddItemStarted = true
@@ -773,6 +820,9 @@ struct AddItemToStorageView: View {
             }
             if formVM.selectedUOM == nil, let defaultUOM = uoms.first(where: { $0.isDefault }) {
                 formVM.selectedUOM = defaultUOM
+            }
+            if formVM.selectedStorage == nil {
+                formVM.selectedStorage = storages.first
             }
             // Pre-fill the scanned barcode if we were presented from the
             // "Scan to Find → not found" flow. Guarded by `barcode.isEmpty`
@@ -796,10 +846,52 @@ struct AddItemToStorageView: View {
                 formVM.selectedUOM = defaultUOM
             }
         }
+        .onChange(of: storages.count) { _, _ in
+            if formVM.selectedStorage == nil {
+                formVM.selectedStorage = storages.first
+            }
+        }
+    }
+
+    private var photoSummaryText: String? {
+        selectedPhotoData == nil ? nil : "1 photo"
+    }
+
+    private func saveItem() {
+        guard SubscriptionManager.shared.canAddItem(currentItemCount: selectedStorageItemCount) else {
+            showingItemLimitPaywall = true
+            return
+        }
+
+        formVM.analyticsSource = initialBarcode.isEmpty ? "fab" : "barcode"
+        formVM.analyticsInputMethod = initialBarcode.isEmpty ? "manual" : "barcode"
+
+        // TODO(iOS-B2): fire item_create_completed{entry_source, duration_ms}
+        //               via AmplitudeManager helper.
+        guard formVM.saveNew() else {
+            showingItemLimitPaywall = true
+            return
+        }
+
+        if let photoData = selectedPhotoData, let item = formVM.lastSavedItem {
+            Task {
+                do {
+                    let url = try await FirestoreManager.shared.uploadItemPhoto(photoData, itemId: item.id)
+                    item.photoURL = url
+                    modelContext.safeSave(context: "AddItem")
+                    FirestoreManager.shared.syncItem(item)
+                } catch {
+                    print("Photo upload failed: \(error.localizedDescription)")
+                }
+            }
+        }
+
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        dismiss()
     }
 }
 
 #Preview {
     ItemListView()
         .modelContainer(for: [Storage.self, InventoryItem.self, UOM.self, InventoryCount.self], inMemory: true)
-} 
+}

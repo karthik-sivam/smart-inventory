@@ -8,6 +8,7 @@ import UIKit
 struct ItemPhotoSection: View {
     @Binding var selectedPhotoData: Data?
     let existingPhotoURL: String?
+    var showsSectionContainer: Bool = true
     @State private var pickerItem: PhotosPickerItem? = nil
     @State private var thumbnailImage: Image? = nil
     @State private var showingPaywall = false
@@ -15,48 +16,59 @@ struct ItemPhotoSection: View {
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
 
     var body: some View {
-        Section(header: Text("Photo")) {
-            if subscriptionManager.isPro {
-                proPhotoRow
-            } else {
-                // Presentation MUST NOT sit on `Section`. A Form Section with
-                // two children (lock row + hint) applies the modifier to both,
-                // so two sheets present at once and iOS dismisses immediately.
-                // Attach to the always-present lock row — a single identity.
-                //
-                // Must be `.fullScreenCover`, not `.sheet`. ItemPhotoSection
-                // lives inside EditItemView / AddItemView, already sheets
-                // (ItemDetailView → Edit, StorageDetailView → Add) with
-                // `.sheetStyle()` detents. A nested sheet + SubscriptionManager
-                // publish from PaywallView.loadProducts() re-identifies the
-                // parent sheet and auto-dismisses. Same precedent as the
-                // barcode scanner. Do not apply `.sheetStyle()` — detents
-                // are sheet-only.
-                freePhotoRow
-                    .fullScreenCover(isPresented: $showingPaywall) {
-                        PaywallView(source: "item_photo", trigger: "item_photo")
-                    }
-                if showProHint {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Add a photo so your team can identify stock at a glance. Item photos are a Pro feature.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Button {
-                            AnalyticsManager.shared.track(.upgradeCtaTapped(source: "item_photo"))
-                            showingPaywall = true
-                        } label: {
-                            Text("Upgrade to Pro")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        .accessibilityIdentifier("itemPhotoUpgradeButton")
-                    }
-                    .padding(.vertical, 4)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+        Group {
+            if showsSectionContainer {
+                Section(header: Text("Photo")) {
+                    photoContent
                 }
+            } else {
+                photoContent
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var photoContent: some View {
+        if subscriptionManager.isPro {
+            proPhotoRow
+        } else {
+            // Presentation MUST NOT sit on `Section` / outer `Group`. A Form
+            // Section with two children (lock row + hint) applies the modifier
+            // to both, so two sheets present at once and iOS dismisses immediately.
+            // Attach to the always-present lock row — a single identity.
+            //
+            // Must be `.fullScreenCover`, not `.sheet`. ItemPhotoSection
+            // lives inside EditItemView / AddItemView, already sheets
+            // (ItemDetailView → Edit, StorageDetailView → Add) with
+            // `.sheetStyle()` detents. A nested sheet + SubscriptionManager
+            // publish from PaywallView.loadProducts() re-identifies the
+            // parent sheet and auto-dismisses. Same precedent as the
+            // barcode scanner. Do not apply `.sheetStyle()` — detents
+            // are sheet-only.
+            freePhotoRow
+                .fullScreenCover(isPresented: $showingPaywall) {
+                    PaywallView(source: "item_photo", trigger: "item_photo")
+                }
+            if showProHint {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Add a photo so your team can identify stock at a glance. Item photos are a Pro feature.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        AnalyticsManager.shared.track(.upgradeCtaTapped(source: "item_photo"))
+                        showingPaywall = true
+                    } label: {
+                        Text("Upgrade to Pro")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .accessibilityIdentifier("itemPhotoUpgradeButton")
+                }
+                .padding(.vertical, 4)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }

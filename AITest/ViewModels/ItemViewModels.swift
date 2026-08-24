@@ -133,6 +133,7 @@ final class ItemFormViewModel: ObservableObject {
     var sourceTemplateId: UUID? = nil
     var analyticsSource: String = "fab"
     var analyticsInputMethod: String = "manual"
+    @Published private(set) var lastSavedItem: InventoryItem?
 
     private var modelContext: ModelContext?
 
@@ -201,19 +202,54 @@ final class ItemFormViewModel: ObservableObject {
         existingPhotoURL = item.photoURL
     }
 
+    var hasValidQuantity: Bool {
+        guard let quantity = Double(currentQuantity.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return false
+        }
+        return quantity.isFinite && quantity >= 0
+    }
+
     var canSaveNew: Bool {
-        !name.isEmpty && selectedStorage != nil && selectedUOM != nil
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasValidQuantity
     }
 
     var canSaveEdit: Bool {
-        !name.isEmpty && !currentQuantity.isEmpty
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasValidQuantity
+    }
+
+    /// Drives Edit Item's initial disclosure state. Auto-generated SKUs and the
+    /// default UOM are defaults, so they do not expand the form by themselves.
+    var hasOptionalDetails: Bool {
+        !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        !barcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        hasUserSuppliedSKU ||
+        category != "Uncategorised" ||
+        (Double(minQuantity) ?? 0) != 0 ||
+        (Double(maxQuantity) ?? 0) != 0 ||
+        (Double(unitCost) ?? 0) != 0 ||
+        (Double(sellingPrice) ?? 0) != 0 ||
+        (Double(lastPurchasePrice) ?? 0) != 0 ||
+        reorderPercentage != 0 ||
+        (selectedUOM != nil && selectedUOM?.isDefault != true) ||
+        hasExpiryDate ||
+        existingPhotoURL != nil
+    }
+
+    private var hasUserSuppliedSKU: Bool {
+        let trimmedSKU = sku.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSKU.isEmpty else { return false }
+        let suffix = trimmedSKU.dropFirst(4)
+        let isGeneratedSKU = trimmedSKU.hasPrefix("SKU-") &&
+            suffix.count == 6 &&
+            suffix.allSatisfy(\.isHexDigit)
+        return !isGeneratedSKU
     }
 
     /// Returns `false` when the free item cap blocked the insert.
     @discardableResult
     func saveNew() -> Bool {
         guard let modelContext else { return false }
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        guard canSaveNew, let qty = Double(currentQuantity) else { return false }
 
         if selectedUOM == nil {
             let uoms = (try? modelContext.fetch(FetchDescriptor<UOM>())) ?? []
@@ -229,7 +265,6 @@ final class ItemFormViewModel: ObservableObject {
             return false
         }
 
-        let qty = Double(currentQuantity) ?? 0
         let item = InventoryItem(
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             description: description,
@@ -261,7 +296,8 @@ final class ItemFormViewModel: ObservableObject {
             modelContext.insert(initialBatch)
         }
 
-        modelContext.safeSave(context: "saveNew item")
+        modelContext.safeSave(context: "AddItem")
+        lastSavedItem = item
 
         AnalyticsManager.shared.track(.itemAdded(
             category: item.category,
@@ -290,6 +326,7 @@ final class ItemFormViewModel: ObservableObject {
     }
 
     func saveEdits(to item: InventoryItem) {
+        guard canSaveEdit else { return }
         let previousQty = item.currentQuantity
         item.name            = name
         item.itemDescription = description
@@ -317,7 +354,7 @@ final class ItemFormViewModel: ObservableObject {
         item.category        = category
         item.expiryDate      = hasExpiryDate ? expiryDate : nil
         item.updatedAt       = Date()
-        modelContext?.safeSave(context: "saveEdits item")
+        modelContext?.safeSave(context: "EditItem")
 
         if let ctx = modelContext {
             let editEvent = ActivityEvent(
