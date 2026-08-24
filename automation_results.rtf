@@ -558,4 +558,17 @@ metadata extraction skipped.\par
 (Total Storages not visible after launch — same class of blocker as
 iOS-A1). Identity fix is compile-verified; 5 back-to-back opens need a
 dedicated free-sandbox tap (QA handoff below).\par
+\par
+{\b iOS-F4: AdMob Amplitude events wired (ad_requested/loaded/failed/
+impression/clicked/dismissed). Diagnostic report saved to
+docs/adman-diagnostic-2026-08-22.md with ranked most-likely-cause
+list. No production AdMob config changes made; awaiting CEO review
+before adjusting.}\par
+[COMPLETED]\par
+\bullet StoqlyEvent ad_requested / ad_loaded / ad_failed_to_load / ad_impression / ad_clicked / ad_dismissed in AnalyticsManager.swift; standard properties app_version, platform=ios, is_offline, device_class, session_id on every event (docs/event-taxonomy.md)\par
+\bullet AdManager.swift: fire from GADBannerViewDelegate + GADFullScreenContentDelegate; suppressed:true when isPro or hasRemovedAds; Dashboard/ItemList noteBannerOpportunity; DEBUG NSLog TODO to remove after first Amplitude reads\par
+\bullet Simulator free account Dashboard: ad_requested (source_screen=Dashboard, is_pro=false, suppressed=false) then ad_failed_to_load (error_domain=simulator). Decision tree: bannerMounted=0 (banners are not persistent on Dashboard)\par
+\bullet Diagnostic: ranked causes (no persistent banner, simulator stub, DEBUG banner uses production unit, ATT no-fill). Unit IDs redacted. Entitlement gating unchanged.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \emdash exit 0, BUILD SUCCEEDED. Only pre-existing warnings (FeedbackView UTF8, ExportManager unused vars). Allowed appintentsmetadataprocessor skip.\par
+\par
 }

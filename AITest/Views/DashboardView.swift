@@ -494,6 +494,7 @@ struct DashboardView: View {
         .onAppear {
             initializeStandardUOMs()
             AnalyticsManager.shared.track(.dashboardViewed)
+            AdManager.shared.noteBannerOpportunity(sourceScreen: "Dashboard")
             FeedbackPromptManager.recordInstallIfNeeded()
             if !didEvaluateFeedbackPrompt {
                 didEvaluateFeedbackPrompt = true
