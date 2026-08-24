@@ -598,4 +598,13 @@ iOS-F1: 7-day free trial live. Firestore manualProUntil integrated with StoreKit
 \bullet BLOCKER FOUND - against live App Store Connect products, isEligibleForTrial resolved FALSE, so the banner did not render. Real ASC prices are $4.99/mo and $39.99/yr, which match neither SmartInventory.storekit ($2.99/$22.99) nor CLAUDE.md. Either the 7-day introductory offer is not configured on the live products in App Store Connect, or the signed-in Apple ID has already consumed it. This needs the CEO to check App Store Connect: if the intro offer is missing there, this feature is inert in production no matter what the client code does.\par
 \bullet Pro-gated features unaffected: all gates still read SubscriptionManager.isPro, which is unchanged in meaning - trial users are Pro via the same isPro path.\par
 \par
+{\b iOS-A2 \emdash Remove BarcodeEnrichmentService debug prints}\par
+[COMPLETED WITH ISSUES]\par
+\bullet iOS-A2: BarcodeEnrichmentService debug prints removed. Enrichment verified. Maestro suite: not green.\par
+\bullet AITest/Services/BarcodeEnrichmentService.swift already had zero print("[Enrichment]...") / debugPrint / NSLog (M6-3). No os_log conversion \emdash nothing useful to convert; adding logs would be a behavior change.\par
+\bullet Struck pre-ship debt in CLAUDE.md and AITest/references/phase-status.md.\par
+\bullet Enrichment E2E (live): Open Food Facts hit 3017620422003 (Nutella) \to EnrichedProduct; miss 8900000000000 \to nil (OFF not found + UPCItemDB INVALID_UPC). XCTest BarcodeEnrichmentServiceTests both passed.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \emdash exit 0, BUILD SUCCEEDED (only allowed warning: appintentsmetadataprocessor).\par
+\bullet Maestro: maestro test maestro/run_all.yaml failed before barcode flows. Pre-existing: (1) flows 93\endash 102 invalid YAML (`tapOn: "..."\\n    optional: true`); (2) 01_onboarding permission-sheet race on iOS 26.3; (3) later driver 127.0.0.1:7001 connect failure. Not caused by this change. Barcode-related flows 08/25/40/51/53 were not independently green.\par
+\par
 }
