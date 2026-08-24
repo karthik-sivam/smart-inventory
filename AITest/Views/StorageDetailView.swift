@@ -540,13 +540,13 @@ struct AddItemView: View {
 
     enum Field: Hashable {
         case name, description, sku, barcode
-        case currentQuantity, minQuantity, maxQuantity, unitCost
+        case currentQuantity, minQuantity, maxQuantity, unitCost, sellingPrice
     }
     @FocusState private var focusedField: Field?
 
     var body: some View {
         Form {
-            Section(header: Text("Primary")) {
+            Section {
                 TextField("Item Name", text: $name)
                     .focused($focusedField, equals: .name)
                     .accessibilityIdentifier("itemNameField")
@@ -583,10 +583,32 @@ struct AddItemView: View {
             }
 
             Section {
+                if subscriptionManager.isPro && !templates.isEmpty && teamManager.canEdit {
+                    HStack {
+                        Button {
+                            showingTemplatePicker = true
+                        } label: {
+                            Label("Use Template", systemImage: "doc.on.doc.fill")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.accentColor.opacity(0.12))
+                                .foregroundColor(.accentColor)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        Spacer(minLength: 0)
+                    }
+                }
+
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         isShowingMoreDetails.toggle()
                     }
+                    AnalyticsManager.shared.track(
+                        .addItemMoreDetailsToggled(context: "add_item", expanded: isShowingMoreDetails)
+                    )
                 } label: {
                     HStack(spacing: 8) {
                         Text("More details")
@@ -610,17 +632,6 @@ struct AddItemView: View {
                 .accessibilityIdentifier("moreDetailsButton")
 
                 if isShowingMoreDetails {
-                    if subscriptionManager.isPro && !templates.isEmpty && teamManager.canEdit {
-                        Button {
-                            showingTemplatePicker = true
-                        } label: {
-                            Label("Use Template", systemImage: "doc.on.doc.fill")
-                                .font(.subheadline)
-                                .foregroundColor(.accentColor)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-
                     TextField("Description (Optional)", text: $description, axis: .vertical)
                         .lineLimit(3)
                         .focused($focusedField, equals: .description)
@@ -691,7 +702,7 @@ struct AddItemView: View {
 
                     TextField("Selling Price", text: $sellingPrice)
                         .keyboardType(.decimalPad)
-                        .focused($focusedField, equals: .unitCost)
+                        .focused($focusedField, equals: .sellingPrice)
                         .accessibilityIdentifier("addItemSellingPrice")
 
                     Toggle("Has Expiry Date", isOn: $hasExpiryDate.animation(.easeInOut(duration: 0.2)))
@@ -731,6 +742,7 @@ struct AddItemView: View {
                     saveItem()
                 }
                 .disabled(!canSave)
+                .accessibilityHint(canSave ? Text("") : Text("Enter an item name and quantity to enable."))
                 .accessibilityIdentifier("addItemSaveButton")
             }
             ToolbarItemGroup(placement: .keyboard) {

@@ -525,4 +525,14 @@
 \bullet Build: exit 0, BUILD SUCCEEDED\par
 \par
 iOS-A4: Add-item progressive disclosure shipped. Maestro 81 added and green. Full suite: skipped at user request.\par
+\par
+{\b iOS-A4b: AddItem/EditItem progressive-disclosure polish}\par
+[COMPLETED]\par
+\bullet Focus bug: AddItemView Field enum gained sellingPrice; Selling Price TextField uses .focused($focusedField, equals: .sellingPrice) so it no longer shares focus with Unit Cost.\par
+\bullet Analytics: StoqlyEvent.addItemMoreDetailsToggled(context:expanded:) fires from the More details button in AddItemView (context=add_item) and EditItemView (context=edit_item) AFTER toggle. EditItemView.onAppear auto-expand does not fire the event.\par
+\bullet Use Template chip: Pro + templates + canEdit shows a compact chip on its own row above More details on Add Item. In-details duplicate removed. Free / 0 templates / no-edit: chip absent. Edit Item unchanged.\par
+\bullet Dropped the "Primary" Section header on AddItemView and EditItemView (headerless Name/Quantity/Storage card).\par
+\bullet Save buttons keep .disabled(!canSave) / .disabled(!formVM.canSaveEdit); VoiceOver hint when disabled: Add "Enter an item name and quantity to enable.", Edit "Enter a name and quantity."\par
+\bullet Maestro 82_edit_item_auto_expand.yaml added and slotted in run_all.yaml after flow 81. Full suite: skipped per spec (credit cost).\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \emdash  exit 0, BUILD SUCCEEDED. No new warnings (only pre-existing ExportManager/Meta/FeedbackView + allowed appintentsmetadataprocessor skip).\par
 }

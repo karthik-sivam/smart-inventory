@@ -97,6 +97,7 @@ env:
 - runFlow: flows/79_bulk_import_add_storage_autoselect.yaml
 - runFlow: flows/80_bulk_import_add_storage_color.yaml
 - runFlow: flows/81_add_item_progressive_disclosure.yaml
+- runFlow: flows/82_edit_item_auto_expand.yaml
 
 # ── Smart Count flows (81–87) ─────────────────────
 - runFlow: flows/81_smart_count_open.yaml

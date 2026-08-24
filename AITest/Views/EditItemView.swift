@@ -35,7 +35,7 @@ struct EditItemView: View {
     
     var body: some View {
         Form {
-            Section(header: Text("Primary")) {
+            Section {
                 TextField("Item Name", text: $formVM.name)
                     .accessibilityIdentifier("itemNameField")
 
@@ -70,6 +70,9 @@ struct EditItemView: View {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         isShowingMoreDetails.toggle()
                     }
+                    AnalyticsManager.shared.track(
+                        .addItemMoreDetailsToggled(context: "edit_item", expanded: isShowingMoreDetails)
+                    )
                 } label: {
                     HStack(spacing: 8) {
                         Text("More details")
@@ -301,6 +304,7 @@ struct EditItemView: View {
                     saveItem()
                 }
                 .disabled(!formVM.canSaveEdit)
+                .accessibilityHint(formVM.canSaveEdit ? Text("") : Text("Enter a name and quantity."))
                 .accessibilityIdentifier("editItemSaveButton")
             }
             ToolbarItemGroup(placement: .keyboard) {
