@@ -6,8 +6,10 @@ struct QuickSaleSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var currencyManager: CurrencyManager
+    @EnvironmentObject private var subscriptionManager: SubscriptionManager
 
     @State private var quantityText: String = "1"
+    @State private var showingSmartSales = false
     @State private var sellingPriceText: String = ""
     @State private var priceWasEdited = false
     @State private var saleDate: Date = Date()
@@ -29,6 +31,12 @@ struct QuickSaleSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    // TODO(iOS-C1): when Manual Purchase Entry ships, add a matching
+                    // Smart Purchase chip ("Or scan an invoice with Smart Purchase →")
+                    // on that screen using AIEntryChip(feature: .smartPurchase).
+                    AIEntryChip(feature: .smartSales, screen: "sales_manual") {
+                        showingSmartSales = true
+                    }
                     itemInfoSection
                     quantitySection
                     sellingPriceSection
@@ -76,6 +84,12 @@ struct QuickSaleSheet: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showingSmartSales) {
+            SmartSalesEntryView()
+                .environmentObject(currencyManager)
+                .environmentObject(subscriptionManager)
+                .sheetStyle()
         }
         .onAppear {
             AnalyticsManager.shared.track(.saleEntryStarted(mode: "manual"))

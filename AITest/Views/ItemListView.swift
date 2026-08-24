@@ -542,6 +542,7 @@ struct AddItemToStorageView: View {
     @State private var selectedPhotoData: Data?
     @State private var isShowingMoreDetails = false
     @State private var showingAddStorage = false
+    @State private var showingSmartCount = false
 
     init(initialBarcode: String = "") {
         self.initialBarcode = initialBarcode
@@ -589,6 +590,10 @@ struct AddItemToStorageView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
 
+            }
+
+            AIEntryChip(feature: .smartCount, screen: "add_item", style: .formSection) {
+                showingSmartCount = true
             }
 
             Section {
@@ -804,6 +809,9 @@ struct AddItemToStorageView: View {
                 formVM.selectedStorage = newStorage
             })
             .sheetStyle()
+        }
+        .sheet(isPresented: $showingSmartCount) {
+            SmartCountView(preselectedStorage: formVM.selectedStorage).sheetStyle()
         }
         .onAppear {
             if !didTrackAddItemStarted {

@@ -271,6 +271,8 @@ enum StoqlyEvent {
     case purchaseEntryCancelled(mode: String)
     case swipeActionUsed(screen: String, action: String)
     case buttonTapped(screen: String, control: String)
+    case aiEntryChipShown(screen: String, feature: String)
+    case aiEntryChipTapped(screen: String, feature: String)
 
     // ── AdMob lifecycle (iOS-F4) ───────────────────────────────────────────────
     case adRequested(unitId: String, format: String, sourceScreen: String, isPro: Bool, suppressed: Bool)
@@ -388,6 +390,8 @@ enum StoqlyEvent {
         case .purchaseEntryCancelled:     return "purchase_entry_cancelled"
         case .swipeActionUsed:            return "swipe_action_used"
         case .buttonTapped:               return "button_tapped"
+        case .aiEntryChipShown:           return "ai_entry_chip_shown"
+        case .aiEntryChipTapped:          return "ai_entry_chip_tapped"
 
         case .adRequested:                return "ad_requested"
         case .adLoaded:                   return "ad_loaded"
@@ -571,6 +575,9 @@ enum StoqlyEvent {
             return ["screen": screen, "action": action]
         case .buttonTapped(let screen, let control):
             return ["screen": screen, "control": control]
+        case .aiEntryChipShown(let screen, let feature),
+             .aiEntryChipTapped(let screen, let feature):
+            return ["screen": screen, "feature": feature]
 
         case .adRequested(let unitId, let format, let sourceScreen, let isPro, let suppressed):
             return [

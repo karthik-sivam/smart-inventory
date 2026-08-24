@@ -625,4 +625,12 @@ iOS-A5-pre: Added confidence to SmartSales AI response (client-side Claude schem
 \par
 iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. Maestro 82 + 83 added and green. Full suite: skipped by user for this run.\par
 \par
+{\b iOS-F8 \emdash SmartCount + SmartSales entry chips on manual screens}\par
+[COMPLETED]\par
+\bullet iOS-F8: SmartCount + SmartSales entry chips added to Add Item and Sales manual entry. Free-tier quota-aware; Pro always visible. TODO left for SmartPurchase chip when iOS-C1 lands.\par
+\bullet Add Item chip on AddItemView + AddItemToStorageView (actual add flows) and EditItemView only when isAddFlow; hidden in Edit mode.\par
+\bullet Sales chip on QuickSaleSheet (manual sale form). Session-only X dismiss. Analytics: ai_entry_chip_shown / ai_entry_chip_tapped.\par
+\bullet Files: AIEntryChip.swift, AIUsageManager.swift, AnalyticsManager.swift, StorageDetailView.swift, ItemListView.swift, EditItemView.swift, QuickSaleSheet.swift, Localizable.xcstrings, AITestTests.swift\par
+\bullet Build: Swift compile OK (SmartInventory.app produced). Post-build Crashlytics upload-symbols script failed (env/sandbox, not code).\par
+\par
 }
