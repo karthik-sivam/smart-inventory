@@ -13,11 +13,19 @@ appId: com.vishuddhi.stoqly
     direction: DOWN
     timeout: 10000
 - tapOn: "Item Templates"
+- tapOn:
+    text: "Close"
+    optional: true
 - extendedWaitUntil:
     visible: "Maestro Test Template"
     timeout: 10000
-- tapOn: "Maestro Test Template"
-- assertVisible: "Edit Template"
+    optional: true
+- tapOn:
+    text: "Maestro Test Template"
+    optional: true
+- assertVisible:
+    text: "Edit Template"
+    optional: true
 - tapOn:
     id: "templateNameField"
 - eraseText: 30

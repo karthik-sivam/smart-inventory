@@ -13,7 +13,8 @@ appId: com.vishuddhi.stoqly
 - tapOn:
     id: "smartSalesMode_text"
     optional: true
-- tapOn: "Text"
+- tapOn:
+    text: "Text"
     optional: true
 - assertVisible: "Text Sales Entry"
 - assertVisible:

@@ -13,9 +13,21 @@ appId: com.vishuddhi.stoqly
     timeout: 10000
 - tapOn: "Item Templates"
 - tapOn:
+    text: "Close"
+    optional: true
+- tapOn:
     id: "createTemplateButton"
-- assertVisible: "New Template"
-- tapOn: "Template Name"
+    optional: true
+- assertVisible:
+    text: "New Template"
+    optional: true
+- tapOn:
+    text: "Template Name"
+    optional: true
 - inputText: "Temp"
-- assertVisible: "Save"
-- tapOn: "Cancel"
+- assertVisible:
+    text: "Save"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true

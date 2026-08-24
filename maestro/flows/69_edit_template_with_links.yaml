@@ -13,6 +13,9 @@ appId: com.vishuddhi.stoqly
     timeout: 10000
 - tapOn: "Item Templates"
 - tapOn:
+    text: "Close"
+    optional: true
+- tapOn:
     text: "Maestro Test Template Edited"
     optional: true
 - tapOn:

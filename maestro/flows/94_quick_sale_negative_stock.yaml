@@ -10,10 +10,12 @@ appId: com.vishuddhi.stoqly
 - tapOn:
     id: "salesEmptyRecordButton"
     optional: true
-- tapOn: "Record a Sale"
+- tapOn:
+    text: "Record a Sale"
     optional: true
 - assertVisible: "Select Item"
-- tapOn: "Sale Test Item"
+- tapOn:
+    text: "Sale Test Item"
     optional: true
 - tapOn:
     id: "saleItemRow_SKU-SALE-TEST"

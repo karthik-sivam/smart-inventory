@@ -6,10 +6,24 @@ appId: com.vishuddhi.stoqly
     optional: true
 - waitForAnimationToEnd
 - tapOn:
+    text: "Dismiss"
+    optional: true
+- tapOn:
     text: "Don’t Allow"
     optional: true
 - tapOn:
+    text: "Don't Allow"
+    optional: true
+- tapOn:
     text: "Ask App Not to Track"
+    optional: true
+- waitForAnimationToEnd
+# S34 language step can appear before the 4-page onboarding walkthrough
+- tapOn:
+    id: "onboardingLanguageContinue"
+    optional: true
+- tapOn:
+    text: "Continue"
     optional: true
 - waitForAnimationToEnd
 - extendedWaitUntil:

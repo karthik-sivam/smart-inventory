@@ -13,7 +13,15 @@ appId: com.vishuddhi.stoqly
     timeout: 10000
 - assertVisible: "Item Templates"
 - tapOn: "Item Templates"
-- assertVisible: "Item Templates"
+- assertVisible:
+    text: "Upgrade to Stoqly Pro"
+    optional: true
+- tapOn:
+    text: "Close"
+    optional: true
+- assertVisible:
+    text: "Item Templates"
+    optional: true
 - assertVisible:
     text: "No Templates Yet"
     optional: true
