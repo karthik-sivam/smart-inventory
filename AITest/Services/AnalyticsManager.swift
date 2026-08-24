@@ -231,6 +231,7 @@ enum StoqlyEvent {
 
     // ── Flow START events (S24) ──────────────────────────────────────────────────
     case addItemStarted(source: String)
+    case addItemMoreDetailsToggled(context: String, expanded: Bool) // context: "add_item" | "edit_item"
     case saleEntryStarted(mode: String)
     case purchaseEntryStarted(mode: String)
 
@@ -352,6 +353,7 @@ enum StoqlyEvent {
         case .paywallDismissed:          return "paywall_dismissed"
 
         case .addItemStarted:            return "add_item_started"
+        case .addItemMoreDetailsToggled: return "add_item_more_details_toggled"
         case .saleEntryStarted:          return "sale_entry_started"
         case .purchaseEntryStarted:      return "purchase_entry_started"
 
@@ -501,6 +503,8 @@ enum StoqlyEvent {
         case .paywallDismissed:               return [:]
 
         case .addItemStarted(let source):     return ["source": source]
+        case .addItemMoreDetailsToggled(let context, let expanded):
+            return ["context": context, "expanded": expanded]
         case .saleEntryStarted(let mode):     return ["mode": mode]
         case .purchaseEntryStarted(let mode): return ["mode": mode]
 
