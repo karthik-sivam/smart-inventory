@@ -633,4 +633,11 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Files: AIEntryChip.swift, AIUsageManager.swift, AnalyticsManager.swift, StorageDetailView.swift, ItemListView.swift, EditItemView.swift, QuickSaleSheet.swift, Localizable.xcstrings, AITestTests.swift\par
 \bullet Build: Swift compile OK (SmartInventory.app produced). Post-build Crashlytics upload-symbols script failed (env/sandbox, not code).\par
 \par
+{\b CONSOLIDATION: master_scope_v1_qa}\par
+[COMPLETED]\par
+\bullet Merged 10 branches into master_scope_v1_qa in order: F3, F4, F1, A2, A1 (already ancestor of F3 \emdash no extra merge commit), A3, A4, A4b, A5-pre, A5, F8.\par
+\bullet Conflicts resolved: automation_results.rtf (kept all entries), maestro/run_all.yaml (auto-merged; preserved A4/A4b flows above Smart Count 81\endash 87), AnalyticsManager.swift (kept trial_*, ad_*, add_item_more_details_toggled, ai_entry_chip_*), CLAUDE.md (kept isPro-blocker removal + A2 Enrichment resolved), ItemPhotoSection.swift (A4 showsSectionContainer + F3 .fullScreenCover on lock row), EditItemView/ItemListView/StorageDetailView (A4/A4b progressive disclosure + F8 AIEntryChip as sibling Form section).\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \emdash  exit 0, BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped.\par
+\bullet Ready for CEO manual QA per docs/Stoqly_master_scope_v1_Manual_QA.xlsx. master_scope_v1 UNCHANGED; fast-forward pending QA.\par
+\par
 }
