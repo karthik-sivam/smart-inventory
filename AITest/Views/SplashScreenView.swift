@@ -9,11 +9,11 @@ struct SplashScreenView: View {
     @State private var animatePills    = false
     @State private var animateDots     = false
 
-    // Brand palette — matches the KPI card deep-ocean theme
-    private let bgTop     = Color(red: 0.031, green: 0.098, blue: 0.173)  // midnight navy
-    private let bgBottom  = Color(red: 0.027, green: 0.188, blue: 0.165)  // deep ocean teal
-    private let teal      = Color(red: 0.051, green: 0.580, blue: 0.533)  // stoqlyAccent
-    private let gold      = Color(red: 0.784, green: 0.455, blue: 0.000)  // cognac gold
+    // Adaptive brand palette — explicit Any/Dark values live in Assets.xcassets.
+    private let bgTop    = Color("SplashBackgroundTop")
+    private let bgBottom = Color("SplashBackgroundBottom")
+    private let teal     = Color("SplashAccent")
+    private let gold     = Color("SplashGold")
 
     var body: some View {
         ZStack {
@@ -78,7 +78,7 @@ struct SplashScreenView: View {
 
                         Text("Count smarter, not harder")
                             .font(.system(size: 13, weight: .regular))
-                            .foregroundColor(.white.opacity(0.45))
+                            .foregroundColor(Color("SplashSecondaryText"))
                             .opacity(animateTagline ? 1.0 : 0.0)
                             .animation(.easeOut(duration: 0.45).delay(1.05), value: animateTagline)
                     }
@@ -144,11 +144,11 @@ struct SplashScreenView: View {
                 .foregroundColor(teal)
             Text(label)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.white.opacity(0.75))
+                .foregroundColor(Color("SplashSecondaryText"))
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 7)
-        .background(Color.white.opacity(0.07))
+        .background(Color("SplashPillSurface"))
         .clipShape(Capsule())
         .overlay(Capsule().stroke(teal.opacity(0.28), lineWidth: 1))
     }
