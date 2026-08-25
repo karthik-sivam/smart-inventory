@@ -25,6 +25,9 @@ struct EditItemView: View {
     /// in `onDismiss` so we don't mutate `formVM.barcode` in the same render
     /// pass that toggles `showingBarcodeScanner`.
     @State private var pendingScannedBarcode: String?
+    @State private var pendingScannedSymbology: String?
+    @State private var pendingScanDurationMs = 0
+    @State private var barcodeScanStartedAt = Date()
     @State private var usePercentThreshold = false
     @State private var isShowingMoreDetails = false
 
@@ -355,8 +358,12 @@ struct EditItemView: View {
             isPresented: $showingBarcodeScanner,
             onDismiss: {
                 if let code = pendingScannedBarcode {
+                    let symbology = pendingScannedSymbology
+                    let durationMs = pendingScanDurationMs
                     formVM.barcode = code
                     pendingScannedBarcode = nil
+                    pendingScannedSymbology = nil
+                    pendingScanDurationMs = 0
                     // Phase 3 — only enrich when the user hasn't started
                     // changing the item's name yet. This protects users who
                     // are scanning a barcode INTO an existing item solely to
@@ -368,23 +375,43 @@ struct EditItemView: View {
                     // users get no network call.
                     if formVM.name == item.name {
                         Task {
-                            await formVM.enrichFromBarcode(code, uoms: uoms)
+                            await formVM.enrichFromBarcode(
+                                code,
+                                symbology: symbology,
+                                scanDurationMs: durationMs,
+                                uoms: uoms
+                            )
                         }
+                    } else {
+                        AnalyticsManager.shared.track(
+                            .barcodeScanResult(
+                                outcome: "found",
+                                provider: "none",
+                                symbology: symbology,
+                                durationMs: durationMs,
+                                reason: "enrichment_skipped_user_entered_name"
+                            )
+                        )
                     }
                 }
             }
         ) {
             BarcodeScannerView(
-                onScan: { code, _ in
+                onScan: { code, symbology in
                     pendingScannedBarcode = code
+                    pendingScannedSymbology = symbology
+                    pendingScanDurationMs = max(0, Int(Date().timeIntervalSince(barcodeScanStartedAt) * 1_000))
                     showingBarcodeScanner = false
                 },
                 onCancel: {
                     pendingScannedBarcode = nil
+                    pendingScannedSymbology = nil
+                    pendingScanDurationMs = 0
                     showingBarcodeScanner = false
                 }
             )
             .onAppear {
+                barcodeScanStartedAt = Date()
                 AnalyticsManager.shared.track(.barcodeScanInitiated)
             }
         }
