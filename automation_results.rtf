@@ -640,4 +640,12 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \emdash  exit 0, BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped.\par
 \bullet Ready for CEO manual QA per docs/Stoqly_master_scope_v1_Manual_QA.xlsx. master_scope_v1 UNCHANGED; fast-forward pending QA.\par
 \par
+{\b iOS-T2: Onboarding copy \emdash cloud sync is free}\par
+[COMPLETED]\par
+\bullet OnboardingView.swift: replaced the false Pro-only cloud-sync claim with CEO-approved copy stating cloud sync is free and describing the current Pro benefits.\par
+\bullet Localizable.xcstrings: renamed the source key; English marked translated; all 14 existing non-English locales machine-drafted as needs_review with the iOS-T2 translator-queue comment. No locales added or removed.\par
+\bullet Sanity scan: no remaining user-facing Swift copy pairs cloud sync with a Pro, upgrade, unlock, or premium requirement; the existing PaywallView always-free statement remains unchanged.\par
+\bullet Fresh-install smoke: isolated iPhone 17 Pro simulator onboarding reached Your Data, Everywhere and displayed the new English copy; isolated Maestro flow passed. Full maestro/run_all.yaml was not run per CEO deferral.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \emdash exit 0, BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped.\par
+\par
 }
