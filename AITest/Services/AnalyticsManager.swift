@@ -162,7 +162,13 @@ enum StoqlyEvent {
 
     // ── Barcode ──────────────────────────────────────────────────────────────────
     case barcodeScanInitiated
-    case barcodeScanResult(found: Bool, enriched: Bool)
+    case barcodeScanResult(
+        outcome: String,
+        provider: String,
+        symbology: String?,
+        durationMs: Int,
+        reason: String?
+    )
 
     // ── Smart Count / AI ─────────────────────────────────────────────────────────
     case smartCountOpened
@@ -211,7 +217,6 @@ enum StoqlyEvent {
 
     // ── Errors / Crashes (non-fatal, for awareness) ───────────────────────────────
     case syncFailed(reason: String)
-    case barcodeEnrichmentFailed
 
     // ── Journey backbone (S24) ───────────────────────────────────────────────────
     case screenViewed(name: String, referrer: String?)
@@ -339,7 +344,6 @@ enum StoqlyEvent {
         case .smartSalesCompleted:       return "smart_sales_completed"
 
         case .syncFailed:                return "sync_failed"
-        case .barcodeEnrichmentFailed:   return "barcode_enrichment_failed"
 
         case .screenViewed:              return "screen_viewed"
 
@@ -419,7 +423,15 @@ enum StoqlyEvent {
         case .itemCounted(let s):             return ["storage_name": s]
 
         case .barcodeScanInitiated:           return [:]
-        case .barcodeScanResult(let f, let e):return ["found": f, "enriched": e]
+        case .barcodeScanResult(let outcome, let provider, let symbology, let durationMs, let reason):
+            var props: [String: Any] = [
+                "outcome": outcome,
+                "provider": provider,
+                "duration_ms": durationMs
+            ]
+            if let symbology, !symbology.isEmpty { props["symbology"] = symbology }
+            if let reason, !reason.isEmpty { props["reason"] = reason }
+            return props
 
         case .smartCountOpened:               return [:]
         case .smartCountModeSelected(let m):  return ["mode": m]
@@ -488,7 +500,6 @@ enum StoqlyEvent {
             return ["mode": m, "sale_count": n]
 
         case .syncFailed(let r):              return ["reason": r]
-        case .barcodeEnrichmentFailed:        return [:]
 
         case .screenViewed(let name, let referrer):
             var props: [String: Any] = ["screen": name]

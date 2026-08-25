@@ -27,6 +27,9 @@ struct ItemListView: View {
     /// follow-up sheet only opens once the scanner has fully gone away —
     /// otherwise SwiftUI drops the next presentation.
     @State private var pendingScanResult: String? = nil
+    @State private var pendingScanSymbology: String? = nil
+    @State private var pendingScanDurationMs = 0
+    @State private var barcodeScanStartedAt = Date()
     /// Triggers `AddItemToStorageView` pre-filled with the scanned barcode
     /// when no existing item matches. Wrapped in a per-scan `UUID` so the
     /// sheet re-presents even if the user scans the same not-found barcode
@@ -313,9 +316,21 @@ struct ItemListView: View {
             isPresented: $showingScanToFind,
             onDismiss: {
                 guard let code = pendingScanResult else { return }
+                let symbology = pendingScanSymbology
+                let durationMs = pendingScanDurationMs
                 pendingScanResult = nil
+                pendingScanSymbology = nil
+                pendingScanDurationMs = 0
                 let found = items.first(where: { $0.barcode == code && !$0.barcode.isEmpty }) != nil
-                AnalyticsManager.shared.track(.barcodeScanResult(found: found, enriched: false))
+                AnalyticsManager.shared.track(
+                    .barcodeScanResult(
+                        outcome: found ? "found" : "not_found",
+                        provider: "none",
+                        symbology: symbology,
+                        durationMs: durationMs,
+                        reason: found ? "local_inventory_match" : "local_inventory_miss"
+                    )
+                )
                 if let foundItem = items.first(where: { $0.barcode == code && !$0.barcode.isEmpty }) {
                     scanToFindResult = foundItem
                 } else {
@@ -324,16 +339,21 @@ struct ItemListView: View {
             }
         ) {
             BarcodeScannerView(
-                onScan: { code, _ in
+                onScan: { code, symbology in
                     pendingScanResult = code
+                    pendingScanSymbology = symbology
+                    pendingScanDurationMs = max(0, Int(Date().timeIntervalSince(barcodeScanStartedAt) * 1_000))
                     showingScanToFind = false
                 },
                 onCancel: {
                     pendingScanResult = nil
+                    pendingScanSymbology = nil
+                    pendingScanDurationMs = 0
                     showingScanToFind = false
                 }
             )
             .onAppear {
+                barcodeScanStartedAt = Date()
                 AnalyticsManager.shared.track(.barcodeScanInitiated)
             }
         }
@@ -538,6 +558,9 @@ struct AddItemToStorageView: View {
     /// pass that toggles `showingBarcodeScanner` (which causes SwiftUI to
     /// drop the value or cascade-dismiss the parent sheet).
     @State private var pendingScannedBarcode: String?
+    @State private var pendingScannedSymbology: String?
+    @State private var pendingScanDurationMs = 0
+    @State private var barcodeScanStartedAt = Date()
     @State private var didTrackAddItemStarted = false
     @State private var selectedPhotoData: Data?
     @State private var isShowingMoreDetails = false
@@ -731,29 +754,43 @@ struct AddItemToStorageView: View {
                 isPresented: $showingBarcodeScanner,
                 onDismiss: {
                     if let code = pendingScannedBarcode {
+                        let symbology = pendingScannedSymbology
+                        let durationMs = pendingScanDurationMs
                         formVM.barcode = code
                         pendingScannedBarcode = nil
+                        pendingScannedSymbology = nil
+                        pendingScanDurationMs = 0
                         // Phase 3 — kick off smart enrichment lookup. Gated on
                         // `isPro` inside `enrichFromBarcode`, so free users
                         // get no network call. Fire-and-forget — never blocks
                         // the UI.
                         Task {
-                            await formVM.enrichFromBarcode(code, uoms: uoms)
+                            await formVM.enrichFromBarcode(
+                                code,
+                                symbology: symbology,
+                                scanDurationMs: durationMs,
+                                uoms: uoms
+                            )
                         }
                     }
                 }
             ) {
                 BarcodeScannerView(
-                    onScan: { code, _ in
+                    onScan: { code, symbology in
                         pendingScannedBarcode = code
+                        pendingScannedSymbology = symbology
+                        pendingScanDurationMs = max(0, Int(Date().timeIntervalSince(barcodeScanStartedAt) * 1_000))
                         showingBarcodeScanner = false
                     },
                     onCancel: {
                         pendingScannedBarcode = nil
+                        pendingScannedSymbology = nil
+                        pendingScanDurationMs = 0
                         showingBarcodeScanner = false
                     }
                 )
                 .onAppear {
+                    barcodeScanStartedAt = Date()
                     AnalyticsManager.shared.track(.barcodeScanInitiated)
                 }
             }

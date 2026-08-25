@@ -155,19 +155,40 @@ final class ItemFormViewModel: ObservableObject {
     ///                      picked one yet)
     /// Never overwrites user-entered values.
     @MainActor
-    func enrichFromBarcode(_ barcode: String, uoms: [UOM]) async {
+    func enrichFromBarcode(
+        _ barcode: String,
+        symbology: String? = nil,
+        scanDurationMs: Int = 0,
+        uoms: [UOM]
+    ) async {
         guard SubscriptionManager.shared.isPro else {
-            AnalyticsManager.shared.track(.barcodeScanResult(found: false, enriched: false))
+            AnalyticsManager.shared.track(
+                .barcodeScanResult(
+                    outcome: "found",
+                    provider: "none",
+                    symbology: symbology,
+                    durationMs: scanDurationMs,
+                    reason: "enrichment_not_available_free"
+                )
+            )
             return
         }
         guard !barcode.isEmpty else { return }
         isEnriching = true
         defer { isEnriching = false }
-        guard let product = await BarcodeEnrichmentService.shared.enrich(barcode: barcode) else {
-            AnalyticsManager.shared.track(.barcodeScanResult(found: false, enriched: false))
+        let result = await BarcodeEnrichmentService.shared.enrichWithOutcome(barcode: barcode)
+        AnalyticsManager.shared.track(
+            .barcodeScanResult(
+                outcome: result.outcome,
+                provider: result.provider,
+                symbology: symbology,
+                durationMs: scanDurationMs + result.durationMs,
+                reason: result.reason
+            )
+        )
+        guard let product = result.product else {
             return
         }
-        AnalyticsManager.shared.track(.barcodeScanResult(found: true, enriched: true))
         if name.isEmpty                { name = product.name }
         if description.isEmpty         { description = product.description }
         if category == "Uncategorised" { category = product.category }

@@ -648,4 +648,13 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Fresh-install smoke: isolated iPhone 17 Pro simulator onboarding reached Your Data, Everywhere and displayed the new English copy; isolated Maestro flow passed. Full maestro/run_all.yaml was not run per CEO deferral.\par
 \bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \emdash exit 0, BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped.\par
 \par
+{\b iOS-D1a \emdash Barcode outcome overhaul}\par
+[COMPLETED WITH ISSUES]\par
+\bullet Replaced barcode_scan_result(found,enriched) with outcome, provider, optional symbology, duration_ms, and optional reason. Per CEO privacy decision, the raw barcode code is intentionally not sent.\par
+\bullet Controlled outcomes wired: found, not_found, scanner_cancelled, camera_denied, no_code_detected, network_error, parser_error. Controlled providers: off, upcitemdb, none. Standard app_version, platform, is_offline, device_class, and session_id properties remain attached by AnalyticsManager.\par
+\bullet BarcodeEnrichmentService now returns a typed terminal result with provider, elapsed lookup duration, and classified OFF/UPCItemDB miss, network, and parser failures. Scanner and lookup durations are combined for end-to-end result timing.\par
+\bullet BarcodeScannerView keeps the fullScreenCover presentation contract and now records cancel, denied-camera, and 30-second no-code outcomes. All barcode result callers migrated; barcodeEnrichmentFailed removed with zero remaining production references.\par
+\bullet Tests added for the new event property shape, privacy omission, optional properties, and live enrichment result metadata. The production app build completed with exit 0: BUILD SUCCEEDED.\par
+\bullet Verification gap: SmartInventoryTests is not included in the only shared scheme, so xcodebuild test cannot execute it. A direct target build was also blocked before test compilation by the existing nanopb package-checkout build-path conflict. No barcode Maestro flow exists in this checkout, and Amplitude Live View verification is pending the required project 832993 tracking-plan update at the runbook checkpoint.\par
+\par
 }

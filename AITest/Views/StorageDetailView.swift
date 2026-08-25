@@ -529,6 +529,9 @@ struct AddItemView: View {
     /// in `onDismiss` so we don't mutate `barcode` in the same render pass
     /// that toggles `showingBarcodeScanner`.
     @State private var pendingScannedBarcode: String?
+    @State private var pendingScannedSymbology: String?
+    @State private var pendingScanDurationMs = 0
+    @State private var barcodeScanStartedAt = Date()
     @State private var isEnriching = false
     @State private var sourceTemplateId: UUID? = nil
     @State private var didTrackAddItemStarted = false
@@ -817,14 +820,27 @@ struct AddItemView: View {
             isPresented: $showingBarcodeScanner,
             onDismiss: {
                 if let code = pendingScannedBarcode {
+                    let symbology = pendingScannedSymbology
+                    let durationMs = pendingScanDurationMs
                     barcode = code
                     pendingScannedBarcode = nil
+                    pendingScannedSymbology = nil
+                    pendingScanDurationMs = 0
                     if subscriptionManager.isPro && name.isEmpty {
                         Task {
                             isEnriching = true
                             defer { isEnriching = false }
-                            if let product = await BarcodeEnrichmentService.shared.enrich(barcode: code) {
-                                AnalyticsManager.shared.track(.barcodeScanResult(found: true, enriched: true))
+                            let result = await BarcodeEnrichmentService.shared.enrichWithOutcome(barcode: code)
+                            AnalyticsManager.shared.track(
+                                .barcodeScanResult(
+                                    outcome: result.outcome,
+                                    provider: result.provider,
+                                    symbology: symbology,
+                                    durationMs: durationMs + result.durationMs,
+                                    reason: result.reason
+                                )
+                            )
+                            if let product = result.product {
                                 if name.isEmpty { name = product.name }
                                 if description.isEmpty { description = product.description }
                                 if category == "Uncategorised" { category = product.category }
@@ -833,25 +849,40 @@ struct AddItemView: View {
                                         selectedUOM = matched
                                     }
                                 }
-                            } else {
-                                AnalyticsManager.shared.track(.barcodeScanResult(found: false, enriched: false))
                             }
                         }
+                    } else {
+                        AnalyticsManager.shared.track(
+                            .barcodeScanResult(
+                                outcome: "found",
+                                provider: "none",
+                                symbology: symbology,
+                                durationMs: durationMs,
+                                reason: subscriptionManager.isPro
+                                    ? "enrichment_skipped_user_entered_name"
+                                    : "enrichment_not_available_free"
+                            )
+                        )
                     }
                 }
             }
         ) {
             BarcodeScannerView(
-                onScan: { code, _ in
+                onScan: { code, symbology in
                     pendingScannedBarcode = code
+                    pendingScannedSymbology = symbology
+                    pendingScanDurationMs = max(0, Int(Date().timeIntervalSince(barcodeScanStartedAt) * 1_000))
                     showingBarcodeScanner = false
                 },
                 onCancel: {
                     pendingScannedBarcode = nil
+                    pendingScannedSymbology = nil
+                    pendingScanDurationMs = 0
                     showingBarcodeScanner = false
                 }
             )
             .onAppear {
+                barcodeScanStartedAt = Date()
                 AnalyticsManager.shared.track(.barcodeScanInitiated)
             }
         }
