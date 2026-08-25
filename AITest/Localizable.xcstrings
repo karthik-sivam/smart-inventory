@@ -83238,91 +83238,98 @@
         }
       }
     },
-    "Start free on one device. Upgrade to Pro for cloud sync, AI insights, and team collaboration." : {
+    "Cloud sync is free. Pro unlocks AI-powered counts, sales, and purchase imports, plus advanced analytics and team collaboration." : {
+      "comment" : "TODO(i18n): CEO-approved 2026-08-24; retranslate cloud-sync copy per iOS-T2.",
       "extractionState" : "manual",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "ابدأ مجاناً على جهاز واحد. ارقَ إلى Pro للمزامنة السحابية ورؤى AI والتعاون بين الفريق."
+            "value" : "مزامنة السحابة مجانية. يُتيح Pro العدّ والمبيعات وواردات الشراء المدعومة بالذكاء الاصطناعي، إلى جانب التحليلات المتقدمة والتعاون الجماعي."
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Kostenlos auf einem Gerät starten. Upgraden Sie auf Pro für Cloud-Sync, AI-Einblicke und Team-Zusammenarbeit."
+            "value" : "Die Cloud-Synchronisierung ist kostenlos. Mit Pro erhältst du KI-gestützte Zählungen, Verkäufe und Einkaufsimporte sowie erweiterte Analysen und Team-Kollaboration."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cloud sync is free. Pro unlocks AI-powered counts, sales, and purchase imports, plus advanced analytics and team collaboration."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Comienza gratis en un dispositivo. Actualiza a Pro para sincronización en la nube, perspectivas de AI y colaboración en equipo."
+            "value" : "La sincronización en la nube es gratuita. Pro desbloquea recuentos, ventas e importaciones de compras con IA, además de análisis avanzados y colaboración en equipo."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Commencez gratuitement sur un appareil. Passez à Pro pour la synchronisation cloud, les analyses IA et la collaboration d'équipe."
+            "value" : "La synchronisation cloud est gratuite. Pro débloque les comptages, ventes et imports d'achats optimisés par l'IA, ainsi que des analyses avancées et la collaboration en équipe."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "एक डिवाइस पर फ्री शुरू करें। क्लाउड सिंक, AI इनसाइट्स और टीम कोलैबोरेशन के लिए Pro में अपग्रेड करें।"
+            "value" : "क्लाउड सिंक मुफ़्त है। Pro से AI-आधारित काउंट, बिक्री और परचेज़ इम्पोर्ट, एडवांस्ड एनालिटिक्स और टीम कोलैबोरेशन अनलॉक होते हैं।"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Mulai gratis di satu perangkat. Tingkatkan ke Pro untuk sinkronisasi cloud, wawasan AI, dan kolaborasi tim."
+            "value" : "Sinkronisasi cloud gratis. Pro membuka penghitungan, penjualan, dan impor pembelian bertenaga AI, ditambah analitik lanjutan dan kolaborasi tim."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "1台のデバイスで無料で開始。Proにアップグレードするとクラウド同期、AI分析、チーム協力ができます。"
+            "value" : "クラウド同期は無料です。Proでは、AIによるカウント、販売、購入インポートに加え、高度な分析とチームコラボレーションが利用できます。"
           }
         },
         "kn" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "ಒಂದು ಸಾಧನದಲ್ಲಿ ಉಚಿತವಾಗಿ ಪ್ರಾರಂಭಿಸಿ. ಕ್ಲೌಡ್ ಸಿಂಕ್, AI ಒಳನೋಟಗಳು ಮತ್ತು ತಂಡದ ಸಹಯೋಗಕ್ಕಾಗಿ Pro ಗೆ ಅಪ್‌ಗ್ರೇಡ್ ಮಾಡಿ."
+            "value" : "ಕ್ಲೌಡ್ ಸಿಂಕ್ ಉಚಿತವಾಗಿದೆ. Pro AI-ಚಾಲಿತ ಎಣಿಕೆಗಳು, ಮಾರಾಟ ಮತ್ತು ಖರೀದಿ ಆಮದುಗಳ ಜೊತೆಗೆ ಸುಧಾರಿತ ವಿಶ್ಲೇಷಣೆ ಮತ್ತು ತಂಡದ ಸಹಯೋಗವನ್ನು ಅನ್‌ಲಾಕ್ ಮಾಡುತ್ತದೆ."
           }
         },
         "ml" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "ഒരു ഡിവൈസിൽ സൗജന്യമായി തുടങ്ങുക. ക്ലൗഡ് സിങ്ക്, AI ഇൻസൈറ്റുകൾ, ടീം കൊളാബറേഷൻ എന്നിവയ്ക്കായി Pro-ലേക്ക് അപ്ഗ്രേഡ് ചെയ്യുക."
+            "value" : "ക്ലൗഡ് സിങ്ക് സൗജന്യമാണ്. AI ഉപയോഗിച്ചുള്ള കൗണ്ട്, സെയിൽസ്, പർച്ചേസ് ഇംപോർട്ട്, അഡ്വാൻസ്ഡ് അനലിറ്റിക്സ്, ടീം സഹകരണം എന്നിവ Pro-യിൽ ലഭിക്കും."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Comece gratuitamente em um dispositivo. Atualize para Pro para sincronização em nuvem, insights de IA e colaboração em equipe."
+            "value" : "A sincronização na nuvem é gratuita. O Pro libera contagens, vendas e importações de compras com IA, além de análises avançadas e colaboração em equipe."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Начните бесплатно на одном устройстве. Обновитесь до Pro для синхронизации в облаке, аналитики AI и командной работы."
+            "value" : "Облачная синхронизация бесплатна. Pro открывает подсчёт запасов, продажи и импорт закупок с помощью ИИ, а также расширенную аналитику и командную работу."
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "ஒரு சாதனத்தில் இலவசமாக தொடங்குங்கள். கிளவுட் ஒத்திசைவு, AI நுண்ணறிவு மற்றும் குழு ஒத்துழைப்புக்கு Pro-க்கு மேம்படுத்தவும்."
+            "value" : "கிளவுட் ஒத்திசைவு இலவசம். AI அடிப்படையிலான எண்ணிக்கை, விற்பனை மற்றும் கொள்முதல் இறக்குமதி, மேம்பட்ட பகுப்பாய்வுகள் மற்றும் குழு ஒத்துழைப்பு Pro-வில் திறக்கப்படுகின்றன."
           }
         },
         "te" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "ఒక పరికరంలో ఉచితంగా మొదలుపెట్టండి. క్లౌడ్ సింక్, AI ఇన్‌సైట్స్ మరియు టీమ్ కొలాబరేషన్ కోసం Pro కి అప్‌గ్రేడ్ చేయండి."
+            "value" : "క్లౌడ్ సింక్ ఉచితం. Pro AI ఆధారిత లెక్కింపులు, విక్రయాలు మరియు కొనుగోలు దిగుమతులతో పాటు అధునాతన విశ్లేషణలు, జట్టు సహకారాన్ని అన్‌లాక్ చేస్తుంది."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "免费从单台设备开始。升级至 Pro 版本享受云同步、AI 洞察和团队协作。"
+            "value" : "云同步免费。Pro 解锁 AI 驱动的盘点、销售和采购导入，以及高级分析和团队协作。"
           }
         }
       }
