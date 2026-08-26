@@ -661,6 +661,7 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 [COMPLETED]\par
 \bullet Deferred camera_denied until the user exits the manual-entry fallback, preventing a later successful manual lookup from producing a contradictory second terminal outcome.\par
 \bullet No-code timing now runs only for a live scanner and pauses while manual entry is open, so fallback/manual text cannot be dismissed by the scanner timeout. Cancelling manual entry safely resumes scanning and timing.\par
+\bullet Scan-to-Find now owns its local match/miss terminal result; the automatic Add Item enrichment handoff suppresses a second barcode_scan_result, preventing contradictory not_found/found outcomes for the same scan.\par
 \bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared.\par
 \par
 }

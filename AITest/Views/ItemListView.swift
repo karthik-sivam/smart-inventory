@@ -562,6 +562,7 @@ struct AddItemToStorageView: View {
     @State private var pendingScanDurationMs = 0
     @State private var barcodeScanStartedAt = Date()
     @State private var didTrackAddItemStarted = false
+    @State private var didAttemptInitialBarcodeEnrichment = false
     @State private var selectedPhotoData: Data?
     @State private var isShowingMoreDetails = false
     @State private var showingAddStorage = false
@@ -880,9 +881,17 @@ struct AddItemToStorageView: View {
             // Phase 3 addendum — same enrichment as the in-form scanner path,
             // for barcodes pre-filled via `initialBarcode`. Pro-gated inside
             // `enrichFromBarcode`; free users get no network call / no banner.
-            if !formVM.barcode.isEmpty {
+            // Scan-to-Find already emitted its single terminal result before
+            // presenting this form, so this automatic follow-up must not emit
+            // a contradictory second barcode_scan_result.
+            if !initialBarcode.isEmpty && !didAttemptInitialBarcodeEnrichment {
+                didAttemptInitialBarcodeEnrichment = true
                 Task {
-                    await formVM.enrichFromBarcode(formVM.barcode, uoms: uoms)
+                    await formVM.enrichFromBarcode(
+                        initialBarcode,
+                        shouldTrackResult: false,
+                        uoms: uoms
+                    )
                 }
             }
         }
