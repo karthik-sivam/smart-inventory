@@ -68,6 +68,7 @@ All Phase 4 parts shipped. See `automation_results.rtf` for per-section details.
 | Part | Feature | Status |
 |------|---------|--------|
 | 4 Part 1 | `performedBy` on all ActivityEvents, `TeamMember` model, `TeamManager` singleton, workspace switching, invite send/accept/decline, `TeamMembersView` | ✅ COMPLETED |
+| 4 Part 1b | Additive `inviteId` on members + atomic invite-acceptance WriteBatch (parity with Android). See `docs/team-workspace-contract.md`. | ✅ COMPLETED |
 | 4 Part 2 | Role gates (`canEdit`, `canDeleteItem`, `canDeleteStorage`), viewer read-only banner, workspace indicator, `ItemTemplate` model + Firestore sync, `TemplatePickerView`, "Save as Template" | ✅ COMPLETED |
 | 4 Part 3 | Templates Maestro flows 63–71 | ✅ COMPLETED WITH ISSUES |
 

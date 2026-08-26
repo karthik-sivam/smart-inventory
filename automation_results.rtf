@@ -687,4 +687,13 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Fresh add_item_started after background now clears `didLeaveBarcodeScannerWithoutCode` in StorageDetailView, ItemListView, and EditItemView so a later cancel cannot inherit barcode_scan_open from the previous session.\par
 \bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared. PR #17 was not merged; D1b/D1d were not started.\par
 \par
+{\b iOS inviteId + atomic workspace-invite acceptance (Android parity)}\par
+[COMPLETED]\par
+\bullet Member contract: users/\{ownerUID\}/members/\{memberUID\} now writes uid, displayName, email, role, status, inviteId, joinedAt. Local TeamMember.inviteId is optional with a nil default (safe SwiftData migration). MemberRecord.fromFirestore decodes inviteId as optional for legacy docs.\par
+\bullet acceptInvite uses InviteAcceptancePlanner + InviteAcceptanceCommitter. Production FirestoreInviteAcceptanceCommitter creates one WriteBatch, schedules invite status=accepted plus member setData(merge: true), and commits once. No try? on the accept path. Returns Result<Void, Error>.\par
+\bullet Local upsert is by uid. joinWorkspace and SwiftData save run only after a successful remote commit. safeSave Bool is checked; local save failure still joins (remote membership already exists) and returns TeamError.localSaveFailed. Failed commit does not join or persist an active member.\par
+\bullet InventoryAppView clears pendingInvites, pulls the workspace, and dismisses success only after a successful batch. Remote failure preserves/reloads the invitation and shows a localized retryable error. Decline path unchanged.\par
+\bullet Tests: AITestTests/InviteAcceptanceTests.swift (8 cases) with a fake committer for success/failure. Files: InviteAcceptance.swift, TeamManager.swift, TeamMember.swift, InventoryAppView.swift, docs/team-workspace-contract.md, Localizable.xcstrings, phase-status.md.\par
+\bullet Verification: git diff --check passed; xcodebuild test SmartInventoryTests/InviteAcceptanceTests on iPhone 17 Pro simulator \emdash  8/8 passed, TEST SUCCEEDED; xcodebuild SmartInventory iPhone 17 Pro simulator \emdash  exit 0, BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped. firestore.rules were not changed or deployed.\par
+\par
 }

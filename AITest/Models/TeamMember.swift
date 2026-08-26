@@ -10,9 +10,13 @@ final class TeamMember {
     var role: String
     var status: String
     var joinedAt: Date
+    /// Invitation document ID that created this membership. Nil on legacy
+    /// local rows written before the hardened invite-acceptance contract.
+    var inviteId: String? = nil
 
     init(uid: String, displayName: String, email: String,
-         role: String, status: String = "pending") {
+         role: String, status: String = "pending",
+         inviteId: String? = nil) {
         self.id = UUID()
         self.uid = uid
         self.displayName = displayName
@@ -20,6 +24,7 @@ final class TeamMember {
         self.role = role
         self.status = status
         self.joinedAt = Date()
+        self.inviteId = inviteId
     }
 
     var roleLabel: String {

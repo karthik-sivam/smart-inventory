@@ -9,6 +9,7 @@ final class TeamManager: ObservableObject {
 
     static let shared = TeamManager()
     private let db = Firestore.firestore()
+    private let inviteCommitter: InviteAcceptanceCommitter
 
     @Published private(set) var activeWorkspaceOwnerUID: String? = nil
     @Published private(set) var currentRole: String = "owner"
@@ -24,7 +25,8 @@ final class TeamManager: ObservableObject {
         activeWorkspaceOwnerUID ?? Auth.auth().currentUser?.uid
     }
 
-    private init() {
+    init(inviteCommitter: InviteAcceptanceCommitter = FirestoreInviteAcceptanceCommitter()) {
+        self.inviteCommitter = inviteCommitter
         restoreWorkspaceState()
     }
 
@@ -96,32 +98,61 @@ final class TeamManager: ObservableObject {
         }
     }
 
-    func acceptInvite(_ invite: PendingInvite, modelContext: ModelContext) async {
+    func acceptInvite(_ invite: PendingInvite, modelContext: ModelContext) async -> Result<Void, Error> {
         guard let myUID = Auth.auth().currentUser?.uid,
-              let myEmail = Auth.auth().currentUser?.email else { return }
+              let myEmail = Auth.auth().currentUser?.email,
+              !myEmail.isEmpty else {
+            return .failure(TeamError.notAuthenticated)
+        }
+        return await acceptInvite(
+            invite,
+            authenticatedUID: myUID,
+            displayName: AuthManager.shared.actorName,
+            email: myEmail,
+            modelContext: modelContext
+        )
+    }
 
-        let myName = AuthManager.shared.actorName
+    /// Testable acceptance path. Remote batch commit is the authority gate;
+    /// local persistence and `joinWorkspace` run only after it succeeds.
+    func acceptInvite(
+        _ invite: PendingInvite,
+        authenticatedUID: String,
+        displayName: String,
+        email: String,
+        modelContext: ModelContext
+    ) async -> Result<Void, Error> {
+        let plan = InviteAcceptancePlanner.plan(
+            inviteId: invite.id,
+            ownerUID: invite.ownerUID,
+            role: invite.role,
+            authenticatedUID: authenticatedUID,
+            displayName: displayName,
+            email: email
+        )
 
-        try? await db.collection("workspaceInvites").document(invite.id)
-            .updateData(["status": "accepted"])
+        do {
+            try await inviteCommitter.commit(plan)
+        } catch {
+            return .failure(error)
+        }
 
-        let memberData: [String: Any] = [
-            "uid": myUID,
-            "displayName": myName,
-            "email": myEmail,
-            "role": invite.role,
-            "status": "active",
-            "joinedAt": FieldValue.serverTimestamp()
-        ]
-        try? await db.collection("users").document(invite.ownerUID)
-            .collection("members").document(myUID)
-            .setData(memberData, merge: true)
+        // Remote membership is now real. Join after local upsert/save; if local
+        // persistence fails, still join so the user is not stuck on an already-
+        // accepted invite, and surface the save error through Result.
+        do {
+            try upsertLocalMember(from: plan.member, modelContext: modelContext)
+        } catch {
+            joinWorkspace(ownerUID: plan.joinOwnerUID, role: plan.joinRole)
+            return .failure(error)
+        }
 
-        let member = TeamMember(uid: myUID, displayName: myName,
-                                email: myEmail, role: invite.role, status: "active")
-        modelContext.insert(member)
-        modelContext.safeSave(context: "acceptInvite")
-        joinWorkspace(ownerUID: invite.ownerUID, role: invite.role)
+        let saved = modelContext.safeSave(context: "acceptInvite")
+        joinWorkspace(ownerUID: plan.joinOwnerUID, role: plan.joinRole)
+        guard saved else {
+            return .failure(TeamError.localSaveFailed)
+        }
+        return .success(())
     }
 
     func declineInvite(_ invite: PendingInvite) async {
@@ -136,16 +167,7 @@ final class TeamManager: ObservableObject {
         do {
             let snap = try await db.collection("users").document(ownerUID)
                 .collection("members").getDocuments()
-            return snap.documents.compactMap { doc -> MemberRecord? in
-                let d = doc.data()
-                guard let uid = d["uid"] as? String,
-                      let name = d["displayName"] as? String,
-                      let email = d["email"] as? String,
-                      let role = d["role"] as? String else { return nil }
-                return MemberRecord(uid: uid, displayName: name,
-                                   email: email, role: role,
-                                   status: d["status"] as? String ?? "active")
-            }
+            return snap.documents.compactMap { MemberRecord.fromFirestore($0.data()) }
         } catch {
             return []
         }
@@ -158,9 +180,40 @@ final class TeamManager: ObservableObject {
             .updateData(["status": "removed"])
     }
 
+    // MARK: - Local member upsert
+
+    private func upsertLocalMember(
+        from payload: AcceptedMemberPayload,
+        modelContext: ModelContext
+    ) throws {
+        let memberUID = payload.uid
+        let descriptor = FetchDescriptor<TeamMember>(
+            predicate: #Predicate { $0.uid == memberUID }
+        )
+        if let existing = try modelContext.fetch(descriptor).first {
+            existing.displayName = payload.displayName
+            existing.email = payload.email
+            existing.role = payload.role
+            existing.status = payload.status
+            existing.inviteId = payload.inviteId
+            existing.joinedAt = Date()
+        } else {
+            modelContext.insert(
+                TeamMember(
+                    uid: payload.uid,
+                    displayName: payload.displayName,
+                    email: payload.email,
+                    role: payload.role,
+                    status: payload.status,
+                    inviteId: payload.inviteId
+                )
+            )
+        }
+    }
+
     // MARK: - Supporting Types
 
-    struct PendingInvite: Identifiable {
+    struct PendingInvite: Identifiable, Equatable {
         let id: String
         let ownerUID: String
         let ownerName: String
@@ -174,10 +227,39 @@ final class TeamManager: ObservableObject {
         let email: String
         let role: String
         let status: String
+        /// Nil when a legacy member document has no `inviteId`.
+        let inviteId: String?
+
+        static func fromFirestore(_ data: [String: Any]) -> MemberRecord? {
+            guard let uid = data["uid"] as? String,
+                  let name = data["displayName"] as? String,
+                  let email = data["email"] as? String,
+                  let role = data["role"] as? String else { return nil }
+            return MemberRecord(
+                uid: uid,
+                displayName: name,
+                email: email,
+                role: role,
+                status: data["status"] as? String ?? "active",
+                inviteId: data["inviteId"] as? String
+            )
+        }
     }
 
     enum TeamError: LocalizedError {
         case notAuthenticated
-        var errorDescription: String? { "You must be signed in." }
+        case localSaveFailed
+
+        var errorDescription: String? {
+            switch self {
+            case .notAuthenticated:
+                return L("team_error_not_authenticated", "You must be signed in.")
+            case .localSaveFailed:
+                return L(
+                    "invite_accept_local_save_failed",
+                    "Couldn't save team membership on this device. Try again."
+                )
+            }
+        }
     }
 }
