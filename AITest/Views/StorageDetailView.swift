@@ -818,6 +818,7 @@ struct AddItemView: View {
             } else if phase == .active, didAbandonForBackground, !didSaveAddItem {
                 didAbandonForBackground = false
                 didEmitAddItemClose = false
+                didLeaveBarcodeScannerWithoutCode = false
                 addItemOpenedAt = Date()
                 AnalyticsManager.shared.track(.addItemStarted(source: "storage_detail"))
             }

@@ -682,4 +682,9 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Session audit (exactly one terminal per started): AddItemView / AddItemToStorageView / EditItemView(isAddFlow) start on appear (or post-background restart) and close via completed, abandoned, or backgrounded; child scanner/sheet presentations are skipped. QuickSaleSheet manual starts on appear; terminals are completed, cancelled, or switched_to_smart_sales; Smart Sales success dismisses the parent; Smart Sales cancel starts a new manual session. SmartSalesEntryView voice/photo/text/csv/pdf start in openSaleMode and close via completed or sheet-onDismiss abandoned. PurchaseInvoiceImportView starts on appear; terminals are completed, cancelled, or paywall; Pro retry after paywall starts a new session. restore_purchase_result and trial_start_failed remain one-shot result events, not started/terminal pairs.\par
 \bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared. PR #17 was not merged; D1b/D1d were not started.\par
 \par
+{\b iOS-D1c Bugbot follow-up 2 \emdash reset sticky barcode stage on session restart}\par
+[COMPLETED]\par
+\bullet Fresh add_item_started after background now clears `didLeaveBarcodeScannerWithoutCode` in StorageDetailView, ItemListView, and EditItemView so a later cancel cannot inherit barcode_scan_open from the previous session.\par
+\bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared. PR #17 was not merged; D1b/D1d were not started.\par
+\par
 }
