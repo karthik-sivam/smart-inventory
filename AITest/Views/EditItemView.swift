@@ -10,6 +10,7 @@ struct EditItemView: View {
     
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
     @EnvironmentObject private var currencyManager: CurrencyManager
     @Query private var storages: [Storage]
@@ -30,6 +31,11 @@ struct EditItemView: View {
     @State private var barcodeScanStartedAt = Date()
     @State private var usePercentThreshold = false
     @State private var isShowingMoreDetails = false
+    @State private var didTrackAddItemStarted = false
+    @State private var addItemOpenedAt = Date()
+    @State private var didEmitAddItemTerminal = false
+    @State private var didAbandonForBackground = false
+    @State private var didOpenPhotoPicker = false
 
     init(item: InventoryItem, isAddFlow: Bool = false, source: String = "fab") {
         self.item = item
@@ -241,7 +247,8 @@ struct EditItemView: View {
                     ItemPhotoSection(
                         selectedPhotoData: $selectedPhotoData,
                         existingPhotoURL: formVM.existingPhotoURL,
-                        showsSectionContainer: false
+                        showsSectionContainer: false,
+                        onPickerTapped: { didOpenPhotoPicker = true }
                     )
 
                     HStack {
@@ -307,7 +314,10 @@ struct EditItemView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button("Cancel") { dismiss() }
+                Button("Cancel") {
+                    emitAddItemAbandonedIfNeeded(stage: addItemAbandonmentStage)
+                    dismiss()
+                }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Save") {
@@ -338,13 +348,33 @@ struct EditItemView: View {
             Button("Cancel", role: .cancel) {}
         }
         .onAppear {
-            if isAddFlow {
+            if isAddFlow, !didTrackAddItemStarted {
+                didTrackAddItemStarted = true
+                addItemOpenedAt = Date()
                 AnalyticsManager.shared.track(.addItemStarted(source: analyticsSource))
             }
             formVM.bind(modelContext: modelContext)
             formVM.load(from: item)
             usePercentThreshold = item.reorderPercentage > 0
             isShowingMoreDetails = isAddFlow ? false : formVM.hasOptionalDetails
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard isAddFlow else { return }
+            if phase == .background {
+                let alreadyTerminal = didEmitAddItemTerminal
+                emitAddItemAbandonedIfNeeded(stage: "backgrounded", includeLegacyCancellation: false)
+                didAbandonForBackground = !alreadyTerminal && didEmitAddItemTerminal
+            } else if phase == .active, didAbandonForBackground {
+                didAbandonForBackground = false
+                didEmitAddItemTerminal = false
+                addItemOpenedAt = Date()
+                AnalyticsManager.shared.track(.addItemStarted(source: analyticsSource))
+            }
+        }
+        .onDisappear {
+            guard scenePhase == .active else { return }
+            guard !showingBarcodeScanner, !showingSmartCount else { return }
+            emitAddItemAbandonedIfNeeded(stage: addItemAbandonmentStage)
         }
         // NOTE: must be `.fullScreenCover`, not `.sheet`. Presenting a camera
         // host as a sheet-inside-a-sheet wedges the AVFoundation capture XPC
@@ -431,7 +461,18 @@ struct EditItemView: View {
     private func saveItem() {
         // TODO(iOS-B2): fire item_create_completed{entry_source, duration_ms}
         //               via AmplitudeManager helper.
-        formVM.saveEdits(to: item)
+        guard formVM.saveEdits(to: item) else { return }
+        if isAddFlow {
+            didEmitAddItemTerminal = true
+            AnalyticsManager.shared.track(
+                .addItemCompleted(
+                    source: analyticsSource,
+                    hasBarcode: !formVM.barcode.isEmpty,
+                    hasPhoto: selectedPhotoData != nil || formVM.existingPhotoURL != nil,
+                    durationMs: max(0, Int(Date().timeIntervalSince(addItemOpenedAt) * 1_000))
+                )
+            )
+        }
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         if let photoData = selectedPhotoData {
             let capturedItem = item
@@ -450,6 +491,35 @@ struct EditItemView: View {
             }
         }
         dismiss()
+    }
+
+    private func emitAddItemAbandonedIfNeeded(
+        stage: String,
+        includeLegacyCancellation: Bool = true
+    ) {
+        guard isAddFlow, !didEmitAddItemTerminal else { return }
+        didEmitAddItemTerminal = true
+        let seconds = max(0, Int(Date().timeIntervalSince(addItemOpenedAt)))
+        AnalyticsManager.shared.track(
+            .addItemAbandoned(
+                source: analyticsSource,
+                stage: stage,
+                secondsInForm: seconds
+            )
+        )
+        if includeLegacyCancellation {
+            AnalyticsManager.shared.track(.addItemCancelled(source: analyticsSource, seconds: seconds))
+        }
+    }
+
+    private var addItemAbandonmentStage: String {
+        if showingBarcodeScanner { return "barcode_scan_open" }
+        if formVM.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "name_empty" }
+        let quantityText = formVM.currentQuantity.trimmingCharacters(in: .whitespacesAndNewlines)
+        if quantityText.isEmpty || Double(quantityText) == nil { return "quantity_empty" }
+        if didOpenPhotoPicker && selectedPhotoData == nil { return "photo_picker_open" }
+        if isShowingMoreDetails { return "more_details_open" }
+        return "cancelled"
     }
     
     private var editStockStatusLabel: String {

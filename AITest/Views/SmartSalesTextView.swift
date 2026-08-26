@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct SmartSalesTextView: View {
-    var onCompleted: (() -> Void)? = nil
+    var onCompleted: ((Int) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
@@ -28,7 +28,7 @@ struct SmartSalesTextView: View {
                 case .review:
                     SaleEntryReviewView(
                         rows: $parsedRows,
-                        onConfirm: { onCompleted?() ?? dismiss() },
+                        onConfirm: { count in onCompleted?(count) ?? dismiss() },
                         onCancel: { step = .input }
                     )
                     .environmentObject(currencyManager)

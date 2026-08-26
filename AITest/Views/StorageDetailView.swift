@@ -504,6 +504,7 @@ struct AddItemView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
     @Query private var uoms: [UOM]
     @Query(sort: \ItemTemplate.name) private var templates: [ItemTemplate]
@@ -538,6 +539,8 @@ struct AddItemView: View {
     @State private var addItemOpenedAt = Date()
     @State private var didSaveAddItem = false
     @State private var didEmitAddItemClose = false
+    @State private var didAbandonForBackground = false
+    @State private var didOpenPhotoPicker = false
     @State private var showingItemLimitPaywall = false
     @State private var isShowingMoreDetails = false
     @State private var showingSmartCount = false
@@ -729,7 +732,8 @@ struct AddItemView: View {
                     ItemPhotoSection(
                         selectedPhotoData: $selectedPhotoData,
                         existingPhotoURL: nil,
-                        showsSectionContainer: false
+                        showsSectionContainer: false,
+                        onPickerTapped: { didOpenPhotoPicker = true }
                     )
                 }
             }
@@ -741,7 +745,7 @@ struct AddItemView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button("Cancel") {
-                    emitAddItemCancelledIfNeeded()
+                    emitAddItemAbandonedIfNeeded(stage: addItemAbandonmentStage)
                     dismiss()
                 }
             }
@@ -783,9 +787,9 @@ struct AddItemView: View {
             SmartCountView(preselectedStorage: storage).sheetStyle()
         }
         .onAppear {
-            addItemOpenedAt = Date()
             if !didTrackAddItemStarted {
                 didTrackAddItemStarted = true
+                addItemOpenedAt = Date()
                 AnalyticsManager.shared.track(.addItemStarted(source: "storage_detail"))
             }
             if uoms.isEmpty {
@@ -803,8 +807,21 @@ struct AddItemView: View {
                 selectedUOM = defaultUOM
             }
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                emitAddItemAbandonedIfNeeded(stage: "backgrounded", includeLegacyCancellation: false)
+                didAbandonForBackground = didEmitAddItemClose && !didSaveAddItem
+            } else if phase == .active, didAbandonForBackground, !didSaveAddItem {
+                didAbandonForBackground = false
+                didEmitAddItemClose = false
+                addItemOpenedAt = Date()
+                AnalyticsManager.shared.track(.addItemStarted(source: "storage_detail"))
+            }
+        }
         .onDisappear {
-            emitAddItemCancelledIfNeeded()
+            guard scenePhase == .active else { return }
+            guard !showingBarcodeScanner, !showingSmartCount, !showingItemLimitPaywall, !showingTemplatePicker else { return }
+            emitAddItemAbandonedIfNeeded(stage: addItemAbandonmentStage)
         }
         // NOTE: must be `.fullScreenCover`, not `.sheet`. Presenting a camera
         // host as a sheet-inside-a-sheet wedges the AVFoundation capture XPC
@@ -905,11 +922,29 @@ struct AddItemView: View {
         return refetched.first(where: { $0.isDefault }) ?? refetched.first
     }
 
-    private func emitAddItemCancelledIfNeeded() {
+    private func emitAddItemAbandonedIfNeeded(
+        stage: String,
+        includeLegacyCancellation: Bool = true
+    ) {
         guard !didSaveAddItem, !didEmitAddItemClose else { return }
         didEmitAddItemClose = true
-        let seconds = Int(Date().timeIntervalSince(addItemOpenedAt))
-        AnalyticsManager.shared.track(.addItemCancelled(source: "storage_detail", seconds: seconds))
+        let seconds = max(0, Int(Date().timeIntervalSince(addItemOpenedAt)))
+        AnalyticsManager.shared.track(
+            .addItemAbandoned(source: "storage_detail", stage: stage, secondsInForm: seconds)
+        )
+        if includeLegacyCancellation {
+            AnalyticsManager.shared.track(.addItemCancelled(source: "storage_detail", seconds: seconds))
+        }
+    }
+
+    private var addItemAbandonmentStage: String {
+        if showingBarcodeScanner { return "barcode_scan_open" }
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "name_empty" }
+        let quantityText = currentQuantity.trimmingCharacters(in: .whitespacesAndNewlines)
+        if quantityText.isEmpty || Double(quantityText) == nil { return "quantity_empty" }
+        if didOpenPhotoPicker && selectedPhotoData == nil { return "photo_picker_open" }
+        if isShowingMoreDetails { return "more_details_open" }
+        return "cancelled"
     }
 
     private var canSave: Bool {
@@ -975,7 +1010,21 @@ struct AddItemView: View {
             modelContext.insert(initialBatch)
         }
 
-        modelContext.safeSave(context: "AddItem")
+        guard modelContext.safeSave(context: "AddItem") else {
+            modelContext.rollback()
+            return
+        }
+
+        didSaveAddItem = true
+        didEmitAddItemClose = true
+        AnalyticsManager.shared.track(
+            .addItemCompleted(
+                source: "storage_detail",
+                hasBarcode: !item.barcode.isEmpty,
+                hasPhoto: selectedPhotoData != nil || item.photoURL != nil,
+                durationMs: max(0, Int(Date().timeIntervalSince(addItemOpenedAt) * 1_000))
+            )
+        )
 
         AnalyticsManager.shared.track(.itemAdded(
             category: item.category,
@@ -1012,7 +1061,6 @@ struct AddItemView: View {
         FirestoreManager.shared.syncItem(item)
         AdManager.shared.recordCompletion(event: .itemAdded)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        didSaveAddItem = true
         dismiss()
     }
 }
