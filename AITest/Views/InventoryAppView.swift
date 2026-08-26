@@ -209,6 +209,9 @@ struct InventoryAppView: View {
         case .failure:
             showingInviteAlert = false
             if TeamManager.shared.isInTeamWorkspace {
+                // Remote batch succeeded (we already joined). Local save may have
+                // failed; safeSave already posted the SwiftData banner. Do not
+                // show the join-failed alert — Try Again would be a no-op.
                 pendingInvites = []
                 await firestoreManager.pullFromCloud(modelContext: modelContext)
             } else {
@@ -218,8 +221,8 @@ struct InventoryAppView: View {
                 } else if pendingInvites.isEmpty {
                     pendingInvites = [invite]
                 }
+                showingInviteAcceptError = true
             }
-            showingInviteAcceptError = true
         }
     }
 

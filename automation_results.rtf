@@ -696,4 +696,14 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Tests: AITestTests/InviteAcceptanceTests.swift (8 cases) with a fake committer for success/failure. Files: InviteAcceptance.swift, TeamManager.swift, TeamMember.swift, InventoryAppView.swift, docs/team-workspace-contract.md, Localizable.xcstrings, phase-status.md.\par
 \bullet Verification: git diff --check passed; xcodebuild test SmartInventoryTests/InviteAcceptanceTests on iPhone 17 Pro simulator \emdash  8/8 passed, TEST SUCCEEDED; xcodebuild SmartInventory iPhone 17 Pro simulator \emdash  exit 0, BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped. firestore.rules were not changed or deployed.\par
 \par
+{\b iOS-D1c integration \emdash invite hardening into PR #17; Amplitude gate}\par
+[COMPLETED WITH ISSUES]\par
+\bullet Topology confirmed: PR #17 is iOS-D1c \to master_scope_v1, OPEN, MERGEABLE. origin/master_scope_v1 is 7d89b59 (includes iOS-D1a). No duplicate invite PR created. Dirty primary master_scope_v1 worktree was not touched.\par
+\bullet origin/iOS-invite-id-atomic pushed as its own branch at de798d33a706726dcfce8553fa05cc48bca37c6a. origin/iOS-D1c was not overwritten by that push (remained 78cca8b until the later D1c fast-forward push).\par
+\bullet Local iOS-D1c fast-forwarded 78cca8b \to de798d3, then Bugbot finding fixed: InventoryAppView no longer shows the join-failed alert when the remote batch already succeeded and the workspace is joined (SwiftData banner remains the local-save signal).\par
+\bullet Amplitude tracking plan (project 832993): NOT updated. This session has no Amplitude MCP (`manage_amp_events` missing). Client AMPLITUDE_API_KEY cannot write Govern/taxonomy. All eight D1c events remain unconfirmed in the tracking plan.\par
+\bullet Amplitude Live View: NOT completed. Browser Amplitude session is unauthenticated (login wall). Merge gate stays OPEN.\par
+\bullet Tests: InviteAcceptanceTests 8/8 passed; SmartInventoryTests including D1a barcode analytics (`testBarcodeScanResultUsesOutcomeShapeAndOmitsRawCode`, `testBarcodeScanResultOmitsNilOptionalProperties`) passed; xcodebuild SmartInventory iPhone 17 Pro \emdash  BUILD SUCCEEDED. git diff --check passed. No firestore.rules files in the D1c vs master_scope_v1 diff. Firebase rules were not deployed.\par
+\bullet Bugbot on iOS-D1c vs master_scope_v1: 1 high finding (false join-failed alert after remote success) \emdash  resolved in InventoryAppView. D1b/D1d were not started. PR #17 not merged.\par
+\par
 }
