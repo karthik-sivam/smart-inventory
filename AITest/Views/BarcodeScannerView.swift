@@ -146,6 +146,10 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
         weak var fallbackPresenter: UIViewController?
         private var hasScanned = false
         private var hasTerminalOutcome = false
+        /// A denied/restricted camera still offers manual entry. Defer the
+        /// camera-denied terminal event until the user leaves that fallback;
+        /// a successful manual entry is completed by the parent lookup path.
+        private var fallbackTerminalOutcome: (outcome: String, reason: String)?
         private let startedAt = CFAbsoluteTimeGetCurrent()
         private var noCodeTimer: Timer?
         private static let noCodeTimeoutSeconds: TimeInterval = 30
@@ -188,11 +192,12 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
 
         @objc func cancelTapped() {
             scanner?.stopScanning()
+            let fallbackOutcome = fallbackTerminalOutcome
             trackTerminalOutcome(
-                outcome: "scanner_cancelled",
+                outcome: fallbackOutcome?.outcome ?? "scanner_cancelled",
                 provider: "none",
                 symbology: nil,
-                reason: "user_tapped_cancel"
+                reason: fallbackOutcome?.reason ?? "user_tapped_cancel"
             )
             onCancel()
         }
@@ -201,6 +206,8 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
             // Prefer the real scanner as presenter; fall back to the simulator
             // / unsupported-device VC so the alert always has somewhere to go.
             guard let presenter: UIViewController = scanner ?? fallbackPresenter else { return }
+            pauseNoCodeTimer()
+            scanner?.stopScanning()
             let alert = UIAlertController(
                 title: "Enter Barcode",
                 message: "Type the barcode number manually.",
@@ -212,14 +219,20 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
                 tf.autocorrectionType = .no
                 tf.autocapitalizationType = .allCharacters
             }
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
+                self?.resumeLiveScannerIfNeeded()
+            })
             alert.addAction(UIAlertAction(title: "Use", style: .default) { [weak self] _ in
-                guard let code = alert.textFields?.first?.text, !code.isEmpty else { return }
-                self?.hasScanned = true
-                self?.finishWithoutResultEvent()
-                self?.scanner?.stopScanning()
+                guard let self else { return }
+                guard let code = alert.textFields?.first?.text, !code.isEmpty else {
+                    self.resumeLiveScannerIfNeeded()
+                    return
+                }
+                self.hasScanned = true
+                self.finishWithoutResultEvent()
+                self.scanner?.stopScanning()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
-                self?.onScan(code, "Manual")
+                self.onScan(code, "Manual")
             })
             presenter.present(alert, animated: true)
         }
@@ -280,7 +293,18 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
         // MARK: Analytics lifecycle
 
         func scannerDidAppear() {
-            guard !hasScanned, !hasTerminalOutcome, noCodeTimer == nil else { return }
+            // Fallback controllers (simulator, unsupported hardware, denied
+            // permission) have no live scanner and must never time out an
+            // in-progress manual entry.
+            guard scanner != nil else { return }
+            startNoCodeTimerIfNeeded()
+        }
+
+        private func startNoCodeTimerIfNeeded() {
+            guard scanner != nil,
+                  !hasScanned,
+                  !hasTerminalOutcome,
+                  noCodeTimer == nil else { return }
             noCodeTimer = Timer.scheduledTimer(
                 timeInterval: Self.noCodeTimeoutSeconds,
                 target: self,
@@ -290,18 +314,23 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
             )
         }
 
+        private func resumeLiveScannerIfNeeded() {
+            guard let scanner,
+                  !hasScanned,
+                  !hasTerminalOutcome else { return }
+            try? scanner.startScanning()
+            startNoCodeTimerIfNeeded()
+        }
+
         func cameraPermissionDenied(status: AVAuthorizationStatus) {
-            trackTerminalOutcome(
+            fallbackTerminalOutcome = (
                 outcome: "camera_denied",
-                provider: "none",
-                symbology: nil,
-                durationMs: 0,
                 reason: "AVCaptureDevice authorizationStatus=\(status.rawValue)"
             )
         }
 
         @objc private func noCodeTimeoutFired() {
-            guard !hasScanned, !hasTerminalOutcome else { return }
+            guard scanner != nil, !hasScanned, !hasTerminalOutcome else { return }
             scanner?.stopScanning()
             trackTerminalOutcome(
                 outcome: "no_code_detected",
@@ -315,6 +344,10 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
         private func finishWithoutResultEvent() {
             guard !hasTerminalOutcome else { return }
             hasTerminalOutcome = true
+            pauseNoCodeTimer()
+        }
+
+        private func pauseNoCodeTimer() {
             noCodeTimer?.invalidate()
             noCodeTimer = nil
         }
@@ -328,8 +361,7 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
         ) {
             guard !hasTerminalOutcome else { return }
             hasTerminalOutcome = true
-            noCodeTimer?.invalidate()
-            noCodeTimer = nil
+            pauseNoCodeTimer()
             let elapsedMs = durationMs ?? max(0, Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1_000))
             AnalyticsManager.shared.track(
                 .barcodeScanResult(
