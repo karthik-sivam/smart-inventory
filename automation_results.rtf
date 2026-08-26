@@ -657,4 +657,10 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Tests added for the new event property shape, privacy omission, optional properties, and live enrichment result metadata. The production app build completed with exit 0: BUILD SUCCEEDED.\par
 \bullet Verification gap: SmartInventoryTests is not included in the only shared scheme, so xcodebuild test cannot execute it. A direct target build was also blocked before test compilation by the existing nanopb package-checkout build-path conflict. No barcode Maestro flow exists in this checkout, and Amplitude Live View verification is pending the required project 832993 tracking-plan update at the runbook checkpoint.\par
 \par
+{\b iOS-D1a Bugbot follow-up \emdash scanner terminal-event lifecycle}\par
+[COMPLETED]\par
+\bullet Deferred camera_denied until the user exits the manual-entry fallback, preventing a later successful manual lookup from producing a contradictory second terminal outcome.\par
+\bullet No-code timing now runs only for a live scanner and pauses while manual entry is open, so fallback/manual text cannot be dismissed by the scanner timeout. Cancelling manual entry safely resumes scanning and timing.\par
+\bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared.\par
+\par
 }
