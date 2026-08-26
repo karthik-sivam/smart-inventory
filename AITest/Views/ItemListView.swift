@@ -573,6 +573,10 @@ struct AddItemToStorageView: View {
     @State private var didEmitAddItemClose = false
     @State private var didAbandonForBackground = false
     @State private var didOpenPhotoPicker = false
+    /// Sticky: user dismissed the in-form scanner without a code. The live
+    /// `showingBarcodeScanner` flag is false by the time Cancel / onDisappear
+    /// can run, so this is what makes `barcode_scan_open` reachable.
+    @State private var didLeaveBarcodeScannerWithoutCode = false
 
     init(initialBarcode: String = "") {
         self.initialBarcode = initialBarcode
@@ -762,6 +766,7 @@ struct AddItemToStorageView: View {
                 isPresented: $showingBarcodeScanner,
                 onDismiss: {
                     if let code = pendingScannedBarcode {
+                        didLeaveBarcodeScannerWithoutCode = false
                         let symbology = pendingScannedSymbology
                         let durationMs = pendingScanDurationMs
                         formVM.barcode = code
@@ -780,6 +785,8 @@ struct AddItemToStorageView: View {
                                 uoms: uoms
                             )
                         }
+                    } else {
+                        didLeaveBarcodeScannerWithoutCode = true
                     }
                 }
             ) {
@@ -959,7 +966,7 @@ struct AddItemToStorageView: View {
     }
 
     private var addItemAbandonmentStage: String {
-        if showingBarcodeScanner { return "barcode_scan_open" }
+        if showingBarcodeScanner || didLeaveBarcodeScannerWithoutCode { return "barcode_scan_open" }
         if formVM.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "name_empty" }
         let quantityText = formVM.currentQuantity.trimmingCharacters(in: .whitespacesAndNewlines)
         if quantityText.isEmpty || Double(quantityText) == nil { return "quantity_empty" }

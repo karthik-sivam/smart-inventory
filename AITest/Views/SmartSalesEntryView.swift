@@ -1,6 +1,10 @@
 import SwiftUI
 
 struct SmartSalesEntryView: View {
+    /// Optional: parent (QuickSaleSheet) uses this to dismiss itself after a
+    /// successful Smart Sales save without a second manual cancellation.
+    var onCompleted: (() -> Void)? = nil
+
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
     @EnvironmentObject var currencyManager: CurrencyManager
@@ -134,6 +138,7 @@ struct SmartSalesEntryView: View {
                 durationMs: max(0, Int(Date().timeIntervalSince(saleEntryOpenedAt) * 1_000))
             )
         )
+        onCompleted?()
         dismiss()
     }
 

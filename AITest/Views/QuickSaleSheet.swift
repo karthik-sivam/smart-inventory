@@ -22,6 +22,7 @@ struct QuickSaleSheet: View {
     @State private var didTrackSaleEntryStarted = false
     @State private var saleEntryOpenedAt = Date()
     @State private var didEmitSaleTerminal = false
+    @State private var didCompleteSmartSales = false
 
     private var qty: Double { Double(quantityText) ?? 0 }
     private var price: Double { Double(sellingPriceText) ?? 0 }
@@ -38,6 +39,8 @@ struct QuickSaleSheet: View {
                     // Smart Purchase chip ("Or scan an invoice with Smart Purchase →")
                     // on that screen using AIEntryChip(feature: .smartPurchase).
                     AIEntryChip(feature: .smartSales, screen: "sales_manual") {
+                        emitSaleAbandonedIfNeeded(stage: "switched_to_smart_sales")
+                        didCompleteSmartSales = false
                         showingSmartSales = true
                     }
                     itemInfoSection
@@ -91,17 +94,23 @@ struct QuickSaleSheet: View {
                 }
             }
         }
-        .sheet(isPresented: $showingSmartSales) {
-            SmartSalesEntryView()
+        .sheet(isPresented: $showingSmartSales, onDismiss: {
+            if didCompleteSmartSales {
+                dismiss()
+            } else if didEmitSaleTerminal {
+                beginManualSaleSession()
+            }
+        }) {
+            SmartSalesEntryView(onCompleted: {
+                didCompleteSmartSales = true
+            })
                 .environmentObject(currencyManager)
                 .environmentObject(subscriptionManager)
                 .sheetStyle()
         }
         .onAppear {
             if !didTrackSaleEntryStarted {
-                didTrackSaleEntryStarted = true
-                saleEntryOpenedAt = Date()
-                AnalyticsManager.shared.track(.saleEntryStarted(mode: "manual"))
+                beginManualSaleSession()
             }
             if item.sellingPrice > 0 {
                 sellingPriceText = String(format: "%.2f", item.sellingPrice)
@@ -393,10 +402,17 @@ struct QuickSaleSheet: View {
         }
     }
 
-    private func emitSaleAbandonedIfNeeded() {
+    private func beginManualSaleSession() {
+        didTrackSaleEntryStarted = true
+        didEmitSaleTerminal = false
+        saleEntryOpenedAt = Date()
+        AnalyticsManager.shared.track(.saleEntryStarted(mode: "manual"))
+    }
+
+    private func emitSaleAbandonedIfNeeded(stage: String = "cancelled") {
         guard didTrackSaleEntryStarted, !didEmitSaleTerminal else { return }
         didEmitSaleTerminal = true
-        AnalyticsManager.shared.track(.saleEntryAbandoned(mode: "manual", stage: "cancelled"))
+        AnalyticsManager.shared.track(.saleEntryAbandoned(mode: "manual", stage: stage))
         AnalyticsManager.shared.track(.saleEntryCancelled(mode: "manual"))
     }
 }
