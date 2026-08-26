@@ -159,33 +159,38 @@ final class ItemFormViewModel: ObservableObject {
         _ barcode: String,
         symbology: String? = nil,
         scanDurationMs: Int = 0,
+        shouldTrackResult: Bool = true,
         uoms: [UOM]
     ) async {
         guard SubscriptionManager.shared.isPro else {
-            AnalyticsManager.shared.track(
-                .barcodeScanResult(
-                    outcome: "found",
-                    provider: "none",
-                    symbology: symbology,
-                    durationMs: scanDurationMs,
-                    reason: "enrichment_not_available_free"
+            if shouldTrackResult {
+                AnalyticsManager.shared.track(
+                    .barcodeScanResult(
+                        outcome: "found",
+                        provider: "none",
+                        symbology: symbology,
+                        durationMs: scanDurationMs,
+                        reason: "enrichment_not_available_free"
+                    )
                 )
-            )
+            }
             return
         }
         guard !barcode.isEmpty else { return }
         isEnriching = true
         defer { isEnriching = false }
         let result = await BarcodeEnrichmentService.shared.enrichWithOutcome(barcode: barcode)
-        AnalyticsManager.shared.track(
-            .barcodeScanResult(
-                outcome: result.outcome,
-                provider: result.provider,
-                symbology: symbology,
-                durationMs: scanDurationMs + result.durationMs,
-                reason: result.reason
+        if shouldTrackResult {
+            AnalyticsManager.shared.track(
+                .barcodeScanResult(
+                    outcome: result.outcome,
+                    provider: result.provider,
+                    symbology: symbology,
+                    durationMs: scanDurationMs + result.durationMs,
+                    reason: result.reason
+                )
             )
-        )
+        }
         guard let product = result.product else {
             return
         }
