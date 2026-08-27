@@ -4,7 +4,7 @@ import SwiftData
 struct PurchaseReviewView: View {
     @Binding var rows: [ParsedPurchaseRow]
     let defaultStorage: Storage?
-    let onConfirm: () -> Void
+    let onConfirm: (Int) -> Void
     let onCancel: () -> Void
 
     @Environment(\.modelContext) private var modelContext
@@ -276,7 +276,11 @@ struct PurchaseReviewView: View {
             return
         }
 
-        modelContext.safeSave(context: "PurchaseInvoiceImport")
+        guard modelContext.safeSave(context: "PurchaseInvoiceImport") else {
+            modelContext.rollback()
+            isSaving = false
+            return
+        }
 
         Task {
             for movement in savedMovements {
@@ -290,7 +294,7 @@ struct PurchaseReviewView: View {
         isSaving = false
         let savedCount = confirmableRows.count
         let savedItemCount = updatedItems.count
-        onConfirm()
+        onConfirm(savedItemCount)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             NotificationCenter.default.post(
                 name: NSNotification.Name("stoqly.purchaseInvoiceConfirmed"),

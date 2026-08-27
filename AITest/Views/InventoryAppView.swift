@@ -36,6 +36,7 @@ struct InventoryAppView: View {
 
     @State private var pendingInvites: [TeamManager.PendingInvite] = []
     @State private var showingInviteAlert = false
+    @State private var showingInviteAcceptError = false
 
     /// Maestro passes `UITestResetOnboarding: true` via launchApp arguments (see maestro/flows/01_onboarding.yaml).
     private static func shouldForceOnboardingForMaestroUITest() -> Bool {
@@ -105,12 +106,7 @@ struct InventoryAppView: View {
         .alert("Team Invitation", isPresented: $showingInviteAlert,
                presenting: pendingInvites.first) { invite in
             Button("Join as \(invite.role.capitalized)") {
-                Task {
-                    await TeamManager.shared.acceptInvite(invite, modelContext: modelContext)
-                    pendingInvites = []
-                    showingInviteAlert = false
-                    await firestoreManager.pullFromCloud(modelContext: modelContext)
-                }
+                Task { await handleAcceptInvite(invite) }
             }
             Button("Decline", role: .destructive) {
                 Task {
@@ -121,6 +117,15 @@ struct InventoryAppView: View {
             }
         } message: { invite in
             Text("\(invite.ownerName) has invited you to their Stoqly workspace as \(invite.role).")
+        }
+        .alert("Couldn't Join Workspace", isPresented: $showingInviteAcceptError) {
+            Button("Try Again") {
+                if !pendingInvites.isEmpty {
+                    showingInviteAlert = true
+                }
+            }
+        } message: {
+            Text("Couldn't join the workspace. Check your connection and try again.")
         }
         .onChange(of: items.count) { _, _ in
             guard !spotlightIndexedOnce, !items.isEmpty else { return }
@@ -188,6 +193,36 @@ struct InventoryAppView: View {
         if !invites.isEmpty {
             pendingInvites = invites
             showingInviteAlert = true
+        }
+    }
+
+    /// Join and pull only after the remote invite+member batch commits.
+    /// On a true remote failure the invitation is preserved (and reloaded
+    /// when possible) so the user can retry.
+    private func handleAcceptInvite(_ invite: TeamManager.PendingInvite) async {
+        let result = await TeamManager.shared.acceptInvite(invite, modelContext: modelContext)
+        switch result {
+        case .success:
+            pendingInvites = []
+            showingInviteAlert = false
+            await firestoreManager.pullFromCloud(modelContext: modelContext)
+        case .failure:
+            showingInviteAlert = false
+            if TeamManager.shared.isInTeamWorkspace {
+                // Remote batch succeeded (we already joined). Local save may have
+                // failed; safeSave already posted the SwiftData banner. Do not
+                // show the join-failed alert — Try Again would be a no-op.
+                pendingInvites = []
+                await firestoreManager.pullFromCloud(modelContext: modelContext)
+            } else {
+                let reloaded = await TeamManager.shared.checkPendingInvites()
+                if !reloaded.isEmpty {
+                    pendingInvites = reloaded
+                } else if pendingInvites.isEmpty {
+                    pendingInvites = [invite]
+                }
+                showingInviteAcceptError = true
+            }
         }
     }
 

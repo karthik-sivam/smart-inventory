@@ -175,6 +175,7 @@ class SubscriptionManager: ObservableObject {
 
     func purchase(_ product: Product) async {
         purchaseState = .purchasing
+        let trialPlan = isEligibleForTrial ? Self.planLabel(forProductID: product.id) : nil
         do {
             let result = try await product.purchase()
             switch result {
@@ -209,14 +210,50 @@ class SubscriptionManager: ObservableObject {
 
             case .userCancelled:
                 purchaseState = .cancelled
+                if let trialPlan {
+                    AnalyticsManager.shared.track(
+                        .trialStartFailed(
+                            plan: trialPlan,
+                            errorClass: "user_cancelled",
+                            reason: "user_cancelled"
+                        )
+                    )
+                }
 
             @unknown default:
                 purchaseState = .idle
+                if let trialPlan {
+                    AnalyticsManager.shared.track(
+                        .trialStartFailed(
+                            plan: trialPlan,
+                            errorClass: "unknown",
+                            reason: "unknown_purchase_result"
+                        )
+                    )
+                }
             }
         } catch StoreKitError.userCancelled {
             purchaseState = .cancelled
+            if let trialPlan {
+                AnalyticsManager.shared.track(
+                    .trialStartFailed(
+                        plan: trialPlan,
+                        errorClass: "user_cancelled",
+                        reason: "user_cancelled"
+                    )
+                )
+            }
         } catch {
             purchaseState = .failed(error.localizedDescription)
+            if let trialPlan {
+                AnalyticsManager.shared.track(
+                    .trialStartFailed(
+                        plan: trialPlan,
+                        errorClass: trialStartErrorClass(for: error),
+                        reason: error.localizedDescription
+                    )
+                )
+            }
             print("StoreKit ❌ Purchase failed: \(error.localizedDescription)")
         }
     }
@@ -225,14 +262,79 @@ class SubscriptionManager: ObservableObject {
 
     func restorePurchases() async {
         isLoading = true
+        defer { isLoading = false }
         do {
             try await AppStore.sync()
             await refreshPurchaseStatus()
+            let restoredCount = await activeStoreKitEntitlementCount()
+            AnalyticsManager.shared.track(
+                .restorePurchaseResult(
+                    outcome: restoredCount > 0 ? "restored" : "no_purchases",
+                    restoredCount: restoredCount,
+                    reason: nil
+                )
+            )
             print("StoreKit ✅ Purchases restored.")
+        } catch StoreKitError.userCancelled {
+            AnalyticsManager.shared.track(
+                .restorePurchaseResult(
+                    outcome: "cancelled",
+                    restoredCount: 0,
+                    reason: "user_cancelled"
+                )
+            )
         } catch {
+            AnalyticsManager.shared.track(
+                .restorePurchaseResult(
+                    outcome: "storekit_error",
+                    restoredCount: 0,
+                    reason: error.localizedDescription
+                )
+            )
             print("StoreKit ❌ Restore failed: \(error.localizedDescription)")
         }
-        isLoading = false
+    }
+
+    private func activeStoreKitEntitlementCount() async -> Int {
+        var count = 0
+        for await result in StoreKit.Transaction.currentEntitlements {
+            guard case .verified(let transaction) = result,
+                  transaction.revocationDate == nil else { continue }
+            if let expirationDate = transaction.expirationDate, expirationDate <= Date() {
+                continue
+            }
+            count += 1
+        }
+        return count
+    }
+
+    private func trialStartErrorClass(for error: Error) -> String {
+        if let urlError = error as? URLError {
+            return urlError.code == .cancelled ? "user_cancelled" : "network"
+        }
+        if let storeKitError = error as? StoreKitError {
+            switch storeKitError {
+            case .userCancelled: return "user_cancelled"
+            case .networkError: return "network"
+            case .notEntitled: return "ineligible"
+            default: return "storekit_error"
+            }
+        }
+        if let purchaseError = error as? Product.PurchaseError {
+            switch purchaseError {
+            case .ineligibleForOffer: return "ineligible"
+            default: return "storekit_error"
+            }
+        }
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain { return "network" }
+        let message = error.localizedDescription.lowercased()
+        if message.contains("eligible") || message.contains("introductory") { return "ineligible" }
+        if nsError.domain.lowercased().contains("storekit") ||
+            nsError.domain.lowercased().contains("asd") {
+            return "storekit_error"
+        }
+        return "unknown"
     }
 
     // MARK: - Status Refresh

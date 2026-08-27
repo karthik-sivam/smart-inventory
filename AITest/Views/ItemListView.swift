@@ -545,6 +545,7 @@ struct AddItemToStorageView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
     @Query private var storages: [Storage]
     @Query private var uoms: [UOM]
@@ -568,6 +569,15 @@ struct AddItemToStorageView: View {
     @State private var isShowingMoreDetails = false
     @State private var showingAddStorage = false
     @State private var showingSmartCount = false
+    @State private var addItemOpenedAt = Date()
+    @State private var didSaveAddItem = false
+    @State private var didEmitAddItemClose = false
+    @State private var didAbandonForBackground = false
+    @State private var didOpenPhotoPicker = false
+    /// Sticky: user dismissed the in-form scanner without a code. The live
+    /// `showingBarcodeScanner` flag is false by the time Cancel / onDisappear
+    /// can run, so this is what makes `barcode_scan_open` reachable.
+    @State private var didLeaveBarcodeScannerWithoutCode = false
 
     init(initialBarcode: String = "") {
         self.initialBarcode = initialBarcode
@@ -729,7 +739,8 @@ struct AddItemToStorageView: View {
                     ItemPhotoSection(
                         selectedPhotoData: $selectedPhotoData,
                         existingPhotoURL: nil,
-                        showsSectionContainer: false
+                        showsSectionContainer: false,
+                        onPickerTapped: { didOpenPhotoPicker = true }
                     )
                 }
             }
@@ -756,6 +767,7 @@ struct AddItemToStorageView: View {
                 isPresented: $showingBarcodeScanner,
                 onDismiss: {
                     if let code = pendingScannedBarcode {
+                        didLeaveBarcodeScannerWithoutCode = false
                         let symbology = pendingScannedSymbology
                         let durationMs = pendingScanDurationMs
                         formVM.barcode = code
@@ -774,6 +786,8 @@ struct AddItemToStorageView: View {
                                 uoms: uoms
                             )
                         }
+                    } else {
+                        didLeaveBarcodeScannerWithoutCode = true
                     }
                 }
             ) {
@@ -802,6 +816,7 @@ struct AddItemToStorageView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
+                        emitAddItemAbandonedIfNeeded(stage: addItemAbandonmentStage)
                         dismiss()
                     }
                 }
@@ -855,8 +870,8 @@ struct AddItemToStorageView: View {
         .onAppear {
             if !didTrackAddItemStarted {
                 didTrackAddItemStarted = true
-                let source = initialBarcode.isEmpty ? "fab" : "barcode_scan"
-                AnalyticsManager.shared.track(.addItemStarted(source: source))
+                addItemOpenedAt = Date()
+                AnalyticsManager.shared.track(.addItemStarted(source: addItemAnalyticsSource))
             }
             formVM.bind(modelContext: modelContext)
             if uoms.isEmpty {
@@ -906,10 +921,60 @@ struct AddItemToStorageView: View {
                 formVM.selectedStorage = storages.first
             }
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                emitAddItemAbandonedIfNeeded(stage: "backgrounded", includeLegacyCancellation: false)
+                didAbandonForBackground = didEmitAddItemClose && !didSaveAddItem
+            } else if phase == .active, didAbandonForBackground, !didSaveAddItem {
+                didAbandonForBackground = false
+                didEmitAddItemClose = false
+                didLeaveBarcodeScannerWithoutCode = false
+                addItemOpenedAt = Date()
+                AnalyticsManager.shared.track(.addItemStarted(source: addItemAnalyticsSource))
+            }
+        }
+        .onDisappear {
+            guard scenePhase == .active else { return }
+            guard !showingBarcodeScanner,
+                  !showingSmartCount,
+                  !showingItemLimitPaywall,
+                  !showingTemplatePicker,
+                  !showingAddStorage else { return }
+            emitAddItemAbandonedIfNeeded(stage: addItemAbandonmentStage)
+        }
+    }
+
+    private var addItemAnalyticsSource: String {
+        initialBarcode.isEmpty ? "fab" : "barcode_scan"
     }
 
     private var photoSummaryText: String? {
         selectedPhotoData == nil ? nil : "1 photo"
+    }
+
+    private func emitAddItemAbandonedIfNeeded(
+        stage: String,
+        includeLegacyCancellation: Bool = true
+    ) {
+        guard !didSaveAddItem, !didEmitAddItemClose else { return }
+        didEmitAddItemClose = true
+        let seconds = max(0, Int(Date().timeIntervalSince(addItemOpenedAt)))
+        AnalyticsManager.shared.track(
+            .addItemAbandoned(source: addItemAnalyticsSource, stage: stage, secondsInForm: seconds)
+        )
+        if includeLegacyCancellation {
+            AnalyticsManager.shared.track(.addItemCancelled(source: addItemAnalyticsSource, seconds: seconds))
+        }
+    }
+
+    private var addItemAbandonmentStage: String {
+        if showingBarcodeScanner || didLeaveBarcodeScannerWithoutCode { return "barcode_scan_open" }
+        if formVM.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "name_empty" }
+        let quantityText = formVM.currentQuantity.trimmingCharacters(in: .whitespacesAndNewlines)
+        if quantityText.isEmpty || Double(quantityText) == nil { return "quantity_empty" }
+        if didOpenPhotoPicker && selectedPhotoData == nil { return "photo_picker_open" }
+        if isShowingMoreDetails { return "more_details_open" }
+        return "cancelled"
     }
 
     private func saveItem() {
@@ -924,11 +989,26 @@ struct AddItemToStorageView: View {
         // TODO(iOS-B2): fire item_create_completed{entry_source, duration_ms}
         //               via AmplitudeManager helper.
         guard formVM.saveNew() else {
-            showingItemLimitPaywall = true
+            if let storage = formVM.selectedStorage,
+               SubscriptionManager.shared.freeItemCapReached(storage: storage, context: modelContext) {
+                showingItemLimitPaywall = true
+            }
             return
         }
 
-        if let photoData = selectedPhotoData, let item = formVM.lastSavedItem {
+        didSaveAddItem = true
+        didEmitAddItemClose = true
+        let savedItem = formVM.lastSavedItem
+        AnalyticsManager.shared.track(
+            .addItemCompleted(
+                source: addItemAnalyticsSource,
+                hasBarcode: !(savedItem?.barcode ?? formVM.barcode).isEmpty,
+                hasPhoto: selectedPhotoData != nil || savedItem?.photoURL != nil,
+                durationMs: max(0, Int(Date().timeIntervalSince(addItemOpenedAt) * 1_000))
+            )
+        )
+
+        if let photoData = selectedPhotoData, let item = savedItem {
             Task {
                 do {
                     let url = try await FirestoreManager.shared.uploadItemPhoto(photoData, itemId: item.id)

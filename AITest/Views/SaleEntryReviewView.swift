@@ -3,7 +3,7 @@ import SwiftData
 
 struct SaleEntryReviewView: View {
     @Binding var rows: [ParsedSaleRow]
-    let onConfirm: () -> Void
+    let onConfirm: (Int) -> Void
     let onCancel: () -> Void
 
     @Environment(\.modelContext) private var modelContext
@@ -431,6 +431,7 @@ struct SaleEntryReviewView: View {
         }
 
         guard modelContext.safeSave(context: "SmartSalesAccept") else {
+            modelContext.rollback()
             isSaving = false
             return
         }
@@ -466,7 +467,7 @@ struct SaleEntryReviewView: View {
     }
 
     private func finishConfirm(count: Int) {
-        onConfirm()
+        onConfirm(count)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             NotificationCenter.default.post(
                 name: NSNotification.Name("stoqly.smartSalesConfirmed"),

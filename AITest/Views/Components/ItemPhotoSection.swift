@@ -9,6 +9,7 @@ struct ItemPhotoSection: View {
     @Binding var selectedPhotoData: Data?
     let existingPhotoURL: String?
     var showsSectionContainer: Bool = true
+    var onPickerTapped: (() -> Void)? = nil
     @State private var pickerItem: PhotosPickerItem? = nil
     @State private var thumbnailImage: Image? = nil
     @State private var showingPaywall = false
@@ -116,6 +117,11 @@ struct ItemPhotoSection: View {
                 }
             }
         }
+        // simultaneousGesture (not .gesture / onTapGesture) so PhotosPicker
+        // still receives the tap that presents the system picker.
+        .simultaneousGesture(
+            TapGesture().onEnded { onPickerTapped?() }
+        )
         .onChange(of: pickerItem) { _, newItem in
             Task {
                 guard let newItem else { return }

@@ -4,7 +4,7 @@ import PDFKit
 import UniformTypeIdentifiers
 
 struct SmartSalesPDFView: View {
-    var onCompleted: (() -> Void)? = nil
+    var onCompleted: ((Int) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
@@ -28,7 +28,7 @@ struct SmartSalesPDFView: View {
                 case .review:
                     SaleEntryReviewView(
                         rows: $parsedRows,
-                        onConfirm: { onCompleted?() ?? dismiss() },
+                        onConfirm: { count in onCompleted?(count) ?? dismiss() },
                         onCancel: { step = .pick }
                     )
                     .environmentObject(currencyManager)

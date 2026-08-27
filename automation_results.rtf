@@ -664,6 +664,48 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Scan-to-Find now owns its local match/miss terminal result; the automatic Add Item enrichment handoff suppresses a second barcode_scan_result, preventing contradictory not_found/found outcomes for the same scan.\par
 \bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared.\par
 \par
+{\b iOS-D1c \emdash Entry completion pairs}\par
+[COMPLETED WITH ISSUES]\par
+\bullet Added eight StoqlyEvent cases: add_item_completed, add_item_abandoned, sale_entry_completed, sale_entry_abandoned, purchase_entry_completed, purchase_entry_abandoned, restore_purchase_result, trial_start_failed. Existing started/cancelled/itemAdded/saleRecorded events remain additive. AnalyticsManager still attaches app_version, platform, is_offline, device_class, and session_id centrally.\par
+\bullet Add-item terminals wired on StorageDetailView AddItemView, ItemListView AddItemToStorageView (FAB + scan-to-find), and EditItemView when isAddFlow. Completion fires only after successful safeSave. Abandonment stages: name_empty, quantity_empty, more_details_open, photo_picker_open, barcode_scan_open, cancelled, backgrounded. Backgrounding emits abandoned then a fresh add_item_started on return to active; legacy add_item_cancelled is skipped for background so it stays a user-cancel signal.\par
+\bullet Sale terminals: QuickSaleSheet manual complete/abandon; SmartSalesEntryView voice/photo/text/csv/pdf complete via SaleEntryReviewView item counts, abandon via sheet onDismiss. Parent onDisappear was removed so nested sheets cannot mark a live session abandoned before save.\par
+\bullet Purchase terminals: PurchaseInvoiceImportView complete/abandon plus paywall dead-end (stage=paywall). Paywall no longer restarts the session from onAppear after the sheet dismisses; a Pro retry after upgrade starts a new session. Saved item counts flow through PurchaseReviewView callbacks.\par
+\bullet Subscription: restore_purchase_result reports restored / no_purchases / cancelled / storekit_error with active entitlement count. trial_start_failed classifies user_cancelled, network, ineligible, storekit_error, and unknown from StoreKitError / Product.PurchaseError / URLError.\par
+\bullet Lifecycle/save fixes: onDisappear ignores child scanner/sheet/paywall presentations and background scenePhase; safeSave failure rolls back the ModelContext and does not emit completed; PhotosPicker uses simultaneousGesture so the system picker still receives the tap.\par
+\bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared.\par
+\bullet Merge gate still open: Amplitude project 832993 tracking-plan entries and Live View smoke for the eight new events were not updated from this session (no Amplitude write access). Do not merge until stoqly-data-analyst completes that checkpoint. D1b/D1d were not chained onto this branch.\par
+\par
+{\b iOS-D1c Bugbot follow-up \emdash barcode_scan_open + Smart Sales manual terminal}\par
+[COMPLETED]\par
+\bullet Add-item barcode abandonment: StorageDetailView, ItemListView, and EditItemView now keep sticky `didLeaveBarcodeScannerWithoutCode` when the in-form scanner fullScreenCover dismisses without a code. `addItemAbandonmentStage` uses that flag so `barcode_scan_open` is reachable after Cancel / onDisappear. A successful scan clears the flag, so a later form abandon is not classified as barcode_scan_open. fullScreenCover scanner contract unchanged.\par
+\bullet Manual sale + Smart Sales: tapping the Smart Sales chip terminates the live manual session as `sale_entry_abandoned(mode:"manual", stage:"switched_to_smart_sales")` plus the legacy `sale_entry_cancelled`. SmartSalesEntryView gained an optional `onCompleted` callback. Successful Smart Sales sets the flag and QuickSaleSheet dismisses without a second manual cancellation. Cancelling Smart Sales starts a fresh manual `sale_entry_started` with a new timestamp so later save/cancel has exactly one terminal.\par
+\bullet Session audit (exactly one terminal per started): AddItemView / AddItemToStorageView / EditItemView(isAddFlow) start on appear (or post-background restart) and close via completed, abandoned, or backgrounded; child scanner/sheet presentations are skipped. QuickSaleSheet manual starts on appear; terminals are completed, cancelled, or switched_to_smart_sales; Smart Sales success dismisses the parent; Smart Sales cancel starts a new manual session. SmartSalesEntryView voice/photo/text/csv/pdf start in openSaleMode and close via completed or sheet-onDismiss abandoned. PurchaseInvoiceImportView starts on appear; terminals are completed, cancelled, or paywall; Pro retry after paywall starts a new session. restore_purchase_result and trial_start_failed remain one-shot result events, not started/terminal pairs.\par
+\bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared. PR #17 was not merged; D1b/D1d were not started.\par
+\par
+{\b iOS-D1c Bugbot follow-up 2 \emdash reset sticky barcode stage on session restart}\par
+[COMPLETED]\par
+\bullet Fresh add_item_started after background now clears `didLeaveBarcodeScannerWithoutCode` in StorageDetailView, ItemListView, and EditItemView so a later cancel cannot inherit barcode_scan_open from the previous session.\par
+\bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared. PR #17 was not merged; D1b/D1d were not started.\par
+\par
+{\b iOS inviteId + atomic workspace-invite acceptance (Android parity)}\par
+[COMPLETED]\par
+\bullet Member contract: users/\{ownerUID\}/members/\{memberUID\} now writes uid, displayName, email, role, status, inviteId, joinedAt. Local TeamMember.inviteId is optional with a nil default (safe SwiftData migration). MemberRecord.fromFirestore decodes inviteId as optional for legacy docs.\par
+\bullet acceptInvite uses InviteAcceptancePlanner + InviteAcceptanceCommitter. Production FirestoreInviteAcceptanceCommitter creates one WriteBatch, schedules invite status=accepted plus member setData(merge: true), and commits once. No try? on the accept path. Returns Result<Void, Error>.\par
+\bullet Local upsert is by uid. joinWorkspace and SwiftData save run only after a successful remote commit. safeSave Bool is checked; local save failure still joins (remote membership already exists) and returns TeamError.localSaveFailed. Failed commit does not join or persist an active member.\par
+\bullet InventoryAppView clears pendingInvites, pulls the workspace, and dismisses success only after a successful batch. Remote failure preserves/reloads the invitation and shows a localized retryable error. Decline path unchanged.\par
+\bullet Tests: AITestTests/InviteAcceptanceTests.swift (8 cases) with a fake committer for success/failure. Files: InviteAcceptance.swift, TeamManager.swift, TeamMember.swift, InventoryAppView.swift, docs/team-workspace-contract.md, Localizable.xcstrings, phase-status.md.\par
+\bullet Verification: git diff --check passed; xcodebuild test SmartInventoryTests/InviteAcceptanceTests on iPhone 17 Pro simulator \emdash  8/8 passed, TEST SUCCEEDED; xcodebuild SmartInventory iPhone 17 Pro simulator \emdash  exit 0, BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped. firestore.rules were not changed or deployed.\par
+\par
+{\b iOS-D1c integration \emdash invite hardening into PR #17; Amplitude gate}\par
+[COMPLETED WITH ISSUES]\par
+\bullet Topology confirmed: PR #17 is iOS-D1c \to master_scope_v1, OPEN, MERGEABLE. origin/master_scope_v1 is 7d89b59 (includes iOS-D1a). No duplicate invite PR created. Dirty primary master_scope_v1 worktree was not touched.\par
+\bullet origin/iOS-invite-id-atomic pushed as its own branch at de798d33a706726dcfce8553fa05cc48bca37c6a. origin/iOS-D1c was not overwritten by that push (remained 78cca8b until the later D1c fast-forward push).\par
+\bullet Local iOS-D1c fast-forwarded 78cca8b \to de798d3, then Bugbot finding fixed: InventoryAppView no longer shows the join-failed alert when the remote batch already succeeded and the workspace is joined (SwiftData banner remains the local-save signal).\par
+\bullet Amplitude tracking plan (project 832993): NOT updated. This session has no Amplitude MCP (`manage_amp_events` missing). Client AMPLITUDE_API_KEY cannot write Govern/taxonomy. All eight D1c events remain unconfirmed in the tracking plan.\par
+\bullet Amplitude Live View: NOT completed. Browser Amplitude session is unauthenticated (login wall). Merge gate stays OPEN.\par
+\bullet Tests: InviteAcceptanceTests 8/8 passed; SmartInventoryTests including D1a barcode analytics (`testBarcodeScanResultUsesOutcomeShapeAndOmitsRawCode`, `testBarcodeScanResultOmitsNilOptionalProperties`) passed; xcodebuild SmartInventory iPhone 17 Pro \emdash  BUILD SUCCEEDED. git diff --check passed. No firestore.rules files in the D1c vs master_scope_v1 diff. Firebase rules were not deployed.\par
+\bullet Bugbot on iOS-D1c vs master_scope_v1: 1 high finding (false join-failed alert after remote success) \emdash  resolved in InventoryAppView. D1b/D1d were not started. PR #17 not merged.\par
+\par
 {\b iOS-D1a-fix \emdash Re-add code on barcode_scan_result}\par
 [COMPLETED]\par
 \bullet Re-added `code: String?` to `StoqlyEvent.barcodeScanResult` (after symbology, before durationMs). Dispatch includes `code` when a non-empty string was read; cancel / camera_denied / no_code_detected omit it. Barcodes are commercial product IDs, not PII \emdash  the D1a defensive omit is reversed.\par
@@ -671,5 +713,10 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet PrivacyInfo.xcprivacy unchanged (barcodes are not an Apple Collected Data Type).\par
 \bullet Amplitude project 832993 main: event-scoped `code` string created on `barcode_scan_result`; event description updated for iOS-D1a-fix / app 1.4 build 8+. Historical events cannot be backfilled.\par
 \bullet Verification: git diff --check passed; xcodebuild SmartInventory iPhone 17 Pro simulator \emdash  BUILD SUCCEEDED; SmartInventoryTests barcode analytics 2/2 TEST SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped. Live View of `code` needs this build on a device/simulator scan. D1b/D1d not started. PR #17 (iOS-D1c) not modified.\par
+\par
+{\b iOS-D1c \emdash merge master after iOS-D1a-fix (PR #18)}\par
+[COMPLETED]\par
+\bullet Merged origin/master_scope_v1 (c8b3712, PR #18) into iOS-D1c. Swift auto-merged with `code:` intact on every barcodeScanResult call site. Only automation_results.rtf conflicted; D1c and D1a-fix entries both kept.\par
+\bullet PR #17 not merged. D1c Live View of the eight terminals is still the merge gate. D1b/D1d not started.\par
 \par
 }

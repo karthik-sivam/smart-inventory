@@ -324,7 +324,10 @@ final class ItemFormViewModel: ObservableObject {
             modelContext.insert(initialBatch)
         }
 
-        modelContext.safeSave(context: "AddItem")
+        guard modelContext.safeSave(context: "AddItem") else {
+            modelContext.rollback()
+            return false
+        }
         lastSavedItem = item
 
         AnalyticsManager.shared.track(.itemAdded(
@@ -353,8 +356,9 @@ final class ItemFormViewModel: ObservableObject {
         return true
     }
 
-    func saveEdits(to item: InventoryItem) {
-        guard canSaveEdit else { return }
+    @discardableResult
+    func saveEdits(to item: InventoryItem) -> Bool {
+        guard canSaveEdit, let modelContext else { return false }
         let previousQty = item.currentQuantity
         item.name            = name
         item.itemDescription = description
@@ -382,27 +386,29 @@ final class ItemFormViewModel: ObservableObject {
         item.category        = category
         item.expiryDate      = hasExpiryDate ? expiryDate : nil
         item.updatedAt       = Date()
-        modelContext?.safeSave(context: "EditItem")
-
-        if let ctx = modelContext {
-            let editEvent = ActivityEvent(
-                eventType: "ItemUpdated",
-                itemName: name,
-                storageName: selectedStorage?.name ?? "Unknown",
-                quantityBefore: previousQty,
-                quantityAfter: Double(currentQuantity) ?? previousQty,
-                performedBy: AuthManager.shared.actorName
-            )
-            ctx.insert(editEvent)
-            ctx.safeSave(context: "saveEdits activity event")
-            FirestoreManager.shared.syncActivity(editEvent)
+        guard modelContext.safeSave(context: "EditItem") else {
+            modelContext.rollback()
+            return false
         }
+
+        let editEvent = ActivityEvent(
+            eventType: "ItemUpdated",
+            itemName: name,
+            storageName: selectedStorage?.name ?? "Unknown",
+            quantityBefore: previousQty,
+            quantityAfter: Double(currentQuantity) ?? previousQty,
+            performedBy: AuthManager.shared.actorName
+        )
+        modelContext.insert(editEvent)
+        modelContext.safeSave(context: "saveEdits activity event")
+        FirestoreManager.shared.syncActivity(editEvent)
 
         // Sync to Firestore
         FirestoreManager.shared.syncItem(item)
         SpotlightManager.shared.index(item)
 
         AdManager.shared.recordCompletion(event: .itemUpdated)
+        return true
     }
 }
 

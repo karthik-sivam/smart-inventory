@@ -241,6 +241,16 @@ enum StoqlyEvent {
     case saleEntryStarted(mode: String)
     case purchaseEntryStarted(mode: String)
 
+    // ── Flow terminal events (iOS-D1c) ──────────────────────────────────────────
+    case addItemCompleted(source: String, hasBarcode: Bool, hasPhoto: Bool, durationMs: Int)
+    case addItemAbandoned(source: String, stage: String, secondsInForm: Int)
+    case saleEntryCompleted(mode: String, itemCount: Int, durationMs: Int)
+    case saleEntryAbandoned(mode: String, stage: String)
+    case purchaseEntryCompleted(mode: String, itemCount: Int, durationMs: Int)
+    case purchaseEntryAbandoned(mode: String, stage: String)
+    case restorePurchaseResult(outcome: String, restoredCount: Int, reason: String?)
+    case trialStartFailed(plan: String, errorClass: String, reason: String)
+
     // ── Onboarding funnel (S24) ──────────────────────────────────────────────────
     case onboardingStarted
     case onboardingStepViewed(step: Int, name: String)
@@ -363,6 +373,14 @@ enum StoqlyEvent {
         case .addItemMoreDetailsToggled: return "add_item_more_details_toggled"
         case .saleEntryStarted:          return "sale_entry_started"
         case .purchaseEntryStarted:      return "purchase_entry_started"
+        case .addItemCompleted:          return "add_item_completed"
+        case .addItemAbandoned:          return "add_item_abandoned"
+        case .saleEntryCompleted:        return "sale_entry_completed"
+        case .saleEntryAbandoned:        return "sale_entry_abandoned"
+        case .purchaseEntryCompleted:    return "purchase_entry_completed"
+        case .purchaseEntryAbandoned:    return "purchase_entry_abandoned"
+        case .restorePurchaseResult:     return "restore_purchase_result"
+        case .trialStartFailed:          return "trial_start_failed"
 
         case .onboardingStarted:         return "onboarding_started"
         case .onboardingStepViewed:       return "onboarding_step_viewed"
@@ -524,6 +542,29 @@ enum StoqlyEvent {
             return ["context": context, "expanded": expanded]
         case .saleEntryStarted(let mode):     return ["mode": mode]
         case .purchaseEntryStarted(let mode): return ["mode": mode]
+        case .addItemCompleted(let source, let hasBarcode, let hasPhoto, let durationMs):
+            return [
+                "source": source,
+                "has_barcode": hasBarcode,
+                "has_photo": hasPhoto,
+                "duration_ms": durationMs
+            ]
+        case .addItemAbandoned(let source, let stage, let secondsInForm):
+            return ["source": source, "stage": stage, "seconds_in_form": secondsInForm]
+        case .saleEntryCompleted(let mode, let itemCount, let durationMs):
+            return ["mode": mode, "item_count": itemCount, "duration_ms": durationMs]
+        case .saleEntryAbandoned(let mode, let stage):
+            return ["mode": mode, "stage": stage]
+        case .purchaseEntryCompleted(let mode, let itemCount, let durationMs):
+            return ["mode": mode, "item_count": itemCount, "duration_ms": durationMs]
+        case .purchaseEntryAbandoned(let mode, let stage):
+            return ["mode": mode, "stage": stage]
+        case .restorePurchaseResult(let outcome, let restoredCount, let reason):
+            var props: [String: Any] = ["outcome": outcome, "restored_count": restoredCount]
+            if let reason, !reason.isEmpty { props["reason"] = reason }
+            return props
+        case .trialStartFailed(let plan, let errorClass, let reason):
+            return ["plan": plan, "error_class": errorClass, "reason": reason]
 
         case .onboardingStarted:              return [:]
         case .onboardingStepViewed(let step, let name):

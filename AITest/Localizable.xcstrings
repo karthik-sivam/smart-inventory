@@ -19460,6 +19460,30 @@
         }
       }
     },
+    "Couldn't Join Workspace" : {
+      "comment" : "Alert title shown when accepting a workspace invitation fails.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't Join Workspace"
+          }
+        }
+      }
+    },
+    "Couldn't join the workspace. Check your connection and try again." : {
+      "comment" : "Retryable error shown when the invite-acceptance Firestore batch fails.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't join the workspace. Check your connection and try again."
+          }
+        }
+      }
+    },
     "Count" : {
       "extractionState" : "manual",
       "localizations" : {
