@@ -105,3 +105,27 @@ Fires when: banner full-screen overlay dismisses or interstitial `adDidDismissFu
 4. Interstitial after 2 workflow actions / 5 min: `ad_requested` (`format=interstitial`) → loaded/failed → impression/dismissed if shown.
 
 TODO(iOS-F4): remove the DEBUG `📊 [iOS-F4]` print in `AnalyticsManager.track` after CEO confirms Amplitude is receiving these events.
+
+## AI request terminals (iOS-D1b)
+
+Every LLM call fires exactly one `ai_request_started` **after** paywall/usage gates, then exactly one of `ai_request_succeeded` / `ai_request_empty` / `ai_request_failed`. Do not log prompts, transcripts, OCR, or answer text on these events. `ai_help_question_asked` still logs a truncated question; that is unchanged and must not be copied onto the new events.
+
+Existing `smart_count_completed` / `smart_count_failed` / `smart_sales_completed` / `bulk_import_*` / `ai_help_question_asked` stay. D1b adds `smart_sales_failed` as the Smart Sales counterpart of `smart_count_failed`.
+
+Wired `feature` slugs: `voice_count`, `photo_count`, `sheet_count`, `voice_sales`, `photo_sales`, `sheet_sales`, `ask_ai_help`.
+
+Not wired (no LLM caller): `identify_product` (photo add/edit uses `photo_count`); `sheet_import` (Bulk Import is local CSV/XLSX parse — keep `bulk_import_completed` / `bulk_import_failed` only).
+
+Helper: `AIRequestClock` in `AITest/Services/AIRequestClock.swift`. `AIInventoryError.noItemsFound` → `ai_request_empty`, not failed. Default `provider` is `"claude"`. `error_class`: `network` | `parse_error` | `server_error` | `rate_limited` | `unknown`.
+
+| Event | Properties | When |
+|---|---|---|
+| `ai_request_started` | `feature` (req), `mode?`, `input_size_kb?` | Clock `init` after the usage/paywall gate |
+| `ai_request_succeeded` | `feature`, `mode?`, `item_count`, `duration_ms`, `provider` | Parsed/saved items, or a non-empty help answer (`item_count=1`) |
+| `ai_request_empty` | `feature`, `mode?`, `duration_ms`, `reason` | Zero items / empty answer / no mapping suggestions |
+| `ai_request_failed` | `feature`, `mode?`, `stage`, `error_class`, `reason`, `duration_ms?` | Network, parse, save, or receive error |
+| `smart_sales_failed` | `mode`, `reason` | Smart Sales parse/save companion (`voice`/`photo`/`text`/`csv`/`pdf`/`batch`). Does not replace `ai_request_failed`. CSV empty-file and JPEG encode failures fire this without `ai_request_started` because no LLM ran. |
+
+Standard `app_version` / `platform` / `is_offline` / `device_class` / `session_id` are attached centrally.
+
+Amplitude project 832993: all five events are official under **AI / Smart Count**.

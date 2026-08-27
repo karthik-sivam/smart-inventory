@@ -177,6 +177,15 @@ enum StoqlyEvent {
     case smartCountCompleted(mode: String, itemCount: Int, capturedExtraFields: [String]?)
     case smartCountFailed(mode: String, reason: String)
 
+    // ── AI request terminals (iOS-D1b) ───────────────────────────────────────────
+    // One started → exactly one of succeeded / empty / failed per model call.
+    // feature: voice_count | voice_sales | photo_count | photo_sales | sheet_count
+    //          | sheet_sales | sheet_import | identify_product | ask_ai_help
+    case aiRequestStarted(feature: String, mode: String?, inputSizeKB: Int?)
+    case aiRequestSucceeded(feature: String, mode: String?, itemCount: Int, durationMs: Int, provider: String)
+    case aiRequestEmpty(feature: String, mode: String?, durationMs: Int, reason: String)
+    case aiRequestFailed(feature: String, mode: String?, stage: String, errorClass: String, reason: String, durationMs: Int?)
+
     // ── Bulk Import ──────────────────────────────────────────────────────────────
     case bulkImportCompleted(itemCount: Int, format: String)  // format: "csv" | "xlsx"
     case bulkImportFailed(reason: String)
@@ -215,6 +224,7 @@ enum StoqlyEvent {
     case smartSalesOpened
     case smartSalesModeSelected(mode: String)
     case smartSalesCompleted(mode: String, saleCount: Int)
+    case smartSalesFailed(mode: String, reason: String)  // iOS-D1b; parity with smartCountFailed
 
     // ── Errors / Crashes (non-fatal, for awareness) ───────────────────────────────
     case syncFailed(reason: String)
@@ -259,7 +269,6 @@ enum StoqlyEvent {
 
     // ── Blockers (S24) ───────────────────────────────────────────────────────────
     case permissionResult(type: String, granted: Bool)
-    case aiRequestFailed(feature: String, reason: String)
     case emptyStateShown(screen: String)
 
     // ── Engagement depth (S24) ───────────────────────────────────────────────────
@@ -323,6 +332,11 @@ enum StoqlyEvent {
         case .smartCountCompleted:       return "smart_count_completed"
         case .smartCountFailed:          return "smart_count_failed"
 
+        case .aiRequestStarted:          return "ai_request_started"
+        case .aiRequestSucceeded:        return "ai_request_succeeded"
+        case .aiRequestEmpty:            return "ai_request_empty"
+        case .aiRequestFailed:           return "ai_request_failed"
+
         case .bulkImportCompleted:       return "bulk_import_completed"
         case .bulkImportFailed:          return "bulk_import_failed"
 
@@ -353,6 +367,7 @@ enum StoqlyEvent {
         case .smartSalesOpened:          return "smart_sales_opened"
         case .smartSalesModeSelected:    return "smart_sales_mode_selected"
         case .smartSalesCompleted:       return "smart_sales_completed"
+        case .smartSalesFailed:          return "smart_sales_failed"
 
         case .syncFailed:                return "sync_failed"
 
@@ -388,7 +403,6 @@ enum StoqlyEvent {
         case .onboardingSkipped:         return "onboarding_skipped"
 
         case .permissionResult:          return "permission_result"
-        case .aiRequestFailed:            return "ai_request_failed"
         case .emptyStateShown:           return "empty_state_shown"
 
         case .searchPerformed:           return "search_performed"
@@ -463,6 +477,39 @@ enum StoqlyEvent {
             return props
         case .smartCountFailed(let m, let r): return ["mode": m, "reason": r]
 
+        case .aiRequestStarted(let feature, let mode, let inputSizeKB):
+            var props: [String: Any] = ["feature": feature]
+            if let mode, !mode.isEmpty { props["mode"] = mode }
+            if let inputSizeKB { props["input_size_kb"] = inputSizeKB }
+            return props
+        case .aiRequestSucceeded(let feature, let mode, let itemCount, let durationMs, let provider):
+            var props: [String: Any] = [
+                "feature": feature,
+                "item_count": itemCount,
+                "duration_ms": durationMs,
+                "provider": provider
+            ]
+            if let mode, !mode.isEmpty { props["mode"] = mode }
+            return props
+        case .aiRequestEmpty(let feature, let mode, let durationMs, let reason):
+            var props: [String: Any] = [
+                "feature": feature,
+                "duration_ms": durationMs,
+                "reason": reason
+            ]
+            if let mode, !mode.isEmpty { props["mode"] = mode }
+            return props
+        case .aiRequestFailed(let feature, let mode, let stage, let errorClass, let reason, let durationMs):
+            var props: [String: Any] = [
+                "feature": feature,
+                "stage": stage,
+                "error_class": errorClass,
+                "reason": reason
+            ]
+            if let mode, !mode.isEmpty { props["mode"] = mode }
+            if let durationMs { props["duration_ms"] = durationMs }
+            return props
+
         case .bulkImportCompleted(let n, let fmt):
             return ["item_count": n, "format": fmt]
         case .bulkImportFailed(let r):        return ["reason": r]
@@ -518,6 +565,8 @@ enum StoqlyEvent {
         case .smartSalesModeSelected(let m):  return ["mode": m]
         case .smartSalesCompleted(let m, let n):
             return ["mode": m, "sale_count": n]
+        case .smartSalesFailed(let m, let r):
+            return ["mode": m, "reason": r]
 
         case .syncFailed(let r):              return ["reason": r]
 
@@ -574,8 +623,6 @@ enum StoqlyEvent {
 
         case .permissionResult(let type, let granted):
             return ["type": type, "granted": granted]
-        case .aiRequestFailed(let feature, let reason):
-            return ["feature": feature, "reason": reason]
         case .emptyStateShown(let screen):    return ["screen": screen]
 
         case .searchPerformed(let scope, let resultCount):

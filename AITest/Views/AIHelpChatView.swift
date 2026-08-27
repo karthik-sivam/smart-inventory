@@ -127,12 +127,24 @@ struct AIHelpChatView: View {
         aiAnswer = nil
         aiError = nil
 
+        let clock = AIRequestClock(
+            feature: "ask_ai_help",
+            mode: "help",
+            inputBytes: trimmed.utf8.count
+        )
         do {
             let answer = try await AIInventoryService.shared.askHelpQuestion(trimmed)
             AIUsageManager.shared.recordUse(.helpChat)
             aiAnswer = answer
+            let trimmedAnswer = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedAnswer.isEmpty {
+                clock.empty(reason: "empty_answer")
+            } else {
+                clock.succeeded(itemCount: 1)
+            }
         } catch {
             aiError = error.localizedDescription
+            clock.finish(error: error, stage: "receive")
         }
 
         isAsking = false

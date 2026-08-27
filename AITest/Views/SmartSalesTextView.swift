@@ -111,14 +111,22 @@ struct SmartSalesTextView: View {
     private func parseText() {
         step = .analyzing
         Task {
+            let clock = AIRequestClock(
+                feature: "sheet_sales",
+                mode: "text",
+                inputBytes: inputText.utf8.count
+            )
             do {
                 parsedRows = try await AIInventoryService.shared.parseSalesText(
                     text: inputText,
                     knownItemNames: allItems.map(\.name)
                 )
+                clock.finish(itemCount: parsedRows.count)
                 AnalyticsManager.shared.track(.smartSalesModeSelected(mode: "text"))
                 step = .review
             } catch {
+                clock.finish(error: error, stage: "parse")
+                AnalyticsManager.shared.track(.smartSalesFailed(mode: "text", reason: error.localizedDescription))
                 errorMessage = error.localizedDescription
                 step = .input
             }
