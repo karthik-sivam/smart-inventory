@@ -664,4 +664,12 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Scan-to-Find now owns its local match/miss terminal result; the automatic Add Item enrichment handoff suppresses a second barcode_scan_result, preventing contradictory not_found/found outcomes for the same scan.\par
 \bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared.\par
 \par
+{\b iOS-D1a-fix \emdash Re-add code on barcode_scan_result}\par
+[COMPLETED]\par
+\bullet Re-added `code: String?` to `StoqlyEvent.barcodeScanResult` (after symbology, before durationMs). Dispatch includes `code` when a non-empty string was read; cancel / camera_denied / no_code_detected omit it. Barcodes are commercial product IDs, not PII \emdash  the D1a defensive omit is reversed.\par
+\bullet All production call sites pass `code:` (raw scanned string or nil): BarcodeScannerView, ItemListView Scan-to-Find, EditItemView, StorageDetailView (enrich + skip), ItemFormViewModel.enrichFromBarcode (free + Pro). Tests: `testBarcodeScanResultIncludesCodeWhenACodeWasRead` and `testBarcodeScanResultOmitsNilOptionalProperties`.\par
+\bullet PrivacyInfo.xcprivacy unchanged (barcodes are not an Apple Collected Data Type).\par
+\bullet Amplitude project 832993 main: event-scoped `code` string created on `barcode_scan_result`; event description updated for iOS-D1a-fix / app 1.4 build 8+. Historical events cannot be backfilled.\par
+\bullet Verification: git diff --check passed; xcodebuild SmartInventory iPhone 17 Pro simulator \emdash  BUILD SUCCEEDED; SmartInventoryTests barcode analytics 2/2 TEST SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped. Live View of `code` needs this build on a device/simulator scan. D1b/D1d not started. PR #17 (iOS-D1c) not modified.\par
+\par
 }

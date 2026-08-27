@@ -169,6 +169,7 @@ final class ItemFormViewModel: ObservableObject {
                         outcome: "found",
                         provider: "none",
                         symbology: symbology,
+                        code: barcode,
                         durationMs: scanDurationMs,
                         reason: "enrichment_not_available_free"
                     )
@@ -186,6 +187,7 @@ final class ItemFormViewModel: ObservableObject {
                     outcome: result.outcome,
                     provider: result.provider,
                     symbology: symbology,
+                    code: barcode,
                     durationMs: scanDurationMs + result.durationMs,
                     reason: result.reason
                 )

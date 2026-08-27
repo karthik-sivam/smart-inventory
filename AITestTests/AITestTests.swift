@@ -468,11 +468,12 @@ final class SmartInventoryTests: XCTestCase {
     // MARK: - iOS-D1a: Barcode outcome analytics
     // ──────────────────────────────────────────────────────────────────────
 
-    func testBarcodeScanResultUsesOutcomeShapeAndOmitsRawCode() {
+    func testBarcodeScanResultIncludesCodeWhenACodeWasRead() {
         let event = StoqlyEvent.barcodeScanResult(
             outcome: "found",
             provider: "off",
             symbology: "EAN-13",
+            code: "8901030865477",
             durationMs: 420,
             reason: nil
         )
@@ -481,9 +482,9 @@ final class SmartInventoryTests: XCTestCase {
         XCTAssertEqual(event.properties["outcome"] as? String, "found")
         XCTAssertEqual(event.properties["provider"] as? String, "off")
         XCTAssertEqual(event.properties["symbology"] as? String, "EAN-13")
+        XCTAssertEqual(event.properties["code"] as? String, "8901030865477")
         XCTAssertEqual(event.properties["duration_ms"] as? Int, 420)
         XCTAssertNil(event.properties["reason"])
-        XCTAssertNil(event.properties["code"])
         XCTAssertNil(event.properties["found"])
         XCTAssertNil(event.properties["enriched"])
     }
@@ -493,11 +494,13 @@ final class SmartInventoryTests: XCTestCase {
             outcome: "scanner_cancelled",
             provider: "none",
             symbology: nil,
+            code: nil,
             durationMs: 125,
             reason: nil
         )
 
         XCTAssertNil(event.properties["symbology"])
+        XCTAssertNil(event.properties["code"])
         XCTAssertNil(event.properties["reason"])
         XCTAssertEqual(event.properties["duration_ms"] as? Int, 125)
     }
