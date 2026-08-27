@@ -327,6 +327,7 @@ struct ItemListView: View {
                         outcome: found ? "found" : "not_found",
                         provider: "none",
                         symbology: symbology,
+                        code: code,
                         durationMs: durationMs,
                         reason: found ? "local_inventory_match" : "local_inventory_miss"
                     )

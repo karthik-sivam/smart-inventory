@@ -424,6 +424,7 @@ struct EditItemView: View {
                                 outcome: "found",
                                 provider: "none",
                                 symbology: symbology,
+                                code: code,
                                 durationMs: durationMs,
                                 reason: "enrichment_skipped_user_entered_name"
                             )
