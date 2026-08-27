@@ -166,6 +166,7 @@ enum StoqlyEvent {
         outcome: String,
         provider: String,
         symbology: String?,
+        code: String?,          // commercial product ID (EAN/UPC/ISBN/GTIN) — not PII; never omit when a code was read
         durationMs: Int,
         reason: String?
     )
@@ -423,13 +424,14 @@ enum StoqlyEvent {
         case .itemCounted(let s):             return ["storage_name": s]
 
         case .barcodeScanInitiated:           return [:]
-        case .barcodeScanResult(let outcome, let provider, let symbology, let durationMs, let reason):
+        case .barcodeScanResult(let outcome, let provider, let symbology, let code, let durationMs, let reason):
             var props: [String: Any] = [
                 "outcome": outcome,
                 "provider": provider,
                 "duration_ms": durationMs
             ]
             if let symbology, !symbology.isEmpty { props["symbology"] = symbology }
+            if let code, !code.isEmpty { props["code"] = code }
             if let reason, !reason.isEmpty { props["reason"] = reason }
             return props
 

@@ -836,6 +836,7 @@ struct AddItemView: View {
                                     outcome: result.outcome,
                                     provider: result.provider,
                                     symbology: symbology,
+                                    code: code,
                                     durationMs: durationMs + result.durationMs,
                                     reason: result.reason
                                 )
@@ -857,6 +858,7 @@ struct AddItemView: View {
                                 outcome: "found",
                                 provider: "none",
                                 symbology: symbology,
+                                code: code,
                                 durationMs: durationMs,
                                 reason: subscriptionManager.isPro
                                     ? "enrichment_skipped_user_entered_name"

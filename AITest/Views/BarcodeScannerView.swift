@@ -356,6 +356,7 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
             outcome: String,
             provider: String,
             symbology: String?,
+            code: String? = nil,
             durationMs: Int? = nil,
             reason: String?
         ) {
@@ -368,6 +369,7 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
                     outcome: outcome,
                     provider: provider,
                     symbology: symbology,
+                    code: code,
                     durationMs: elapsedMs,
                     reason: reason
                 )
