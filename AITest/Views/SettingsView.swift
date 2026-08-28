@@ -160,7 +160,7 @@ struct SettingsView: View {
                         Button(role: .destructive) {
                             teamManager.leaveWorkspace()
                             Task {
-                                await firestoreManager.pullFromCloud(modelContext: modelContext)
+                                await firestoreManager.pullFromCloud(modelContext: modelContext, context: "manual")
                             }
                         } label: {
                             Label("Leave Team Workspace", systemImage: "rectangle.portrait.and.arrow.right")

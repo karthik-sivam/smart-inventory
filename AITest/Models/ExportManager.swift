@@ -9,6 +9,7 @@ import WebKit
 class ExportManager: ObservableObject {
     @Published var isExporting = false
     @Published var exportProgress: Double = 0.0
+    private var lastExportFailureReason: String?
 
     private final class PDFNavigationHandler: NSObject, WKNavigationDelegate {
         var onDidFinish: ((WKWebView) -> Void)?
@@ -51,6 +52,7 @@ class ExportManager: ObservableObject {
         await MainActor.run {
             isExporting = true
             exportProgress = 0.0
+            lastExportFailureReason = nil
         }
         
         let result: URL?
@@ -67,9 +69,16 @@ class ExportManager: ObservableObject {
             exportProgress = 1.0
         }
 
+        let formatString = data.format == .csv ? "csv" : "pdf"
         if result != nil {
-            let formatString = data.format == .csv ? "csv" : "pdf"
             AnalyticsManager.shared.track(.exportCompleted(format: formatString))
+        } else {
+            AnalyticsManager.shared.track(
+                .exportFailed(
+                    format: formatString,
+                    reason: lastExportFailureReason ?? "unknown"
+                )
+            )
         }
 
         return result
@@ -104,6 +113,9 @@ class ExportManager: ObservableObject {
         
         // Convert HTML to PDF using WebKit
         guard let pdfData = await convertHTMLToPDF(htmlContent) else {
+            if lastExportFailureReason == nil {
+                lastExportFailureReason = "pdf_render_failed"
+            }
             return nil
         }
         
@@ -453,6 +465,7 @@ class ExportManager: ObservableObject {
     
     private func saveToFile(content: String, fileName: String) -> URL? {
         guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            lastExportFailureReason = "documents_directory_unavailable"
             return nil
         }
         
@@ -464,12 +477,14 @@ class ExportManager: ObservableObject {
             return fileURL
         } catch {
             print("Error saving file: \(error)")
+            lastExportFailureReason = error.localizedDescription
             return nil
         }
     }
     
     private func savePDFData(_ pdfData: Data, fileName: String) -> URL? {
         guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            lastExportFailureReason = "documents_directory_unavailable"
             return nil
         }
         
@@ -480,6 +495,7 @@ class ExportManager: ObservableObject {
             return fileURL
         } catch {
             print("Error saving PDF file: \(error)")
+            lastExportFailureReason = error.localizedDescription
             return nil
         }
     }
