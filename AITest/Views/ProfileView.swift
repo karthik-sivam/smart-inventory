@@ -153,7 +153,7 @@ struct ProfileView: View {
 
                         // Manual sync trigger
                         Button {
-                            Task { await firestoreManager.pullFromCloud(modelContext: modelContext) }
+                            Task { await firestoreManager.pullFromCloud(modelContext: modelContext, context: "manual") }
                         } label: {
                             HStack {
                                 Label("Sync Now", systemImage: "arrow.triangle.2.circlepath.icloud")

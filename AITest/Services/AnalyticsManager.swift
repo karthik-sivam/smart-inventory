@@ -212,6 +212,7 @@ enum StoqlyEvent {
     case categoryExplorerViewed
     case settingsViewed
     case exportCompleted(format: String)                   // "csv" | "pdf"
+    case exportFailed(format: String, reason: String)      // iOS-D1d; pair with exportCompleted
 
     // ── Sales & Movements (Phase 7A) ─────────────────────────────────────────────
     case saleRecorded(itemId: String, qty: Double, sellingPrice: Double, costPrice: Double, profit: Double, storageId: String, mode: String)
@@ -226,8 +227,14 @@ enum StoqlyEvent {
     case smartSalesCompleted(mode: String, saleCount: Int)
     case smartSalesFailed(mode: String, reason: String)  // iOS-D1b; parity with smartCountFailed
 
-    // ── Errors / Crashes (non-fatal, for awareness) ───────────────────────────────
-    case syncFailed(reason: String)
+    // ── Sync (iOS-D1d) ────────────────────────────────────────────────────────────
+    // Session pair on pullFromCloud / background flush. context:
+    //   "cold_launch" | "foreground" | "manual" | "background_task"
+    // Per-document write failures keep firing syncFailed with context "write"
+    // (no started) so queued retries stay diagnosable.
+    case syncStarted(context: String)
+    case syncCompleted(context: String, docsUpdated: Int, durationMs: Int)
+    case syncFailed(context: String, errorClass: String, reason: String, durationMs: Int?)
 
     // ── Journey backbone (S24) ───────────────────────────────────────────────────
     case screenViewed(name: String, referrer: String?)
@@ -277,6 +284,7 @@ enum StoqlyEvent {
     case languageChanged(toLanguage: String)
     case aiHelpQuestionAsked(question: String)
     case reorderEmailSent(supplierCount: Int, itemCount: Int)
+    case reorderEmailFailed(reason: String)                // iOS-D1d; pair with reorderEmailSent
     case voiceEngineUsed(engine: String, language: String)
     case languageChosenAtOnboarding(language: String)
     case feedbackSubmitted(type: String)
@@ -357,6 +365,7 @@ enum StoqlyEvent {
         case .categoryExplorerViewed:    return "category_explorer_viewed"
         case .settingsViewed:            return "settings_viewed"
         case .exportCompleted:           return "export_completed"
+        case .exportFailed:              return "export_failed"
 
         case .saleRecorded:              return "sale_recorded"
         case .movementLogged:            return "movement_logged"
@@ -369,6 +378,8 @@ enum StoqlyEvent {
         case .smartSalesCompleted:       return "smart_sales_completed"
         case .smartSalesFailed:          return "smart_sales_failed"
 
+        case .syncStarted:               return "sync_started"
+        case .syncCompleted:             return "sync_completed"
         case .syncFailed:                return "sync_failed"
 
         case .screenViewed:              return "screen_viewed"
@@ -411,6 +422,7 @@ enum StoqlyEvent {
         case .languageChosenAtOnboarding: return "language_chosen_at_onboarding"
         case .aiHelpQuestionAsked:        return "ai_help_question_asked"
         case .reorderEmailSent:           return "reorder_email_sent"
+        case .reorderEmailFailed:         return "reorder_email_failed"
         case .voiceEngineUsed:            return "voice_engine_used"
         case .feedbackSubmitted:          return "feedback_submitted"
         case .feedbackPromptShown:        return "feedback_prompt_shown"
@@ -542,6 +554,7 @@ enum StoqlyEvent {
         case .categoryExplorerViewed:         return [:]
         case .settingsViewed:                 return [:]
         case .exportCompleted(let fmt):       return ["format": fmt]
+        case .exportFailed(let fmt, let r):   return ["format": fmt, "reason": r]
 
         case .saleRecorded(let itemId, let qty, let sp, let cp, let profit, let storageId, let mode):
             return [
@@ -568,7 +581,18 @@ enum StoqlyEvent {
         case .smartSalesFailed(let m, let r):
             return ["mode": m, "reason": r]
 
-        case .syncFailed(let r):              return ["reason": r]
+        case .syncStarted(let context):
+            return ["context": context]
+        case .syncCompleted(let context, let docs, let durationMs):
+            return ["context": context, "docs_updated": docs, "duration_ms": durationMs]
+        case .syncFailed(let context, let errorClass, let r, let durationMs):
+            var props: [String: Any] = [
+                "context": context,
+                "error_class": errorClass,
+                "reason": r
+            ]
+            if let durationMs { props["duration_ms"] = durationMs }
+            return props
 
         case .screenViewed(let name, let referrer):
             var props: [String: Any] = ["screen": name]
@@ -636,6 +660,8 @@ enum StoqlyEvent {
             return ["question": String(text.prefix(500)), "question_length": text.count]
         case .reorderEmailSent(let supplierCount, let itemCount):
             return ["supplier_count": supplierCount, "item_count": itemCount]
+        case .reorderEmailFailed(let r):
+            return ["reason": r]
         case .voiceEngineUsed(let engine, let language):
             return ["engine": engine, "language": language]
         case .languageChosenAtOnboarding(let language):

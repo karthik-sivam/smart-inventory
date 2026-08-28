@@ -129,3 +129,21 @@ Helper: `AIRequestClock` in `AITest/Services/AIRequestClock.swift`. `AIInventory
 Standard `app_version` / `platform` / `is_offline` / `device_class` / `session_id` are attached centrally.
 
 Amplitude project 832993: all five events are official under **AI / Smart Count**.
+
+## Sync / export / reorder email (iOS-D1d)
+
+Session pair on `pullFromCloud` and background `flushPending`. Do not log emails, mailto bodies, or file contents.
+
+`context` on pull/flush: `cold_launch` | `foreground` | `manual` | `background_task`.
+
+Per-document `pushItem` / `pushStorage` failures still emit `sync_failed` with `context=write` and no `sync_started` (existing write-path signal; retries stay diagnosable).
+
+| Event | Properties | When |
+|---|---|---|
+| `sync_started` | `context` | After auth; pull or background flush begins |
+| `sync_completed` | `context`, `docs_updated`, `duration_ms` | Pull fetched N docs, or flush pushed storage+item counts |
+| `sync_failed` | `context`, `error_class`, `reason`, `duration_ms?` | Pull error (`duration_ms` set) or write error (`duration_ms` omitted). `error_class`: `network` \| `rate_limited` \| `auth` \| `server_error` \| `unknown` |
+| `export_failed` | `format`, `reason` | Pair with existing `export_completed`. `format`: `csv` \| `pdf`. Reasons: `pdf_render_failed`, `documents_directory_unavailable`, or write error description |
+| `reorder_email_failed` | `reason` | Pair with existing `reorder_email_sent`. Fires when `UIApplication.open(mailto:)` returns false (`cannot_open_mailto`) |
+
+Not signed in: `pullFromCloud` returns 0 with no started/failed (callers already guard auth).

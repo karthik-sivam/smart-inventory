@@ -730,4 +730,14 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Tests: testAIRequestSucceededOmitsNilModeAndDoesNotLogPromptText, testAIRequestFailedUsesExtendedShape, testAIRequestEmptyAndSmartSalesFailedNames. git diff --check passed. xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. SmartInventoryTests D1b cases \emdash TEST SUCCEEDED.\par
 \bullet Amplitude project 832993 main: five events created, official, category AI / Smart Count, with event-scoped feature/mode/input_size_kb/item_count/duration_ms/provider/reason/stage/error_class plus standard app_version/platform/is_offline/device_class/session_id. D1d not started; Live View of the new events is the merge gate.\par
 \par
+{\b iOS-D1b \emdash merge PR #19 after CEO Live View}\par
+[COMPLETED]\par
+\bullet CEO confirmed D1b. Merged PR #19 into master_scope_v1 as 4e54ba2. Dirty primary Documents checkout was not used.\par
+\par
+{\b iOS-D1d \emdash Sync/export/reorder failures}\par
+[COMPLETED]\par
+\bullet Extended syncFailed to context + error_class + reason + optional duration_ms. Added sync_started, sync_completed, export_failed, reorder_email_failed. pullFromCloud now takes context: cold_launch (startup), foreground (15-min throttle), manual (Sync Now / leave workspace / invite join). flushPending emits background_task started/completed. Per-item write failures keep sync_failed with context=write and no started.\par
+\bullet ExportManager tracks export_failed with format and reason (pdf_render_failed, documents_directory_unavailable, or write error). Reorder email tracks sent only after UIApplication.open succeeds; cannot_open_mailto fires reorder_email_failed. No emails, mailto bodies, or file contents on events.\par
+\bullet Tests: testSyncCompletedAndFailedShapes, testExportFailedAndReorderEmailFailedNames. git diff --check passed. xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. SmartInventoryTests D1d cases \emdash TEST SUCCEEDED.\par
+\par
 }

@@ -555,6 +555,41 @@ final class SmartInventoryTests: XCTestCase {
         XCTAssertEqual(failed.properties["mode"] as? String, "voice")
     }
 
+    func testSyncCompletedAndFailedShapes() {
+        let started = StoqlyEvent.syncStarted(context: "cold_launch")
+        XCTAssertEqual(started.name, "sync_started")
+        XCTAssertEqual(started.properties["context"] as? String, "cold_launch")
+
+        let completed = StoqlyEvent.syncCompleted(context: "foreground", docsUpdated: 12, durationMs: 900)
+        XCTAssertEqual(completed.name, "sync_completed")
+        XCTAssertEqual(completed.properties["docs_updated"] as? Int, 12)
+        XCTAssertEqual(completed.properties["duration_ms"] as? Int, 900)
+
+        let failed = StoqlyEvent.syncFailed(
+            context: "write",
+            errorClass: "network",
+            reason: "The Internet connection appears to be offline.",
+            durationMs: nil
+        )
+        XCTAssertEqual(failed.name, "sync_failed")
+        XCTAssertEqual(failed.properties["context"] as? String, "write")
+        XCTAssertEqual(failed.properties["error_class"] as? String, "network")
+        XCTAssertNil(failed.properties["duration_ms"])
+        XCTAssertNil(failed.properties["email"])
+    }
+
+    func testExportFailedAndReorderEmailFailedNames() {
+        let exportFailed = StoqlyEvent.exportFailed(format: "pdf", reason: "pdf_render_failed")
+        XCTAssertEqual(exportFailed.name, "export_failed")
+        XCTAssertEqual(exportFailed.properties["format"] as? String, "pdf")
+        XCTAssertEqual(exportFailed.properties["reason"] as? String, "pdf_render_failed")
+
+        let emailFailed = StoqlyEvent.reorderEmailFailed(reason: "cannot_open_mailto")
+        XCTAssertEqual(emailFailed.name, "reorder_email_failed")
+        XCTAssertEqual(emailFailed.properties["reason"] as? String, "cannot_open_mailto")
+        XCTAssertNil(emailFailed.properties["body"])
+    }
+
     func testSaleEventRevenueUsesPriceTimesQty() {
         let sale = SaleEvent(
             item: nil,

@@ -144,7 +144,7 @@ struct InventoryAppView: View {
                 let throttleInterval: TimeInterval = 15 * 60
                 let lastSync = firestoreManager.lastSyncDate ?? .distantPast
                 if Date().timeIntervalSince(lastSync) > throttleInterval {
-                    await firestoreManager.pullFromCloud(modelContext: modelContext)
+                    await firestoreManager.pullFromCloud(modelContext: modelContext, context: "foreground")
                 }
             }
         }
@@ -205,7 +205,7 @@ struct InventoryAppView: View {
         case .success:
             pendingInvites = []
             showingInviteAlert = false
-            await firestoreManager.pullFromCloud(modelContext: modelContext)
+            await firestoreManager.pullFromCloud(modelContext: modelContext, context: "manual")
         case .failure:
             showingInviteAlert = false
             if TeamManager.shared.isInTeamWorkspace {
@@ -213,7 +213,7 @@ struct InventoryAppView: View {
                 // failed; safeSave already posted the SwiftData banner. Do not
                 // show the join-failed alert — Try Again would be a no-op.
                 pendingInvites = []
-                await firestoreManager.pullFromCloud(modelContext: modelContext)
+                await firestoreManager.pullFromCloud(modelContext: modelContext, context: "manual")
             } else {
                 let reloaded = await TeamManager.shared.checkPendingInvites()
                 if !reloaded.isEmpty {
@@ -303,7 +303,7 @@ struct InventoryAppView: View {
             //   • Normal login:   restores latest cloud data into local SwiftData.
             //   • After reinstall: SwiftData is empty, pull restores everything.
             //   • Brand-new user: cloud is empty, pull returns 0 — handled below.
-            let cloudCount = await firestoreManager.pullFromCloud(modelContext: modelContext)
+            let cloudCount = await firestoreManager.pullFromCloud(modelContext: modelContext, context: "cold_launch")
 
             // Step 2 — If cloud had nothing but local does, this is a first-time
             //           migration (user had data before cloud sync was introduced).

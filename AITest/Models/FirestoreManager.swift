@@ -382,7 +382,7 @@ class FirestoreManager: ObservableObject {
             try await docRef.setData(data, merge: true)
         } catch {
             print("Firestore: Failed to sync storage '\(storage.name)' — \(error.localizedDescription)")
-            AnalyticsManager.shared.track(.syncFailed(reason: error.localizedDescription))
+            trackWriteSyncFailed(error)
             if isRetryableSyncError(error) {
                 queueWrite(kind: .storage, entityId: storage.id.uuidString)
             }
@@ -407,6 +407,10 @@ class FirestoreManager: ObservableObject {
     /// Cancel all debounced writes and push current local state immediately.
     /// Called when the app enters background so mid-session counts are not lost.
     func flushPending(storages: [Storage], items: [InventoryItem]) async {
+        let context = "background_task"
+        let startedAt = CFAbsoluteTimeGetCurrent()
+        AnalyticsManager.shared.track(.syncStarted(context: context))
+
         pendingItemTasks.values.forEach { $0.cancel() }
         pendingStorageTasks.values.forEach { $0.cancel() }
         pendingItemTasks.removeAll()
@@ -414,6 +418,15 @@ class FirestoreManager: ObservableObject {
 
         await pushAllConcurrently(storages: storages, items: items, maxConcurrent: 10)
         await flushPendingWrites(items: items, storages: storages)
+
+        let durationMs = max(0, Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1_000))
+        AnalyticsManager.shared.track(
+            .syncCompleted(
+                context: context,
+                docsUpdated: storages.count + items.count,
+                durationMs: durationMs
+            )
+        )
     }
 
     /// Push storages then items with a MainActor task pool (SwiftData models are not
@@ -522,7 +535,7 @@ class FirestoreManager: ObservableObject {
             try await docRef.setData(data, merge: true)
         } catch {
             print("Firestore: Failed to sync item '\(item.name)' — \(error.localizedDescription)")
-            AnalyticsManager.shared.track(.syncFailed(reason: error.localizedDescription))
+            trackWriteSyncFailed(error)
             if isRetryableSyncError(error) {
                 queueWrite(kind: .item, entityId: item.id.uuidString)
             }
@@ -669,11 +682,15 @@ class FirestoreManager: ObservableObject {
     /// Returns the number of storages found in Firestore (0 = cloud is empty for this user).
     /// Call on login, on app foreground, or on user-initiated refresh.
     @discardableResult
-    func pullFromCloud(modelContext: ModelContext) async -> Int {
+    func pullFromCloud(modelContext: ModelContext, context: String) async -> Int {
         guard let ref = try? userRef() else {
             syncState = .failed("Not logged in")
             return 0
         }
+
+        let startedAt = CFAbsoluteTimeGetCurrent()
+        AnalyticsManager.shared.track(.syncStarted(context: context))
+        var docsUpdated = 0
 
         syncState = .syncing
         errorMessage = nil
@@ -684,6 +701,7 @@ class FirestoreManager: ObservableObject {
                 .getDocuments()
 
             let cloudStorageCount = storageSnapshot.documents.count
+            docsUpdated += cloudStorageCount
 
             for storageDoc in storageSnapshot.documents {
                 let d = storageDoc.data()
@@ -730,6 +748,7 @@ class FirestoreManager: ObservableObject {
                 let itemSnapshot = try await storageDoc.reference.collection("items")
                     .whereField("isDeleted", isEqualTo: false)
                     .getDocuments()
+                docsUpdated += itemSnapshot.documents.count
 
                 for itemDoc in itemSnapshot.documents {
                     try await mergeItem(from: itemDoc.data(), into: storage, modelContext: modelContext)
@@ -741,6 +760,7 @@ class FirestoreManager: ObservableObject {
             let templateSnapshot = try await ref.collection("itemTemplates")
                 .whereField("isDeleted", isEqualTo: false)
                 .getDocuments()
+            docsUpdated += templateSnapshot.documents.count
 
             for templateDoc in templateSnapshot.documents {
                 let d = templateDoc.data()
@@ -778,6 +798,7 @@ class FirestoreManager: ObservableObject {
                 .order(by: "occurredAt", descending: true)
                 .limit(to: 50)
                 .getDocuments()
+            docsUpdated += activitySnap.documents.count
 
             for doc in activitySnap.documents {
                 let d = doc.data()
@@ -818,6 +839,7 @@ class FirestoreManager: ObservableObject {
                 .collection("saleEvents")
                 .order(by: "occurredAt", descending: true)
                 .getDocuments()
+            docsUpdated += saleEventsSnap.documents.count
 
             for doc in saleEventsSnap.documents {
                 let d = doc.data()
@@ -858,6 +880,7 @@ class FirestoreManager: ObservableObject {
                 .collection("inventoryMovements")
                 .order(by: "occurredAt", descending: true)
                 .getDocuments()
+            docsUpdated += movementsSnap.documents.count
 
             for doc in movementsSnap.documents {
                 let d = doc.data()
@@ -904,12 +927,18 @@ class FirestoreManager: ObservableObject {
             await flushPendingWrites(items: allItems, storages: allStorages)
 
             print("Firestore ✅ Pull complete — \(cloudStorageCount) storages synced.")
+            let durationMs = max(0, Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1_000))
+            AnalyticsManager.shared.track(
+                .syncCompleted(context: context, docsUpdated: docsUpdated, durationMs: durationMs)
+            )
             return cloudStorageCount
 
         } catch {
             syncState = .failed(error.localizedDescription)
             errorMessage = error.localizedDescription
             print("Firestore ❌ Pull failed — \(error.localizedDescription)")
+            let durationMs = max(0, Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1_000))
+            trackSyncFailed(context: context, error: error, durationMs: durationMs)
             return 0
         }
     }
@@ -999,6 +1028,42 @@ class FirestoreManager: ObservableObject {
             }
         }
         return false
+    }
+
+    private func trackWriteSyncFailed(_ error: Error) {
+        trackSyncFailed(context: "write", error: error, durationMs: nil)
+    }
+
+    private func trackSyncFailed(context: String, error: Error, durationMs: Int?) {
+        AnalyticsManager.shared.track(
+            .syncFailed(
+                context: context,
+                errorClass: Self.syncErrorClass(for: error),
+                reason: error.localizedDescription,
+                durationMs: durationMs
+            )
+        )
+    }
+
+    static func syncErrorClass(for error: Error) -> String {
+        if error is URLError { return "network" }
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain { return "network" }
+        if ns.domain == FirestoreErrorDomain {
+            switch FirestoreErrorCode.Code(rawValue: ns.code) {
+            case .unavailable, .deadlineExceeded, .cancelled:
+                return "network"
+            case .resourceExhausted:
+                return "rate_limited"
+            case .unauthenticated, .permissionDenied:
+                return "auth"
+            case .internal, .dataLoss, .aborted:
+                return "server_error"
+            default:
+                return "unknown"
+            }
+        }
+        return "unknown"
     }
 
     private func pushStorageThrowing(_ storage: Storage) async throws {
