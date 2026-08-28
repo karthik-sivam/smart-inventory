@@ -740,4 +740,14 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet ExportManager tracks export_failed with format and reason (pdf_render_failed, documents_directory_unavailable, or write error). Reorder email tracks sent only after UIApplication.open succeeds; cannot_open_mailto fires reorder_email_failed. No emails, mailto bodies, or file contents on events.\par
 \bullet Tests: testSyncCompletedAndFailedShapes, testExportFailedAndReorderEmailFailedNames. git diff --check passed. xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. SmartInventoryTests D1d cases \emdash TEST SUCCEEDED.\par
 \par
+{\b iOS-D1d \emdash merge PR #20 after CEO Live View}\par
+[COMPLETED]\par
+\bullet CEO confirmed D1d. Merged PR #20 into master_scope_v1 as c9754f2. Dirty primary Documents checkout was not used. Amplitude MCP still unauthenticated this session \emdash D1d events were not officialized from this pass.\par
+\par
+{\b iOS-T5 \emdash Remove Coming soon from paywall multi-user row}\par
+[COMPLETED]\par
+\bullet PaywallView ProFeatureList: Multi-user collaboration no longer shows a Coming soon note. Team workspaces already ship behind isPro.\par
+\bullet Localizable.xcstrings "Coming soon" translations left in place (14 locales, needs_review) per spec; no remaining Swift caller of that exact string. NotificationSettingsView still uses the separate "Coming soon (server push)" key.\par
+\bullet Verification: git diff --check passed; xcodebuild SmartInventory iPhone 17 Pro simulator \emdash BUILD SUCCEEDED.\par
+\par
 }

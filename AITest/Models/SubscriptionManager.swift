@@ -1000,7 +1000,7 @@ private struct ProFeatureList: View {
                 PaywallFeatureRow(icon: "camera.fill",                       color: .teal,         text: "AI Photo Inventory Scan",    note: "Free: 3/month")
                 PaywallFeatureRow(icon: "doc.text.viewfinder",               color: .teal,         text: "AI Sheet Inventory Import",  note: "Free: 3/month")
                 PaywallFeatureRow(icon: "square.and.arrow.down.on.square", color: .indigo, text: "Bulk CSV / Excel import")
-                PaywallFeatureRow(icon: "person.2.fill",            color: .cyan,   text: "Multi-user collaboration",            note: "Coming soon")
+                PaywallFeatureRow(icon: "person.2.fill",            color: .cyan,   text: "Multi-user collaboration")
                 PaywallFeatureRow(icon: "xmark.circle.fill",        color: .gray,   text: "No ads")
             }
 
