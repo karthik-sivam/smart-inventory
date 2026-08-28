@@ -750,4 +750,14 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Localizable.xcstrings "Coming soon" translations left in place (14 locales, needs_review) per spec; no remaining Swift caller of that exact string. NotificationSettingsView still uses the separate "Coming soon (server push)" key.\par
 \bullet Verification: git diff --check passed; xcodebuild SmartInventory iPhone 17 Pro simulator \emdash BUILD SUCCEEDED.\par
 \par
+{\b iOS-T5 \emdash merge PR #21}\par
+[COMPLETED]\par
+\bullet Merged PR #21 into master_scope_v1 as c1b4250. Dirty primary Documents checkout was not used.\par
+\par
+{\b iOS-T6 \emdash Stale $2.99/$22.99 pricing sweep}\par
+[COMPLETED]\par
+\bullet CLAUDE.md StoreKit product IDs now quote ₹499/month, ₹3,999/year (StoreKit-localized per storefront) and Remove Ads as displayPrice-only. No $2.99/$22.99/$3.99 remain in AITest/, AITestTests/, AITestUITests/, or CLAUDE.md. Paywall already uses Product.displayPrice; no new Swift price helpers needed.\par
+\bullet Leftover docs outside spec paths (not changed): XCODE_SETUP_GUIDE.md (old bundle + $2.99) and ROADMAP.md ($3.99 Remove Ads row).\par
+\bullet Markdown-only change; xcodebuild not re-run.\par
+\par
 }

@@ -166,9 +166,11 @@ users/{uid}/
 | Remove Ads | Free limits retained, ads removed |
 
 **StoreKit product IDs:**
-- `com.vishuddhi.stoqly.pro.monthly` — $2.99/month
-- `com.vishuddhi.stoqly.pro.annual` — $22.99/year
-- `com.vishuddhi.stoqly.removeads` — $3.99 one-time
+- `com.vishuddhi.stoqly.pro.monthly` — ₹499/month (StoreKit-localized per storefront)
+- `com.vishuddhi.stoqly.pro.annual` — ₹3,999/year (StoreKit-localized per storefront)
+- `com.vishuddhi.stoqly.removeads` — one-time; never hardcode — use `Product.displayPrice`
+
+User-facing paywall prices already come from StoreKit `Product.displayPrice` via `SubscriptionManager.formattedPrice(for:)`. Do not quote $2.99 / $22.99 / $3.99.
 
 All Pro gates: `SubscriptionManager.shared.isPro`
 All ad suppression: `SubscriptionManager.shared.hasRemovedAds || isPro`
