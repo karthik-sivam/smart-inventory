@@ -448,9 +448,15 @@ final class SmartCountCSVViewModel: ObservableObject {
         guard !headers.isEmpty, !rows.isEmpty else { return }
         isSuggestingMappings = true
         defer { isSuggestingMappings = false }
+        let sample = rows.first ?? []
+        let clock = AIRequestClock(
+            feature: "sheet_count",
+            mode: "csv",
+            inputBytes: headers.joined().utf8.count
+        )
         do {
-            let sample = rows.first ?? []
             let suggestions = try await AIInventoryService.shared.suggestCountColumnMapping(headers: headers, sampleRow: sample)
+            clock.finish(itemCount: suggestions.count, emptyReason: "no_mapping_suggestions")
             for (indexStr, fieldName) in suggestions {
                 guard let index = Int(indexStr) else { continue }
                 let matched = CountImportField.allCases.first { $0.rawValue == fieldName } ?? .skip
@@ -459,6 +465,7 @@ final class SmartCountCSVViewModel: ObservableObject {
                 }
             }
         } catch {
+            clock.finish(error: error, stage: "parse")
             // Fall back to keyword autoDetect() already applied
         }
     }

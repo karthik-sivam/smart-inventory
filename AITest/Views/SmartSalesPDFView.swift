@@ -90,6 +90,7 @@ struct SmartSalesPDFView: View {
         guard let url = pdfURL else { return }
         step = .analyzing
         Task {
+            let clock = AIRequestClock(feature: "sheet_sales", mode: "pdf")
             do {
                 guard url.startAccessingSecurityScopedResource() else { throw URLError(.fileDoesNotExist) }
                 defer { url.stopAccessingSecurityScopedResource() }
@@ -109,9 +110,12 @@ struct SmartSalesPDFView: View {
                     pages: images,
                     knownItemNames: allItems.map(\.name)
                 )
+                clock.finish(itemCount: parsedRows.count)
                 AnalyticsManager.shared.track(.smartSalesModeSelected(mode: "pdf"))
                 step = .review
             } catch {
+                clock.finish(error: error, stage: "parse")
+                AnalyticsManager.shared.track(.smartSalesFailed(mode: "pdf", reason: error.localizedDescription))
                 errorMessage = error.localizedDescription
                 step = .pick
             }

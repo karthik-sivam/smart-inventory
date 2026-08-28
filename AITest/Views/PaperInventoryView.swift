@@ -427,6 +427,11 @@ struct PaperInventoryView: View {
         }
 
         let compressed = image.jpegData(compressionQuality: 0.75) ?? Data()
+        let clock = AIRequestClock(
+            feature: "sheet_count",
+            mode: "sheet",
+            inputBytes: compressed.count
+        )
 
         do {
             let items = try await AIInventoryService.shared.parseInventorySheet(
@@ -434,6 +439,7 @@ struct PaperInventoryView: View {
                 inventoryHints: Array(allItems.prefix(50).map(\.name)),
                 appLanguageCode: localizationManager.currentCode
             )
+            clock.finish(itemCount: items.count)
             usageManager.recordUse(.paper)
 
             await MainActor.run {
@@ -452,6 +458,7 @@ struct PaperInventoryView: View {
         } catch {
             await MainActor.run {
                 errorMessage = error.localizedDescription
+                clock.finish(error: error, stage: "parse")
                 AnalyticsManager.shared.track(.smartCountFailed(mode: "sheet", reason: error.localizedDescription))
                 step = .capture
             }

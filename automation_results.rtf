@@ -719,4 +719,15 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Merged origin/master_scope_v1 (c8b3712, PR #18) into iOS-D1c. Swift auto-merged with `code:` intact on every barcodeScanResult call site. Only automation_results.rtf conflicted; D1c and D1a-fix entries both kept.\par
 \bullet PR #17 not merged. D1c Live View of the eight terminals is still the merge gate. D1b/D1d not started.\par
 \par
+{\b iOS-D1c \emdash merge PR #17 after CEO Live View}\par
+[COMPLETED]\par
+\bullet CEO confirmed D1c (plus barcode `code`) on the D1c worktree Xcode project. Merged PR #17 into master_scope_v1 as 4a335ed. Dirty primary Documents checkout was not used.\par
+\par
+{\b iOS-D1b \emdash AI request started/succeeded/empty/failed}\par
+[COMPLETED]\par
+\bullet Extended StoqlyEvent with ai_request_started / succeeded / empty / failed (extended failed shape: stage, error_class, duration_ms) and smart_sales_failed. Removed unused old aiRequestFailed(feature:reason:). AIRequestClock.swift fires started on init and exactly one terminal.\par
+\bullet Wired voice_count, photo_count, sheet_count, voice_sales, photo_sales, sheet_sales, ask_ai_help after usage/paywall gates. Kept smartCountCompleted/Failed, smartSalesCompleted, bulkImport*, aiHelpQuestionAsked. identify_product and sheet_import not wired (no LLM callers). New events do not log prompts/transcripts/OCR/answers.\par
+\bullet Tests: testAIRequestSucceededOmitsNilModeAndDoesNotLogPromptText, testAIRequestFailedUsesExtendedShape, testAIRequestEmptyAndSmartSalesFailedNames. git diff --check passed. xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. SmartInventoryTests D1b cases \emdash TEST SUCCEEDED.\par
+\bullet Amplitude project 832993 main: five events created, official, category AI / Smart Count, with event-scoped feature/mode/input_size_kb/item_count/duration_ms/provider/reason/stage/error_class plus standard app_version/platform/is_offline/device_class/session_id. D1d not started; Live View of the new events is the merge gate.\par
+\par
 }

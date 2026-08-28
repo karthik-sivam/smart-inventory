@@ -505,6 +505,56 @@ final class SmartInventoryTests: XCTestCase {
         XCTAssertEqual(event.properties["duration_ms"] as? Int, 125)
     }
 
+    func testAIRequestSucceededOmitsNilModeAndDoesNotLogPromptText() {
+        let event = StoqlyEvent.aiRequestSucceeded(
+            feature: "voice_count",
+            mode: nil,
+            itemCount: 3,
+            durationMs: 1200,
+            provider: "claude"
+        )
+        XCTAssertEqual(event.name, "ai_request_succeeded")
+        XCTAssertEqual(event.properties["feature"] as? String, "voice_count")
+        XCTAssertEqual(event.properties["item_count"] as? Int, 3)
+        XCTAssertEqual(event.properties["duration_ms"] as? Int, 1200)
+        XCTAssertEqual(event.properties["provider"] as? String, "claude")
+        XCTAssertNil(event.properties["mode"])
+        XCTAssertNil(event.properties["question"])
+        XCTAssertNil(event.properties["transcript"])
+    }
+
+    func testAIRequestFailedUsesExtendedShape() {
+        let event = StoqlyEvent.aiRequestFailed(
+            feature: "ask_ai_help",
+            mode: "help",
+            stage: "receive",
+            errorClass: "network",
+            reason: "The Internet connection appears to be offline.",
+            durationMs: 800
+        )
+        XCTAssertEqual(event.name, "ai_request_failed")
+        XCTAssertEqual(event.properties["feature"] as? String, "ask_ai_help")
+        XCTAssertEqual(event.properties["mode"] as? String, "help")
+        XCTAssertEqual(event.properties["stage"] as? String, "receive")
+        XCTAssertEqual(event.properties["error_class"] as? String, "network")
+        XCTAssertEqual(event.properties["duration_ms"] as? Int, 800)
+    }
+
+    func testAIRequestEmptyAndSmartSalesFailedNames() {
+        let empty = StoqlyEvent.aiRequestEmpty(
+            feature: "photo_count",
+            mode: "photo",
+            durationMs: 400,
+            reason: "no_items_returned"
+        )
+        XCTAssertEqual(empty.name, "ai_request_empty")
+        XCTAssertEqual(empty.properties["reason"] as? String, "no_items_returned")
+
+        let failed = StoqlyEvent.smartSalesFailed(mode: "voice", reason: "parse_error")
+        XCTAssertEqual(failed.name, "smart_sales_failed")
+        XCTAssertEqual(failed.properties["mode"] as? String, "voice")
+    }
+
     func testSaleEventRevenueUsesPriceTimesQty() {
         let sale = SaleEvent(
             item: nil,

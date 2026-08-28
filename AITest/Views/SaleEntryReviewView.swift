@@ -433,6 +433,7 @@ struct SaleEntryReviewView: View {
         guard modelContext.safeSave(context: "SmartSalesAccept") else {
             modelContext.rollback()
             isSaving = false
+            AnalyticsManager.shared.track(.smartSalesFailed(mode: "batch", reason: "swift_data_save_failed"))
             return
         }
 

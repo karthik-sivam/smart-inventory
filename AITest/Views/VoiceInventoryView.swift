@@ -856,6 +856,11 @@ struct VoiceInventoryView: View {
         }
 
         step = .parsing
+        let clock = AIRequestClock(
+            feature: "voice_count",
+            mode: "voice",
+            inputBytes: transcript.utf8.count
+        )
         do {
             let hints = allItems.prefix(50).map(\.name)
             let items = try await AIInventoryService.shared.parseVoiceTranscript(
@@ -863,6 +868,7 @@ struct VoiceInventoryView: View {
                 inventoryHints: Array(hints),
                 appLanguageCode: localizationManager.currentCode
             )
+            clock.finish(itemCount: items.count)
             usageManager.recordUse(.voice)
             editableItems = items.map { EditableItem(from: $0) }
             editableItems.applyNameMatching(in: selectedStorage)
@@ -873,6 +879,7 @@ struct VoiceInventoryView: View {
             step = .review
         } catch {
             errorMessage = error.localizedDescription
+            clock.finish(error: error, stage: "parse")
             AnalyticsManager.shared.track(.smartCountFailed(mode: "voice", reason: error.localizedDescription))
             step = .record
         }

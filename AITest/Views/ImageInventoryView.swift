@@ -830,6 +830,11 @@ struct ImageInventoryView: View {
         }
 
         let compressed = image.jpegData(compressionQuality: 0.7) ?? Data()
+        let clock = AIRequestClock(
+            feature: "photo_count",
+            mode: "photo",
+            inputBytes: compressed.count
+        )
 
         do {
             let items = try await AIInventoryService.shared.identifyProduct(
@@ -837,6 +842,7 @@ struct ImageInventoryView: View {
                 fluidMode: fluidMode,
                 appLanguageCode: LocalizationManager.shared.currentCode
             )
+            clock.finish(itemCount: items.count)
             usageManager.recordUse(.image)
 
             let storage = selectedStorage
@@ -897,6 +903,7 @@ struct ImageInventoryView: View {
         } catch {
             await MainActor.run {
                 errorMessage = error.localizedDescription
+                clock.finish(error: error, stage: "identify")
                 AnalyticsManager.shared.track(.smartCountFailed(mode: "photo", reason: error.localizedDescription))
                 step = .capture
             }
