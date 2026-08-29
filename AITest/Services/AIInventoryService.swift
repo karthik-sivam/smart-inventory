@@ -307,7 +307,8 @@ final class AIInventoryService {
         - Unlimited AI uses for all SmartCount modes.
         - Unlimited team members.
         - Full analytics history (free plan: last 30 days only).
-        - Barcode scanner pro (enriched product data).
+        - Bulk barcode scan on Pro: keep the camera open, queue codes, review, save all. \
+          Free users get unlimited single scans (one code at a time). Enrichment may fill names.
         - Item photos.
         - Remove Ads (also available as a separate one-time purchase).
         - Stoqly has a 7-day free trial. Users can start it from Settings or from any paywall.

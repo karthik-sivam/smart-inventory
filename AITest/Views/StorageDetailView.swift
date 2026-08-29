@@ -8,6 +8,7 @@ struct StorageDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var currencyManager: CurrencyManager
+    @EnvironmentObject private var subscriptionManager: SubscriptionManager
     @StateObject private var viewModel = StorageDetailViewModel()
     @StateObject private var teamManager = TeamManager.shared
     @State private var searchText = ""
@@ -24,6 +25,8 @@ struct StorageDetailView: View {
     @State private var toastMessage: String? = nil
     @State private var showingQuickSaleItem: InventoryItem? = nil
     @State private var showingSmartCount = false
+    @State private var showingBulkBarcodeScan = false
+    @State private var showingBarcodeBulkPaywall = false
     @State private var showingInvoiceImport = false
     @State private var savedPurchaseCount = 0
     @State private var showPurchaseToast = false
@@ -98,6 +101,22 @@ struct StorageDetailView: View {
                     }
                     .accessibilityLabel("Smart Count")
                     .accessibilityIdentifier("smart-count-button")
+
+                    if teamManager.canEdit {
+                        Button {
+                            if subscriptionManager.canUseBarcodeScannerPro {
+                                showingBulkBarcodeScan = true
+                            } else {
+                                showingBarcodeBulkPaywall = true
+                            }
+                        } label: {
+                            Image(systemName: "barcode.viewfinder")
+                                .font(.title2)
+                                .foregroundColor(.stoqlyPrimary)
+                        }
+                        .accessibilityLabel(L("bulkScan.toolbar", "Bulk barcode scan"))
+                        .accessibilityIdentifier("bulkBarcodeScanButton")
+                    }
 
                     if teamManager.canEdit {
                         Button { showingInvoiceImport = true } label: {
@@ -296,6 +315,22 @@ struct StorageDetailView: View {
                 }
             )
             .sheetStyle()
+        }
+        .fullScreenCover(isPresented: $showingBulkBarcodeScan) {
+            BulkBarcodeScanFlowView(
+                storage: storage,
+                onComplete: { savedCount in
+                    toastMessage = String(
+                        format: L("toast.itemsUpdated", "%1$d item%2$@ updated"),
+                        savedCount,
+                        savedCount == 1 ? "" : "s"
+                    )
+                }
+            )
+        }
+        .sheet(isPresented: $showingBarcodeBulkPaywall) {
+            PaywallView(source: "barcode_bulk", trigger: "bulk_scan")
+                .sheetStyle()
         }
         .sheet(isPresented: $showingInvoiceImport) {
             PurchaseInvoiceImportView(defaultStorage: storage)
@@ -2455,5 +2490,6 @@ struct CountFirstTimeTipsView: View {
     let storage = Storage(name: "Sample Storage", location: "Warehouse A", description: "Sample description")
     return StorageDetailView(storage: storage)
         .environmentObject(CurrencyManager())
+        .environmentObject(SubscriptionManager.shared)
         .modelContainer(for: [Storage.self, InventoryItem.self, UOM.self, InventoryCount.self], inMemory: true)
 }

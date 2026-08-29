@@ -162,6 +162,9 @@ enum StoqlyEvent {
 
     // ── Barcode ──────────────────────────────────────────────────────────────────
     case barcodeScanInitiated
+    case barcodeBulkScanStarted(source: String)
+    case barcodeBulkScanCompleted(scannedCount: Int, newCount: Int, updatedCount: Int, durationMs: Int)
+    case barcodeBulkScanAbandoned(stage: String, scannedCount: Int, durationMs: Int)
     case barcodeScanResult(
         outcome: String,
         provider: String,
@@ -333,6 +336,9 @@ enum StoqlyEvent {
         case .itemCounted:               return "item_counted"
 
         case .barcodeScanInitiated:      return "barcode_scan_initiated"
+        case .barcodeBulkScanStarted:    return "barcode_bulk_scan_started"
+        case .barcodeBulkScanCompleted:  return "barcode_bulk_scan_completed"
+        case .barcodeBulkScanAbandoned:  return "barcode_bulk_scan_abandoned"
         case .barcodeScanResult:         return "barcode_scan_result"
 
         case .smartCountOpened:          return "smart_count_opened"
@@ -468,6 +474,17 @@ enum StoqlyEvent {
         case .itemCounted(let s):             return ["storage_name": s]
 
         case .barcodeScanInitiated:           return [:]
+        case .barcodeBulkScanStarted(let source):
+            return ["source": source]
+        case .barcodeBulkScanCompleted(let scanned, let newCount, let updated, let durationMs):
+            return [
+                "scanned_count": scanned,
+                "new_count": newCount,
+                "updated_count": updated,
+                "duration_ms": durationMs
+            ]
+        case .barcodeBulkScanAbandoned(let stage, let scanned, let durationMs):
+            return ["stage": stage, "scanned_count": scanned, "duration_ms": durationMs]
         case .barcodeScanResult(let outcome, let provider, let symbology, let code, let durationMs, let reason):
             var props: [String: Any] = [
                 "outcome": outcome,

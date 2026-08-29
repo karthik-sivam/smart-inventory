@@ -19,7 +19,7 @@ import GoogleMobileAds
  2. Unlimited Storages        — Remove 5-storage free limit
  3. Advanced Analytics        — Trend charts, detailed reports
  4. PDF Export                — Branded PDF reports
- 5. Barcode Scanner Pro       — Bulk scan, history
+  5. Barcode Scanner Pro       — Bulk scan (camera stays open), then save all
  6. Push Notifications        — Low-stock alerts via FCM
  7. Multi-User Collaboration  — Invite team members
  8. AI Reorder Suggestions    — Demand forecasting

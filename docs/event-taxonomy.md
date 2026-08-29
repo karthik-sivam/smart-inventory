@@ -147,3 +147,15 @@ Per-document `pushItem` / `pushStorage` failures still emit `sync_failed` with `
 | `reorder_email_failed` | `reason` | Pair with existing `reorder_email_sent`. Fires when `UIApplication.open(mailto:)` returns false (`cannot_open_mailto`) |
 
 Not signed in: `pullFromCloud` returns 0 with no started/failed (callers already guard auth).
+
+## Bulk barcode scan (iOS-F2)
+
+Pro-only keep-camera-open session. Free remains unlimited **single** scan. Do not emit `barcode_scan_result` per beep in a bulk session.
+
+| Event | Properties | When |
+|---|---|---|
+| `barcode_bulk_scan_started` | `source` (`storage_detail`) | Bulk camera opens after the Pro gate |
+| `barcode_bulk_scan_completed` | `scanned_count`, `new_count`, `updated_count`, `duration_ms` | Save all on the review list |
+| `barcode_bulk_scan_abandoned` | `stage` (`camera` \| `review` \| `empty`), `scanned_count`, `duration_ms` | Cancel / Done with nothing queued |
+
+Paywall: `paywall_shown` with `source=barcode_bulk`. Session events do not include barcode `code` (volume); codes live on the saved items. Barcodes are commercial IDs, not PII.
