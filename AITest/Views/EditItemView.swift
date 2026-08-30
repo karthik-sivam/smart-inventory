@@ -106,6 +106,15 @@ struct EditItemView: View {
                                 .background(Color.secondary.opacity(0.12))
                                 .clipShape(Capsule())
                         }
+                        if !formVM.barcode.isEmpty {
+                            Text(L("addItem.barcodeSet", "Barcode set"))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.secondary.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
                         Spacer()
                         Image(systemName: isShowingMoreDetails ? "chevron.up" : "chevron.down")
                             .foregroundColor(.secondary)
@@ -400,6 +409,9 @@ struct EditItemView: View {
                     pendingScannedBarcode = nil
                     pendingScannedSymbology = nil
                     pendingScanDurationMs = 0
+                    if !isShowingMoreDetails {
+                        isShowingMoreDetails = true
+                    }
                     // Phase 3 — only enrich when the user hasn't started
                     // changing the item's name yet. This protects users who
                     // are scanning a barcode INTO an existing item solely to

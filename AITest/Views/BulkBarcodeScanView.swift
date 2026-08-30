@@ -17,6 +17,7 @@ struct BulkBarcodeScanFlowView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \UOM.name) private var uoms: [UOM]
     @StateObject private var viewModel = BulkBarcodeScanViewModel()
+    @StateObject private var scanHandler = BulkScanCodeHandler()
     @State private var step: Step = .scanning
     @State private var showingManualEntry = false
     @State private var manualCode = ""
@@ -38,6 +39,9 @@ struct BulkBarcodeScanFlowView: View {
         }
         .onAppear {
             viewModel.bind(items: storage.items)
+            scanHandler.onCode = { code, symbology in
+                acceptCode(code, symbology: symbology)
+            }
             if !didEmitTerminal {
                 AnalyticsManager.shared.track(.barcodeBulkScanStarted(source: "storage_detail"))
             }
@@ -65,9 +69,7 @@ struct BulkBarcodeScanFlowView: View {
 
     private var scanningLayer: some View {
         ZStack(alignment: .bottom) {
-            BulkBarcodeScannerRepresentable(onCode: { code, symbology in
-                acceptCode(code, symbology: symbology)
-            })
+            BulkBarcodeScannerRepresentable(handler: scanHandler)
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -78,6 +80,13 @@ struct BulkBarcodeScanFlowView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
+
+                    Spacer()
+
+                    Text(L("bulkScan.toolbar", "Bulk barcode scan"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
 
                     Spacer()
 
@@ -382,13 +391,20 @@ struct BulkBarcodeScanFlowView: View {
     }
 }
 
+/// Stable callback so SwiftUI does not recreate the camera VC when the
+/// overlay counter updates after each beep.
+@MainActor
+private final class BulkScanCodeHandler: ObservableObject {
+    var onCode: (String, String) -> Void = { _, _ in }
+}
+
 // MARK: - VisionKit host (keep-open)
 
 private struct BulkBarcodeScannerRepresentable: UIViewControllerRepresentable {
-    let onCode: (String, String) -> Void
+    let handler: BulkScanCodeHandler
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onCode: onCode)
+        Coordinator(handler: handler)
     }
 
     func makeUIViewController(context: Context) -> UIViewController {
@@ -424,19 +440,20 @@ private struct BulkBarcodeScannerRepresentable: UIViewControllerRepresentable {
         context.coordinator.scanner = scanner
 
         let host = BulkScannerHostController(scanner: scanner)
-        host.modalPresentationStyle = .overFullScreen
         return host
         #endif
     }
 
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        context.coordinator.handler = handler
+    }
 
     final class Coordinator: NSObject, DataScannerViewControllerDelegate {
-        let onCode: (String, String) -> Void
+        var handler: BulkScanCodeHandler
         weak var scanner: DataScannerViewController?
 
-        init(onCode: @escaping (String, String) -> Void) {
-            self.onCode = onCode
+        init(handler: BulkScanCodeHandler) {
+            self.handler = handler
         }
 
         func dataScanner(
@@ -450,7 +467,7 @@ private struct BulkBarcodeScannerRepresentable: UIViewControllerRepresentable {
                       !payload.isEmpty else { continue }
                 let symbology = barcode.observation.symbology.rawValue
                 DispatchQueue.main.async { [weak self] in
-                    self?.onCode(payload, symbology)
+                    self?.handler.onCode(payload, symbology)
                 }
             }
         }

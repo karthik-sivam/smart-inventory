@@ -765,4 +765,10 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Pro keep-camera-open bulk scan from Storage detail (barcode.viewfinder). Queue + 1.2s per-code cooldown; Done opens an in-cover review list; Save increments existing barcodes in that storage or adds new items. Free: unlimited single scan; bulk tap shows Paywall source=barcode_bulk. Paywall row no longer says history.\par
 \bullet Events: barcode_bulk_scan_started / completed / abandoned. No per-beep barcode_scan_result. Tests: session event shapes, increment vs new, cooldown. xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. SmartInventoryTests F2 cases \emdash TEST SUCCEEDED. CEO console work listed in docs/ceo-manual-work.md.\par
 \par
+{\b iOS-F2 follow-up \emdash Add Item scan vs bulk identity}\par
+[COMPLETED WITH ISSUES]\par
+\bullet CEO Pro device test hit Add Item single-scan (camera dismisses on first code; barcode lives under collapsed More details), not Storage-toolbar bulk. Add Item/Edit Item now expand More details after a successful scan and show a Barcode set chip on the collapsed row.\par
+\bullet Storage bulk icon now has a plus badge; bulk camera title is Bulk barcode scan; VisionKit host uses a stable BulkScanCodeHandler so overlay counter updates do not recreate the camera VC.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. Device keep-open smoke still owed on the storage toolbar path. Free paywall test still owed.\par
+\par
 }

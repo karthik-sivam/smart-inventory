@@ -113,6 +113,12 @@ struct StorageDetailView: View {
                             Image(systemName: "barcode.viewfinder")
                                 .font(.title2)
                                 .foregroundColor(.stoqlyPrimary)
+                                .overlay(alignment: .bottomTrailing) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(.stoqlyAccent)
+                                        .background(Circle().fill(Color(.systemBackground)))
+                                }
                         }
                         .accessibilityLabel(L("bulkScan.toolbar", "Bulk barcode scan"))
                         .accessibilityIdentifier("bulkBarcodeScanButton")
@@ -672,6 +678,15 @@ struct AddItemView: View {
                                 .background(Color.secondary.opacity(0.12))
                                 .clipShape(Capsule())
                         }
+                        if !barcode.isEmpty {
+                            Text(L("addItem.barcodeSet", "Barcode set"))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.secondary.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
                         Spacer()
                         Image(systemName: isShowingMoreDetails ? "chevron.up" : "chevron.down")
                             .foregroundColor(.secondary)
@@ -884,6 +899,9 @@ struct AddItemView: View {
                     pendingScannedBarcode = nil
                     pendingScannedSymbology = nil
                     pendingScanDurationMs = 0
+                    if !isShowingMoreDetails {
+                        isShowingMoreDetails = true
+                    }
                     if subscriptionManager.isPro && name.isEmpty {
                         Task {
                             isEnriching = true
