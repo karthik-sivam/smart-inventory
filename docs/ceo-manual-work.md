@@ -2,7 +2,7 @@
 
 Cursor cannot do these. Nothing here is a code PR.
 
-Last updated: 2026-08-29 (iOS-F2 decisions locked: Growth option A).
+Last updated: 2026-09-01 (iOS-F2 **merged** as PR #23, `8507b77` on `master_scope_v1`).
 
 ---
 
@@ -23,9 +23,9 @@ Source of claims: Release Gate tab in `docs/Stoqly_master_scope_v1_Manual_QA.xls
 
 ---
 
-## After iOS-F2 merges (Amplitude)
+## After iOS-F2 merge (Amplitude) — still on you
 
-Claude / data-analyst: officialize on project **832993** (create unexpected, then update metadata):
+F2 is in production code on `master_scope_v1`. Claude / data-analyst: officialize on project **832993** (create unexpected, then update metadata):
 
 - `barcode_bulk_scan_started`
 - `barcode_bulk_scan_completed` (`scanned_count`, `new_count`, `updated_count`, `duration_ms`)
