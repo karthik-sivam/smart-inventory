@@ -252,7 +252,6 @@ struct BulkBarcodeScanFlowView: View {
         let accepted = viewModel.ingest(code: code, symbology: symbology)
         guard accepted else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        AdManager.shared.recordCompletion(event: .barcodeScanned)
         let normalized = BulkBarcodeScanViewModel.normalize(code)
         let row = viewModel.rows.first(where: { $0.code == normalized })
         if row?.isExisting != true {

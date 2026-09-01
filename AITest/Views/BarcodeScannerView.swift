@@ -182,9 +182,13 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
 
             // onScan is called on the main thread; the caller's closure sets
             // formVM.barcode and dismisses the sheet.
+            // Do NOT recordCompletion(.barcodeScanned) here. That opens
+            // RealAdIntegrationView's interstitial fullScreenCover from the
+            // tab root, which SwiftUI uses to tear down this scanner (and
+            // the Add Item sheet under it). Free-tier ads fire on itemAdded
+            // after Save instead.
             DispatchQueue.main.async { [weak self] in
                 self?.onScan(payload, symbology)
-                AdManager.shared.recordCompletion(event: .barcodeScanned)
             }
         }
 

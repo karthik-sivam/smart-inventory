@@ -776,4 +776,8 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Pro Items toolbar barcode (same plus-badge icon) opens keep-open bulk. Uses the storage chip when one is selected; otherwise a Save scans to picker. Analytics source=item_list. Free/view-only still get one-shot Scan to Find. Add Item sheet remains one-shot for everyone. Storage-detail Free tap still paywall.\par
 \bullet Build: xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. SmartInventoryTests F2 cases \emdash TEST SUCCEEDED.\par
 \par
+{\b iOS-F2 follow-up \emdash Pro scan interstitial}\par
+[COMPLETED]\par
+\bullet recordCompletion ignored isPro/shouldShowAds, so a Pro barcode beep opened RealAdIntegrationView's interstitial fullScreenCover. Continue dismissed the scanner and the Add Item / bulk session under it. Gate every show/load/preload path on shouldShowAds; drop per-beep barcodeScanned from the camera (Free ads still fire on itemAdded after Save).\par
+\par
 }
