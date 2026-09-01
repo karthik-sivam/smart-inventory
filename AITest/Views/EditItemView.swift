@@ -418,9 +418,6 @@ struct EditItemView: View {
                     // associate the code with that record — we mustn't
                     // clobber their carefully chosen name with whatever the
                     // external database returns.
-                    //
-                    // Gated on `isPro` inside `enrichFromBarcode` so free
-                    // users get no network call.
                     if formVM.name == item.name {
                         Task {
                             await formVM.enrichFromBarcode(

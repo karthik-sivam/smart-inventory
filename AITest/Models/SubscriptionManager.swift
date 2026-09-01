@@ -993,7 +993,7 @@ private struct ProFeatureList: View {
                 PaywallFeatureRow(icon: "archivebox.fill",          color: .purple, text: "Unlimited storage areas",             note: "Free: 5 max")
                 PaywallFeatureRow(icon: "cube.box.fill",            color: .blue,   text: "Unlimited items per storage",         note: "Free: 50 max")
                 PaywallFeatureRow(icon: "chart.line.uptrend.xyaxis",color: .green,  text: "Advanced analytics & full history",   note: "Free: 30 days")
-                PaywallFeatureRow(icon: "barcode.viewfinder",       color: .orange, text: "Bulk barcode scan — keep the camera open, then save all", note: "Free: single scan")
+                PaywallFeatureRow(icon: "barcode.viewfinder",       color: .orange, text: "Bulk barcode scan — keep the camera open, then save all", note: "Free: single scan + product lookup")
                 PaywallFeatureRow(icon: "sparkles",                          color: .stoqlyAccent, text: "Smart Sales Entry — Voice, Photo, Text, CSV & PDF")
                 PaywallFeatureRow(icon: "arrow.down.doc.fill",               color: .orange,       text: "AI Purchase Invoice Import")
                 PaywallFeatureRow(icon: "mic.fill",                          color: .teal,         text: "AI Voice Inventory Count",   note: "Free: 3/month")

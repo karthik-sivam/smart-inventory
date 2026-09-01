@@ -127,7 +127,7 @@ final class ItemFormViewModel: ObservableObject {
     @Published var expiryDate: Date = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
     @Published var existingPhotoURL: String? = nil
     /// Drives the "Looking up product..." banner in Add/Edit Item forms while
-    /// a barcode enrichment lookup is in flight. Phase 3 — Pro only.
+    /// a barcode enrichment lookup is in flight.
     @Published var isEnriching: Bool = false
     /// Tracks which template was used to pre-fill this add-item form (if any).
     var sourceTemplateId: UUID? = nil
@@ -141,10 +141,10 @@ final class ItemFormViewModel: ObservableObject {
         self.modelContext = modelContext
     }
 
-    /// Phase 3 — Pro-only smart barcode enrichment. Looks the scanned code up
-    /// in external product databases (Open Food Facts → UPCItemDB) and
-    /// pre-fills the form fields that are still empty. Free users get no
-    /// network call; the barcode field is still populated by the caller.
+    /// Looks the scanned code up in external product databases (Open Food Facts
+    /// → UPCItemDB) and pre-fills form fields that are still empty. Free and
+    /// Pro both get this on single scan; Pro bulk scan uses the same service
+    /// from the review queue. The barcode field is populated by the caller.
     ///
     /// Field-fill semantics:
     ///   - `name`         — filled only if empty
@@ -162,21 +162,6 @@ final class ItemFormViewModel: ObservableObject {
         shouldTrackResult: Bool = true,
         uoms: [UOM]
     ) async {
-        guard SubscriptionManager.shared.isPro else {
-            if shouldTrackResult {
-                AnalyticsManager.shared.track(
-                    .barcodeScanResult(
-                        outcome: "found",
-                        provider: "none",
-                        symbology: symbology,
-                        code: barcode,
-                        durationMs: scanDurationMs,
-                        reason: "enrichment_not_available_free"
-                    )
-                )
-            }
-            return
-        }
         guard !barcode.isEmpty else { return }
         isEnriching = true
         defer { isEnriching = false }

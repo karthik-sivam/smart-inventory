@@ -28,15 +28,15 @@ struct BarcodeEnrichmentResult: Sendable {
 
 // MARK: - BarcodeEnrichmentService
 //
-// Phase 3 — Pro-only smart barcode lookup. Tries free product databases in
-// order (Open Food Facts → UPCItemDB), returns the first hit, or `nil` if
-// neither finds the product.
+// Tries free product databases in order (Open Food Facts → UPCItemDB),
+// returns the first hit, or `nil` if neither finds the product.
 //
 // Contract:
 //  - All errors are swallowed; the service never throws.
 //  - Networking is best-effort: any failure (offline, timeout, malformed
 //    payload) yields `nil`, never a crash.
-//  - Caller is responsible for gating on `SubscriptionManager.shared.isPro`.
+//  - Callers populate the barcode field first; this service only fills
+//    empty name/details. Single-scan lookup is free; bulk session is Pro.
 
 // `Sendable` is safe here: the class has no stored properties, no mutable
 // state — only stateless lookup methods. Required so the `shared` singleton

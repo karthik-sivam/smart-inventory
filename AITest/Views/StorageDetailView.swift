@@ -903,7 +903,7 @@ struct AddItemView: View {
                     if !isShowingMoreDetails {
                         isShowingMoreDetails = true
                     }
-                    if subscriptionManager.isPro && name.isEmpty {
+                    if name.isEmpty {
                         Task {
                             isEnriching = true
                             defer { isEnriching = false }
@@ -937,9 +937,7 @@ struct AddItemView: View {
                                 symbology: symbology,
                                 code: code,
                                 durationMs: durationMs,
-                                reason: subscriptionManager.isPro
-                                    ? "enrichment_skipped_user_entered_name"
-                                    : "enrichment_not_available_free"
+                                reason: "enrichment_skipped_user_entered_name"
                             )
                         )
                     }

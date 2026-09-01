@@ -310,7 +310,8 @@ final class AIInventoryService {
         - Bulk barcode scan on Pro: keep the camera open, queue codes, review, save all. \
           Entry: Storage detail toolbar, or Items toolbar (pick a storage if All Storages \
           is selected). Free: one-shot Scan to Find on Items, and one-shot scan inside \
-          Add Item. Storage-detail bulk icon shows the Pro paywall for Free.
+          Add Item. Lookup fills name and details on that single scan (Free and Pro). \
+          Storage-detail bulk icon shows the Pro paywall for Free.
         - Item photos.
         - Remove Ads (also available as a separate one-time purchase).
         - Stoqly has a 7-day free trial. Users can start it from Settings or from any paywall.

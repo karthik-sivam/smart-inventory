@@ -74,7 +74,7 @@ struct HelpCentreView: View {
                 answer: "Go to Settings — Export. You can export as CSV or PDF."),
         FAQItem(section: "Pro",
                 question: "What does Pro include?",
-                answer: "Unlimited storages and items, full analytics history, bulk barcode scan from a storage or from Items (keep the camera open, then save all), bulk CSV import, and no ads. Free includes unlimited single barcode scans (Scan to Find on Items, and scan inside Add Item)."),
+                answer: "Unlimited storages and items, full analytics history, bulk barcode scan from a storage or from Items (keep the camera open, then save all), bulk CSV import, and no ads. Free includes unlimited single barcode scans that look up name and details (Scan to Find on Items, and scan inside Add Item)."),
         FAQItem(section: "Pro",
                 question: "How do I upgrade to Pro?",
                 answer: "Go to Settings — Upgrade to Pro to unlock all features instantly."),

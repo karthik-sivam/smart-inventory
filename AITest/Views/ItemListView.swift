@@ -857,10 +857,8 @@ struct AddItemToStorageView: View {
                         if !isShowingMoreDetails {
                             isShowingMoreDetails = true
                         }
-                        // Phase 3 — kick off smart enrichment lookup. Gated on
-                        // `isPro` inside `enrichFromBarcode`, so free users
-                        // get no network call. Fire-and-forget — never blocks
-                        // the UI.
+                        // Phase 3 — kick off smart enrichment lookup.
+                        // Fire-and-forget — never blocks the UI.
                         Task {
                             await formVM.enrichFromBarcode(
                                 code,
@@ -978,8 +976,7 @@ struct AddItemToStorageView: View {
                 formVM.barcode = initialBarcode
             }
             // Phase 3 addendum — same enrichment as the in-form scanner path,
-            // for barcodes pre-filled via `initialBarcode`. Pro-gated inside
-            // `enrichFromBarcode`; free users get no network call / no banner.
+            // for barcodes pre-filled via `initialBarcode`.
             // Scan-to-Find already emitted its single terminal result before
             // presenting this form, so this automatic follow-up must not emit
             // a contradictory second barcode_scan_result.

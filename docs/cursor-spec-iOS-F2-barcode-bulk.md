@@ -22,9 +22,9 @@ Walk a shelf / receiving pile and capture ~20 barcodes **without reopening the c
 - **Done** → review list → **Save all**.
 - Same code again (after cooldown): increment that row’s qty.
 - Match **barcode in the current storage**: existing item → qty += delta; else new item (name editable; enrichment may fill name/category).
-- Free: **unlimited single scan** — Items toolbar stays **Scan to Find** (one-shot); Add Item sheet scanner stays one-shot. Storage-detail bulk icon still opens Paywall (`source=barcode_bulk`).
+- Free: **unlimited single scan** — Items toolbar stays **Scan to Find** (one-shot) with product lookup; Add Item sheet scanner stays one-shot with the same lookup. Storage-detail bulk icon still opens Paywall (`source=barcode_bulk`).
 - Pro: unlimited bulk sessions.
-- Paywall row: drop “history”. Honest bulk copy + note “Free: single scan”.
+- Paywall row: drop “history”. Honest bulk copy + note “Free: single scan + product lookup”.
 - Entry: **Storage detail** toolbar, and **Items** toolbar (Pro). Items uses the storage chip when one is selected; otherwise a “Save scans to” picker. Match is still **that storage only**.
 - Scanner stays `.fullScreenCover`. Simulator uses manual-code entry into the same queue.
 
