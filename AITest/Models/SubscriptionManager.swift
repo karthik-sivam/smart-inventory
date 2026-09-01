@@ -21,7 +21,7 @@ import SwiftData
 // │  • Unlimited storage areas                                      │
 // │  • Unlimited items per storage                                  │
 // │  • Advanced analytics (full history, trends, custom dates)      │
-// │  • Barcode scanner pro (bulk, history)       [Phase 1]          │
+// │  • Bulk barcode scan (camera stays open)     [iOS-F2]           │
 // │  • Multi-user collaboration                  [Phase 2]          │
 // │  • AI reorder suggestions                    [Phase 3]          │
 // │  • No ads                                                       │
@@ -717,7 +717,7 @@ class SubscriptionManager: ObservableObject {
     /// Free: included. Pro: included.
     var canUsePushNotifications: Bool { true }
 
-    /// Free: basic scanner. Pro: bulk scan, history, custom formats.
+    /// Free: unlimited single scans. Pro: bulk session (camera stays open, then save all).
     var canUseBarcodeScannerPro: Bool { isPro }
 
     /// Phase 2 — Pro only.
@@ -993,7 +993,7 @@ private struct ProFeatureList: View {
                 PaywallFeatureRow(icon: "archivebox.fill",          color: .purple, text: "Unlimited storage areas",             note: "Free: 5 max")
                 PaywallFeatureRow(icon: "cube.box.fill",            color: .blue,   text: "Unlimited items per storage",         note: "Free: 50 max")
                 PaywallFeatureRow(icon: "chart.line.uptrend.xyaxis",color: .green,  text: "Advanced analytics & full history",   note: "Free: 30 days")
-                PaywallFeatureRow(icon: "barcode.viewfinder",       color: .orange, text: "Barcode scanner pro (bulk, history)")
+                PaywallFeatureRow(icon: "barcode.viewfinder",       color: .orange, text: "Bulk barcode scan — keep the camera open, then save all", note: "Free: single scan + product lookup")
                 PaywallFeatureRow(icon: "sparkles",                          color: .stoqlyAccent, text: "Smart Sales Entry — Voice, Photo, Text, CSV & PDF")
                 PaywallFeatureRow(icon: "arrow.down.doc.fill",               color: .orange,       text: "AI Purchase Invoice Import")
                 PaywallFeatureRow(icon: "mic.fill",                          color: .teal,         text: "AI Voice Inventory Count",   note: "Free: 3/month")

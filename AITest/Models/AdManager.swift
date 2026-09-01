@@ -19,7 +19,7 @@ import GoogleMobileAds
  2. Unlimited Storages        — Remove 5-storage free limit
  3. Advanced Analytics        — Trend charts, detailed reports
  4. PDF Export                — Branded PDF reports
- 5. Barcode Scanner Pro       — Bulk scan, history
+  5. Barcode Scanner Pro       — Bulk scan (camera stays open), then save all
  6. Push Notifications        — Low-stock alerts via FCM
  7. Multi-User Collaboration  — Invite team members
  8. AI Reorder Suggestions    — Demand forecasting
@@ -126,7 +126,9 @@ class AdManager: NSObject, ObservableObject {
             Task { @MainActor [weak self] in
                 self?.isInitialized = true
                 print("AdMob: SDK initialized. Adapter statuses: \(adapterKeys)")
-                self?.preloadInterstitialAd()
+                if SubscriptionManager.shared.shouldShowAds {
+                    self?.preloadInterstitialAd()
+                }
             }
         }
 
@@ -151,6 +153,10 @@ class AdManager: NSObject, ObservableObject {
         return
         #else
         guard isInitialized else { return }
+        // Pro / Remove Ads must never accumulate toward an interstitial.
+        // `disableAds()` only clears current state; without this gate the next
+        // barcode beep re-opens the overlay.
+        guard SubscriptionManager.shared.shouldShowAds else { return }
 
         completionCount += 1
         if shouldShowAdNow() {
@@ -167,6 +173,7 @@ class AdManager: NSObject, ObservableObject {
     }
 
     private func shouldShowAdNow() -> Bool {
+        guard SubscriptionManager.shared.shouldShowAds else { return false }
         guard completionCount >= actionsBeforeAd else { return false }
         return Date().timeIntervalSince(lastAdShown) >= minTimeBetweenAds
     }
@@ -184,6 +191,7 @@ class AdManager: NSObject, ObservableObject {
     // MARK: - Ad Loading & Display
 
     private func loadAndShowAd() {
+        guard SubscriptionManager.shared.shouldShowAds else { return }
         switch currentAdType {
         case .interstitial:
             if interstitialAd != nil {
@@ -202,6 +210,7 @@ class AdManager: NSObject, ObservableObject {
 
     private func preloadInterstitialAd() {
         #if !targetEnvironment(simulator)
+        guard SubscriptionManager.shared.shouldShowAds else { return }
         let unitID = isLiveBuild ? interstitialAdUnitID : testInterstitialUnitID
         lastInterstitialUnitID = unitID
         interstitialRequestStartedAt = Date()
@@ -229,6 +238,7 @@ class AdManager: NSObject, ObservableObject {
 
     private func loadInterstitialAd() {
         #if !targetEnvironment(simulator)
+        guard SubscriptionManager.shared.shouldShowAds else { return }
         isAdLoading = true
         adLoadError = nil
 
@@ -249,6 +259,11 @@ class AdManager: NSObject, ObservableObject {
                     self.emitAdFailedToLoad(unitID: unitID, format: "interstitial", error: nsError)
                     return
                 }
+                guard SubscriptionManager.shared.shouldShowAds else {
+                    self.interstitialAd = nil
+                    self.shouldShowAd = false
+                    return
+                }
                 let latency = self.latencyMs(since: self.interstitialRequestStartedAt)
                 self.interstitialAd = wrapped?.value
                 self.interstitialAd?.fullScreenContentDelegate = self
@@ -265,6 +280,10 @@ class AdManager: NSObject, ObservableObject {
 
     func showInterstitialAd() {
         #if !targetEnvironment(simulator)
+        guard SubscriptionManager.shared.shouldShowAds else {
+            shouldShowAd = false
+            return
+        }
         guard let ad = interstitialAd else {
             // No cached ad yet. Kick off a fresh load so there's a better
             // chance next time. Auto-dismiss the cover immediately — don't
@@ -304,6 +323,7 @@ class AdManager: NSObject, ObservableObject {
         shouldShowAd = false
         isAdLoading = false
         adLoadError = nil
+        interstitialAd = nil
     }
 
     // MARK: - Debug / Testing
@@ -690,7 +710,7 @@ struct RealAdIntegrationView<Content: View>: View {
             content
 
             // Persistent banner ad — shown above the tab bar when triggered
-            if adManager.shouldShowAd && adManager.currentAdType == .banner {
+            if adManager.shouldShowAd && adManager.currentAdType == .banner && SubscriptionManager.shared.shouldShowAds {
                 VStack {
                     Spacer()
                     BannerAdView(adUnitID: adManager.bannerAdUnitID, sourceScreen: adManager.bannerSourceScreen)
@@ -768,6 +788,10 @@ struct RealAdIntegrationView<Content: View>: View {
     }
 
     private func syncInterstitialOverlay() {
+        guard SubscriptionManager.shared.shouldShowAds else {
+            showInterstitialOverlay = false
+            return
+        }
         showInterstitialOverlay = adManager.shouldShowAd && adManager.currentAdType == .interstitial
     }
 }

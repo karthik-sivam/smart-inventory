@@ -760,4 +760,30 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 \bullet Leftover docs outside spec paths (not changed): XCODE_SETUP_GUIDE.md (old bundle + $2.99) and ROADMAP.md ($3.99 Remove Ads row).\par
 \bullet Markdown-only change; xcodebuild not re-run.\par
 \par
+{\b iOS-F2 \emdash Bulk barcode scan}\par
+[COMPLETED]\par
+\bullet Pro keep-camera-open bulk scan from Storage detail (barcode.viewfinder). Queue + 1.2s per-code cooldown; Done opens an in-cover review list; Save increments existing barcodes in that storage or adds new items. Free: unlimited single scan; bulk tap shows Paywall source=barcode_bulk. Paywall row no longer says history.\par
+\bullet Events: barcode_bulk_scan_started / completed / abandoned. No per-beep barcode_scan_result. Tests: session event shapes, increment vs new, cooldown. xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. SmartInventoryTests F2 cases \emdash TEST SUCCEEDED. CEO console work listed in docs/ceo-manual-work.md.\par
+\par
+{\b iOS-F2 follow-up \emdash Add Item scan vs bulk identity}\par
+[COMPLETED WITH ISSUES]\par
+\bullet CEO Pro device test hit Add Item single-scan (camera dismisses on first code; barcode lives under collapsed More details), not Storage-toolbar bulk. Add Item/Edit Item now expand More details after a successful scan and show a Barcode set chip on the collapsed row.\par
+\bullet Storage bulk icon now has a plus badge; bulk camera title is Bulk barcode scan; VisionKit host uses a stable BulkScanCodeHandler so overlay counter updates do not recreate the camera VC.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. Device keep-open smoke still owed on the storage toolbar path. Free paywall test still owed.\par
+\par
+{\b iOS-F2 follow-up \emdash Items tab bulk entry}\par
+[COMPLETED]\par
+\bullet Pro Items toolbar barcode (same plus-badge icon) opens keep-open bulk. Uses the storage chip when one is selected; otherwise a Save scans to picker. Analytics source=item_list. Free/view-only still get one-shot Scan to Find. Add Item sheet remains one-shot for everyone. Storage-detail Free tap still paywall.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. SmartInventoryTests F2 cases \emdash TEST SUCCEEDED.\par
+\par
+{\b iOS-F2 follow-up \emdash Pro scan interstitial}\par
+[COMPLETED]\par
+\bullet recordCompletion ignored isPro/shouldShowAds, so a Pro barcode beep opened RealAdIntegrationView's interstitial fullScreenCover. Continue dismissed the scanner and the Add Item / bulk session under it. Gate every show/load/preload path on shouldShowAds; drop per-beep barcodeScanned from the camera (Free ads still fire on itemAdded after Save).\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED.\par
+\par
+{\b iOS-F2 follow-up \emdash Free single-scan product lookup}\par
+[COMPLETED]\par
+\bullet Single-scan enrichment was still Pro-gated (Phase 3). Free scans now call Open Food Facts then UPCItemDB and fill empty name/description/category/UOM. Bulk remains Pro. Paywall note: Free: single scan + product lookup.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED.\par
+\par
 }

@@ -134,7 +134,7 @@ All ViewModels are `@MainActor final class` conforming to `ObservableObject`.
 | `AdManager.shared` | AdMob; call `recordCompletion(event:)` after every significant user action |
 | `SubscriptionManager.shared` | StoreKit 2; exposes `isPro`, `hasRemovedAds`, `trialDaysRemaining` |
 | `SpotlightManager.shared` | Core Spotlight index; `index`, `deindex`, `reindexAll` |
-| `BarcodeEnrichmentService.shared` | Pro-only barcode lookup (Open Food Facts → UPCItemDB) |
+| `BarcodeEnrichmentService.shared` | Barcode lookup (Open Food Facts → UPCItemDB); free on single scan |
 | `NotificationManager.shared` | Local push notifications for low-stock and expiry alerts |
 
 ### Data Flow
@@ -161,8 +161,8 @@ users/{uid}/
 
 | Tier | Limits |
 |---|---|
-| Free | 5 storages, 30-day analytics, ad-supported |
-| Pro | Unlimited storages/items, full analytics, no ads, barcode enrichment, batch expiry |
+| Free | 5 storages, 30-day analytics, ad-supported, single barcode scan + product lookup |
+| Pro | Unlimited storages/items, full analytics, no ads, bulk barcode scan, batch expiry |
 | Remove Ads | Free limits retained, ads removed |
 
 **StoreKit product IDs:**

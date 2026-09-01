@@ -590,6 +590,68 @@ final class SmartInventoryTests: XCTestCase {
         XCTAssertNil(emailFailed.properties["body"])
     }
 
+    func testBarcodeBulkScanSessionEventShapes() {
+        let started = StoqlyEvent.barcodeBulkScanStarted(source: "storage_detail")
+        XCTAssertEqual(started.name, "barcode_bulk_scan_started")
+        XCTAssertEqual(started.properties["source"] as? String, "storage_detail")
+
+        let fromItems = StoqlyEvent.barcodeBulkScanStarted(source: "item_list")
+        XCTAssertEqual(fromItems.properties["source"] as? String, "item_list")
+
+        let completed = StoqlyEvent.barcodeBulkScanCompleted(
+            scannedCount: 12,
+            newCount: 4,
+            updatedCount: 8,
+            durationMs: 45_000
+        )
+        XCTAssertEqual(completed.name, "barcode_bulk_scan_completed")
+        XCTAssertEqual(completed.properties["scanned_count"] as? Int, 12)
+        XCTAssertEqual(completed.properties["new_count"] as? Int, 4)
+        XCTAssertEqual(completed.properties["updated_count"] as? Int, 8)
+        XCTAssertEqual(completed.properties["duration_ms"] as? Int, 45_000)
+        XCTAssertNil(completed.properties["code"])
+
+        let abandoned = StoqlyEvent.barcodeBulkScanAbandoned(
+            stage: "camera",
+            scannedCount: 3,
+            durationMs: 900
+        )
+        XCTAssertEqual(abandoned.name, "barcode_bulk_scan_abandoned")
+        XCTAssertEqual(abandoned.properties["stage"] as? String, "camera")
+        XCTAssertEqual(abandoned.properties["scanned_count"] as? Int, 3)
+    }
+
+    @MainActor
+    func testBulkBarcodeScanViewModelIncrementsExistingAndAddsNew() {
+        let vm = BulkBarcodeScanViewModel()
+        vm.cooldownSeconds = 0
+        let existingId = UUID()
+        vm.bind(catalog: [
+            .init(id: existingId, name: "Maggi", barcode: "8901030865477")
+        ])
+
+        XCTAssertTrue(vm.ingest(code: "8901030865477", symbology: "EAN-13"))
+        XCTAssertTrue(vm.ingest(code: "8901030865477", symbology: "EAN-13"))
+        XCTAssertTrue(vm.ingest(code: "  890123  ", symbology: "EAN-13"))
+
+        XCTAssertEqual(vm.rows.count, 2)
+        XCTAssertEqual(vm.rows[0].existingItemId, existingId)
+        XCTAssertEqual(vm.rows[0].quantity, 2, accuracy: 0.001)
+        XCTAssertTrue(vm.rows[0].isExisting)
+        XCTAssertEqual(vm.rows[1].code, "890123")
+        XCTAssertFalse(vm.rows[1].isExisting)
+        XCTAssertEqual(vm.rows[1].name, BulkBarcodeScanViewModel.defaultName(for: "890123"))
+    }
+
+    @MainActor
+    func testBulkBarcodeScanCooldownDropsRapidRepeat() {
+        let vm = BulkBarcodeScanViewModel()
+        vm.cooldownSeconds = 10
+        XCTAssertTrue(vm.ingest(code: "111", symbology: "EAN-13"))
+        XCTAssertFalse(vm.ingest(code: "111", symbology: "EAN-13"))
+        XCTAssertEqual(vm.rows.first?.quantity ?? 0, 1, accuracy: 0.001)
+    }
+
     func testSaleEventRevenueUsesPriceTimesQty() {
         let sale = SaleEvent(
             item: nil,
