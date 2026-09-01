@@ -11,6 +11,7 @@ import AVFoundation
 
 struct BulkBarcodeScanFlowView: View {
     let storage: Storage
+    var source: String = "storage_detail"
     var onComplete: ((Int) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
@@ -43,7 +44,7 @@ struct BulkBarcodeScanFlowView: View {
                 acceptCode(code, symbology: symbology)
             }
             if !didEmitTerminal {
-                AnalyticsManager.shared.track(.barcodeBulkScanStarted(source: "storage_detail"))
+                AnalyticsManager.shared.track(.barcodeBulkScanStarted(source: source))
             }
         }
         .alert(

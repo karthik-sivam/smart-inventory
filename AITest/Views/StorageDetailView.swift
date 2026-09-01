@@ -325,6 +325,7 @@ struct StorageDetailView: View {
         .fullScreenCover(isPresented: $showingBulkBarcodeScan) {
             BulkBarcodeScanFlowView(
                 storage: storage,
+                source: "storage_detail",
                 onComplete: { savedCount in
                     toastMessage = String(
                         format: L("toast.itemsUpdated", "%1$d item%2$@ updated"),

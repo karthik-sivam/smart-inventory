@@ -308,7 +308,9 @@ final class AIInventoryService {
         - Unlimited team members.
         - Full analytics history (free plan: last 30 days only).
         - Bulk barcode scan on Pro: keep the camera open, queue codes, review, save all. \
-          Free users get unlimited single scans (one code at a time). Enrichment may fill names.
+          Entry: Storage detail toolbar, or Items toolbar (pick a storage if All Storages \
+          is selected). Free: one-shot Scan to Find on Items, and one-shot scan inside \
+          Add Item. Storage-detail bulk icon shows the Pro paywall for Free.
         - Item photos.
         - Remove Ads (also available as a separate one-time purchase).
         - Stoqly has a 7-day free trial. Users can start it from Settings or from any paywall.

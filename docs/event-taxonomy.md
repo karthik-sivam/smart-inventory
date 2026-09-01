@@ -154,7 +154,7 @@ Pro-only keep-camera-open session. Free remains unlimited **single** scan. Do no
 
 | Event | Properties | When |
 |---|---|---|
-| `barcode_bulk_scan_started` | `source` (`storage_detail`) | Bulk camera opens after the Pro gate |
+| `barcode_bulk_scan_started` | `source` (`storage_detail` \| `item_list`) | Bulk camera opens after the Pro gate |
 | `barcode_bulk_scan_completed` | `scanned_count`, `new_count`, `updated_count`, `duration_ms` | Save all on the review list |
 | `barcode_bulk_scan_abandoned` | `stage` (`camera` \| `review` \| `empty`), `scanned_count`, `duration_ms` | Cancel / Done with nothing queued |
 

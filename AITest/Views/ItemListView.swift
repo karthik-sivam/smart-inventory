@@ -21,6 +21,9 @@ struct ItemListView: View {
     @State private var showingFullCount: InventoryItem? = nil
     @State private var pendingFullCountItem: InventoryItem? = nil
     @State private var showingScanToFind = false
+    @State private var showingBulkBarcodeScan = false
+    @State private var showingBulkStoragePicker = false
+    @State private var bulkScanStorage: Storage?
     @State private var scanToFindResult: InventoryItem? = nil
     /// Bridges the scanned code across the fullScreenCover dismissal. The
     /// look-up (found-vs-not-found) happens in the cover's `onDismiss` so the
@@ -80,12 +83,25 @@ struct ItemListView: View {
                         .accessibilityLabel("Import Invoice")
                         .accessibilityIdentifier("globalInvoiceImportButton")
 
-                        Button(action: { showingScanToFind = true }) {
+                        Button(action: { barcodeToolbarTapped() }) {
                             Image(systemName: "barcode.viewfinder")
                                 .font(.title2)
                                 .foregroundColor(.stoqlyPrimary)
+                                .overlay(alignment: .bottomTrailing) {
+                                    if teamManager.canEdit && subscriptionManager.canUseBarcodeScannerPro {
+                                        Image(systemName: "plus.circle.fill")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(.stoqlyAccent)
+                                            .background(Circle().fill(Color(.systemBackground)))
+                                    }
+                                }
                         }
-                        .accessibilityLabel("Scan to Find Item")
+                        .accessibilityLabel(
+                            teamManager.canEdit && subscriptionManager.canUseBarcodeScannerPro
+                                ? L("bulkScan.toolbar", "Bulk barcode scan")
+                                : L("itemList.scanToFind", "Scan to Find Item")
+                        )
+                        .accessibilityIdentifier("itemListBarcodeButton")
 
                         Button(action: { showingSmartCount = true }) {
                             Image(systemName: "sparkles")
@@ -303,15 +319,39 @@ struct ItemListView: View {
             CountItemView(item: item)
                 .sheetStyle()
         }
-        // "Scan to Find" — looks up the scanned code in the existing items.
-        //   Match found       → presents ItemDetailView (existing behaviour).
-        //   No match          → presents AddItemToStorageView pre-filled with
-        //                       the scanned barcode, so the user can add it
-        //                       on the spot.
-        //
-        // The lookup runs in `onDismiss` (not in `onScan`) so the next sheet
-        // is presented AFTER the fullScreenCover has fully torn down —
-        // otherwise SwiftUI drops the second presentation on iOS 16/17.
+        // Pro bulk from the Items toolbar. Review stays inside this cover.
+        .fullScreenCover(isPresented: $showingBulkBarcodeScan) {
+            if let storage = bulkScanStorage {
+                BulkBarcodeScanFlowView(
+                    storage: storage,
+                    source: "item_list",
+                    onComplete: { savedCount in
+                        toastMessage = String(
+                            format: L("toast.itemsUpdated", "%1$d item%2$@ updated"),
+                            savedCount,
+                            savedCount == 1 ? "" : "s"
+                        )
+                    }
+                )
+            }
+        }
+        .confirmationDialog(
+            L("bulkScan.pickStorage", "Save scans to"),
+            isPresented: $showingBulkStoragePicker,
+            titleVisibility: .visible
+        ) {
+            ForEach(storages, id: \.id) { storage in
+                Button(storage.name) {
+                    openBulkBarcodeScan(in: storage)
+                }
+            }
+            Button(L("Cancel", "Cancel"), role: .cancel) {}
+        }
+        // Free / view-only: one-shot Scan to Find.
+        // Match → ItemDetailView. Miss → Add Item pre-filled.
+        // Lookup runs in onDismiss so the follow-up sheet presents after
+        // this cover tears down (iOS 16/17 drops the second presentation
+        // if both fire in the same pass).
         .fullScreenCover(
             isPresented: $showingScanToFind,
             onDismiss: {
@@ -456,6 +496,37 @@ struct ItemListView: View {
         } else {
             showingAddItem = true
         }
+    }
+
+    /// Pro + can-edit: keep-open bulk into the filtered storage, or a picker
+    /// when "All Storages" is selected. Free: existing one-shot Scan to Find.
+    private func barcodeToolbarTapped() {
+        guard teamManager.canEdit, subscriptionManager.canUseBarcodeScannerPro else {
+            showingScanToFind = true
+            return
+        }
+        beginBulkBarcodeScan()
+    }
+
+    private func beginBulkBarcodeScan() {
+        if storages.isEmpty {
+            showingNoStorageAlert = true
+            return
+        }
+        if let selected = viewModel.selectedStorage {
+            openBulkBarcodeScan(in: selected)
+            return
+        }
+        if storages.count == 1, let only = storages.first {
+            openBulkBarcodeScan(in: only)
+            return
+        }
+        showingBulkStoragePicker = true
+    }
+
+    private func openBulkBarcodeScan(in storage: Storage) {
+        bulkScanStorage = storage
+        showingBulkBarcodeScan = true
     }
 }
 

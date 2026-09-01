@@ -595,6 +595,9 @@ final class SmartInventoryTests: XCTestCase {
         XCTAssertEqual(started.name, "barcode_bulk_scan_started")
         XCTAssertEqual(started.properties["source"] as? String, "storage_detail")
 
+        let fromItems = StoqlyEvent.barcodeBulkScanStarted(source: "item_list")
+        XCTAssertEqual(fromItems.properties["source"] as? String, "item_list")
+
         let completed = StoqlyEvent.barcodeBulkScanCompleted(
             scannedCount: 12,
             newCount: 4,

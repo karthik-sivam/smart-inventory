@@ -22,10 +22,10 @@ Walk a shelf / receiving pile and capture ~20 barcodes **without reopening the c
 - **Done** → review list → **Save all**.
 - Same code again (after cooldown): increment that row’s qty.
 - Match **barcode in the current storage**: existing item → qty += delta; else new item (name editable; enrichment may fill name/category).
-- Free: **unlimited single scan** (unchanged Scan to Find / Add Item scanner).
+- Free: **unlimited single scan** — Items toolbar stays **Scan to Find** (one-shot); Add Item sheet scanner stays one-shot. Storage-detail bulk icon still opens Paywall (`source=barcode_bulk`).
 - Pro: unlimited bulk sessions.
 - Paywall row: drop “history”. Honest bulk copy + note “Free: single scan”.
-- Entry: **Storage detail** toolbar (needs a storage).
+- Entry: **Storage detail** toolbar, and **Items** toolbar (Pro). Items uses the storage chip when one is selected; otherwise a “Save scans to” picker. Match is still **that storage only**.
 - Scanner stays `.fullScreenCover`. Simulator uses manual-code entry into the same queue.
 
 ## 4. Scope — OUT (deferred)
@@ -41,11 +41,15 @@ Walk a shelf / receiving pile and capture ~20 barcodes **without reopening the c
 
 **Pro bulk**
 - Given Pro and a storage, when I tap Bulk scan, then the camera stays open and a counter updates as I scan.
+- Given Pro on Items with a storage chip selected, when I tap the barcode toolbar, then bulk opens into that storage with no extra picker.
+- Given Pro on Items with All Storages, when I tap the barcode toolbar, then I pick a storage and bulk opens.
 - Given a queued session, when I tap Done, then I see each code as New vs +N on {name}, can edit qty/name, uncheck rows, Save.
 - Given Save, then existing items increment, new items insert, ActivityEvents + Firestore sync run, scanner dismisses.
 
 **Free**
-- Given Free, when I tap Bulk scan, then Paywall (`source=barcode_bulk`). Single-scan paths still work with no monthly N.
+- Given Free on Storage detail, when I tap Bulk scan, then Paywall (`source=barcode_bulk`).
+- Given Free on Items, when I tap the barcode toolbar, then one-shot Scan to Find still works.
+- Add Item / Edit Item barcode remains one-shot for Free and Pro.
 
 ## 6. Success metrics
 
@@ -57,7 +61,7 @@ Walk a shelf / receiving pile and capture ~20 barcodes **without reopening the c
 
 | Event | Properties |
 |---|---|
-| `barcode_bulk_scan_started` | `source` (`storage_detail`) |
+| `barcode_bulk_scan_started` | `source` (`storage_detail` \| `item_list`) |
 | `barcode_bulk_scan_completed` | `scanned_count`, `new_count`, `updated_count`, `duration_ms` |
 | `barcode_bulk_scan_abandoned` | `stage` (`camera` \| `review` \| `empty`), `scanned_count`, `duration_ms` |
 
