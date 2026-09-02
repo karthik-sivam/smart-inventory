@@ -23,15 +23,31 @@ Source of claims: Release Gate tab in `docs/Stoqly_master_scope_v1_Manual_QA.xls
 
 ---
 
-## After iOS-F2 merge (Amplitude) — still on you
+## Amplitude tracking plan (project 832993) — DONE 2026-09-02, no longer on you
 
-F2 is in production code on `master_scope_v1`. Claude / data-analyst: officialize on project **832993** (create unexpected, then update metadata):
+Officialized directly through the Amplitude MCP on branch `main` (main is unprotected, single environment, so no branch/merge was needed). All seven events are now in the plan, `isOfficial`, categorised, and documented with their properties:
 
-- `barcode_bulk_scan_started`
-- `barcode_bulk_scan_completed` (`scanned_count`, `new_count`, `updated_count`, `duration_ms`)
-- `barcode_bulk_scan_abandoned` (`stage`, `scanned_count`, `duration_ms`)
+| Category | Event | Was |
+|---|---|---|
+| Barcode bulk scan | `barcode_bulk_scan_started` | unexpected → in plan |
+| Barcode bulk scan | `barcode_bulk_scan_abandoned` | unexpected → in plan |
+| Barcode bulk scan | `barcode_bulk_scan_completed` | never ingested → pre-declared |
+| Business profile | `business_profile_prompt_shown` | unexpected → in plan |
+| Business profile | `business_profile_completed` | unexpected → in plan |
+| Business profile | `business_profile_save_failed` | unexpected → in plan |
+| Business profile | `business_profile_updated` | never ingested → pre-declared |
 
-Do **not** fire per-beep `barcode_scan_result` from bulk sessions (keeps the single-scan funnel clean). Barcodes are commercial IDs, not PII; they are stored on items, not on these session events.
+Standing rules captured in the event descriptions themselves, so they survive this doc:
+
+- Do **not** fire per-beep `barcode_scan_result` from bulk sessions (keeps the single-scan funnel clean). Barcodes are commercial IDs, not PII; they are stored on items, not on these session events.
+- `business_profile_prompt_shown` fires once per app session while the profile is missing, so a force-quit re-fires it. **Count uniques, not event totals** — or use a Funnel chart, which is user-based by construction.
+- `business_city` is self-declared and deliberately named to avoid Amplitude's IP-derived `city` / `region`. Phone number, business name, and custom "Other" text are never sent.
+
+### Note on the empty bulk-scan funnel — nothing to action yet
+
+`barcode_bulk_scan_completed` has never fired. This is **expected**, not a finding: F2 (`8507b77`) is on `master_scope_v1` only — not merged to `main`, not tagged, and production is still 1.4 — so no real user has ever had the feature. The lone `_started` / `_abandoned` pair on 2026-09-01 (01:49 and 01:50, first_seen == last_seen on both) is a single local test session on merge night.
+
+Read the funnel only after F2 ships in a released build. At that point the number that matters is `_completed ÷ _started` as **uniques**, segmented by `stage` on `_abandoned` — a high `scanned_count` with `stage=camera` would be the expensive failure (user did the work, lost it).
 
 ---
 

@@ -26,7 +26,7 @@ enum AIEntryChipFeature: String {
     case smartCount = "smart_count"
     case smartSales = "smart_sales"
     // TODO(iOS-C1): add `smartPurchase` when Manual Purchase Entry ships,
-    // with copy "Or scan an invoice with Smart Purchase →" on that screen.
+    // with copy "Add many purchases at once →" on that screen.
 
     var analyticsValue: String { rawValue }
 
@@ -39,8 +39,14 @@ enum AIEntryChipFeature: String {
 
     var titleFallback: String {
         switch self {
-        case .smartCount: return "Or scan a shelf with Smart Count →"
-        case .smartSales: return "Or scan a bill with Smart Sales →"
+        // Outcome-first, no product jargon. "Smart Count" / "Smart Sales" are
+        // internal names the user has never seen, and "scan" already means
+        // barcode scanning elsewhere in the app — reusing it here made the chip
+        // read like a barcode shortcut. Kept short so Tamil/Malayalam/German do
+        // not wrap to three lines, and deliberately not promising the AI does it
+        // all: both flows still end in a review step.
+        case .smartCount: return "Add many items at once →"
+        case .smartSales: return "Record many sales at once →"
         }
     }
 }

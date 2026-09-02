@@ -83,6 +83,26 @@ final class AnalyticsManager: @unchecked Sendable {
         amplitude?.identify(identify: identify)
     }
 
+    /// Updates only coarse business traits. Phone numbers, the business name, and
+    /// custom "Other" descriptions intentionally never leave Firestore for Amplitude.
+    /// City is sent, but only after `analyticsCity(from:)` canonicalizes it and
+    /// rejects anything containing a digit.
+    func identifyBusinessProfile(userId: String, profile: BusinessProfile) {
+        amplitude?.setUserId(userId: userId)
+        let identify = Identify()
+        identify.set(property: "business_profile_version", value: profile.schemaVersion)
+        identify.set(property: "business_type", value: profile.businessType.rawValue)
+        identify.set(property: "business_state", value: profile.state)
+        // Named `business_city` so it never collides with Amplitude's own
+        // IP-derived `city` / `region` user properties.
+        if let city = profile.city.flatMap({ BusinessProfileValidation.analyticsCity(from: $0) }) {
+            identify.set(property: "business_city", value: city)
+        }
+        identify.set(property: "phone_provided", value: profile.phoneNumber != nil)
+        identify.set(property: "contact_opt_in", value: profile.contactConsent)
+        amplitude?.identify(identify: identify)
+    }
+
     /// Call on sign-out to disassociate future events from this user.
     func reset() {
         amplitude?.reset()
@@ -148,6 +168,12 @@ enum StoqlyEvent {
     case userSignedUp(method: String)                      // method: "email" | "google"
     case userSignedIn(method: String)
     case userSignedOut
+
+    // ── Business Profile ─────────────────────────────────────────────────────────
+    case businessProfilePromptShown(audience: String)
+    case businessProfileCompleted(source: String, audience: String, businessType: String, state: String, city: String?, hasPhone: Bool, contactConsent: Bool, durationMs: Int)
+    case businessProfileUpdated(source: String, businessType: String, state: String, city: String?, hasPhone: Bool, contactConsent: Bool)
+    case businessProfileSaveFailed(source: String)
 
     // ── Storages ─────────────────────────────────────────────────────────────────
     case storageCreated(color: String)
@@ -326,6 +352,11 @@ enum StoqlyEvent {
         case .userSignedIn:              return "user_signed_in"
         case .userSignedOut:             return "user_signed_out"
 
+        case .businessProfilePromptShown:return "business_profile_prompt_shown"
+        case .businessProfileCompleted:  return "business_profile_completed"
+        case .businessProfileUpdated:    return "business_profile_updated"
+        case .businessProfileSaveFailed: return "business_profile_save_failed"
+
         case .storageCreated:            return "storage_created"
         case .storageDeleted:            return "storage_deleted"
         case .storageViewed:             return "storage_viewed"
@@ -462,6 +493,37 @@ enum StoqlyEvent {
         case .userSignedUp(let method):       return ["method": method]
         case .userSignedIn(let method):       return ["method": method]
         case .userSignedOut:                  return [:]
+
+        case .businessProfilePromptShown(let audience):
+            return ["audience": audience, "profile_version": BusinessProfile.currentSchemaVersion]
+        case .businessProfileCompleted(let source, let audience, let type, let state, let city, let hasPhone, let consent, let duration):
+            // `business_city` is deliberately NOT named `city`: Amplitude already
+            // derives `city` and `region` from IP, and those must keep working.
+            var props: [String: Any] = [
+                "source": source,
+                "audience": audience,
+                "business_type": type,
+                "business_state": state,
+                "phone_provided": hasPhone,
+                "contact_opt_in": consent,
+                "duration_ms": duration,
+                "profile_version": BusinessProfile.currentSchemaVersion
+            ]
+            if let city { props["business_city"] = city }
+            return props
+        case .businessProfileUpdated(let source, let type, let state, let city, let hasPhone, let consent):
+            var props: [String: Any] = [
+                "source": source,
+                "business_type": type,
+                "business_state": state,
+                "phone_provided": hasPhone,
+                "contact_opt_in": consent,
+                "profile_version": BusinessProfile.currentSchemaVersion
+            ]
+            if let city { props["business_city"] = city }
+            return props
+        case .businessProfileSaveFailed(let source):
+            return ["source": source, "profile_version": BusinessProfile.currentSchemaVersion]
 
         case .storageCreated(let color):      return ["color": color]
         case .storageDeleted:                 return [:]

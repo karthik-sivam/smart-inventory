@@ -14,6 +14,7 @@ struct InventoryAppView: View {
 
     @State private var selectedTab = 0
     @StateObject private var currencyManager = CurrencyManager()
+    @StateObject private var teamManager = TeamManager.shared
 
     // Onboarding: shown once on first ever launch (Maestro: launchApp arguments UITestResetOnboarding: true)
     @State private var showOnboarding = !UserDefaults.hasCompletedOnboarding
@@ -23,6 +24,11 @@ struct InventoryAppView: View {
     @AppStorage(LocalizationManager.hasChosenLanguageKey) private var hasChosenLanguage = false
     @State private var showLanguageOnboarding = false
     private static let postLoginOnboardingKey = "postLoginOnboardingShown"
+
+    // Versioned, cross-device business profile prompt for workspace owners.
+    @State private var showBusinessProfile = false
+    @State private var hasCheckedBusinessProfile = false
+    @State private var businessProfileAudience = "existing_user"
 
     // Paywall
     @State private var showPaywall = false
@@ -73,6 +79,17 @@ struct InventoryAppView: View {
             OnboardingLanguageStepView(isPresented: $showLanguageOnboarding)
                 .environmentObject(LocalizationManager.shared)
         }
+        // Required once for owners. Phone remains optional; business type and
+        // State are the only fields that gate completion.
+        .fullScreenCover(isPresented: $showBusinessProfile) {
+            BusinessProfileView(
+                isPresented: $showBusinessProfile,
+                mode: .requiredPrompt(audience: businessProfileAudience)
+            ) { _ in
+                maybeShowPostLoginOnboarding()
+            }
+            .environmentObject(firestoreManager)
+        }
         // Paywall sheet
         .sheet(isPresented: $showPaywall) {
             PaywallView(source: "unknown")
@@ -91,7 +108,7 @@ struct InventoryAppView: View {
                 selectedTab = 0
                 runStartupSync()
                 maybeShowLanguageOnboardingIfNeeded()
-                maybeShowPostLoginOnboarding()
+                Task { await maybeShowBusinessProfile() }
                 Task { await checkPendingInvites() }
             } else {
                 // User signed out — clear all local data immediately.
@@ -99,6 +116,8 @@ struct InventoryAppView: View {
                 clearLocalData()
                 // Reset sync flag so the next sign-in triggers a fresh cloud pull.
                 hasSyncedThisSession = false
+                hasCheckedBusinessProfile = false
+                showBusinessProfile = false
                 spotlightIndexedOnce = false
                 TeamManager.shared.reset()
             }
@@ -177,9 +196,18 @@ struct InventoryAppView: View {
             if authManager.isAuthenticated {
                 runStartupSync()
                 maybeShowLanguageOnboardingIfNeeded()
-                maybeShowPostLoginOnboarding()
+                Task { await maybeShowBusinessProfile() }
                 Task { await checkPendingInvites() }
             }
+        }
+        .onChange(of: showOnboarding) { _, isShowing in
+            guard !isShowing, authManager.isAuthenticated else { return }
+            maybeShowLanguageOnboardingIfNeeded()
+            Task { await maybeShowBusinessProfile() }
+        }
+        .onChange(of: showLanguageOnboarding) { _, isShowing in
+            guard !isShowing, authManager.isAuthenticated else { return }
+            Task { await maybeShowBusinessProfile() }
         }
         .onReceive(NotificationCenter.default.publisher(
             for: NSNotification.Name("stoqly.showPaywall"))) { _ in
@@ -233,6 +261,70 @@ struct InventoryAppView: View {
 
     // MARK: - Post-login onboarding
 
+    /// Only a workspace owner is asked to describe the business.
+    private var isBusinessProfileOwnerAudience: Bool {
+        teamManager.isOwner && !teamManager.isInTeamWorkspace
+    }
+
+    /// Checks Firestore once per signed-in session. Missing or older profiles
+    /// receive the required prompt; completed profiles remain completed across devices.
+    private func maybeShowBusinessProfile() async {
+        guard !Self.shouldForceOnboardingForMaestroUITest(),
+              authManager.isAuthenticated,
+              !hasCheckedBusinessProfile,
+              !showOnboarding,
+              !showLanguageOnboarding else { return }
+
+        // Let auth settle and give TeamManager a chance to restore or join a
+        // workspace before we decide whether this person is an owner.
+        try? await Task.sleep(for: .milliseconds(800))
+        guard authManager.isAuthenticated,
+              !showOnboarding,
+              !showLanguageOnboarding,
+              !hasCheckedBusinessProfile else { return }
+
+        // Invited members should not be forced to describe a business they do
+        // not own. Their workspace owner supplies these details. Deliberately
+        // evaluated AFTER the settle delay: TeamManager.reset() clears the
+        // persisted workspace on sign-out, so at the instant of an auth change
+        // every member still looks like an owner.
+        guard isBusinessProfileOwnerAudience else {
+            hasCheckedBusinessProfile = true
+            maybeShowPostLoginOnboarding()
+            return
+        }
+
+        hasCheckedBusinessProfile = true
+        do {
+            if let profile = try await firestoreManager.fetchBusinessProfile(),
+               profile.schemaVersion >= BusinessProfile.currentSchemaVersion {
+                if let uid = authManager.currentUser?.uid {
+                    AnalyticsManager.shared.identifyBusinessProfile(userId: uid, profile: profile)
+                }
+                maybeShowPostLoginOnboarding()
+                return
+            }
+
+            // Re-check: the Firestore round trip above is another window in
+            // which a pending invite can be accepted.
+            guard isBusinessProfileOwnerAudience else {
+                maybeShowPostLoginOnboarding()
+                return
+            }
+
+            businessProfileAudience = storages.isEmpty ? "new_user" : "existing_user"
+            AnalyticsManager.shared.track(.businessProfilePromptShown(
+                audience: businessProfileAudience
+            ))
+            showBusinessProfile = true
+        } catch {
+            // A temporary connectivity problem must not lock the app. The check
+            // retries after the next authentication session or cold launch.
+            hasCheckedBusinessProfile = true
+            maybeShowPostLoginOnboarding()
+        }
+    }
+
     /// Trigger the post-login guided flow only on the user's very first signed-in
     /// session with no storages. After it runs once we persist the flag so it
     /// never reappears, even if the user later deletes all their storages.
@@ -249,8 +341,11 @@ struct InventoryAppView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             guard !alreadyShown,
                   authManager.isAuthenticated,
+                  hasCheckedBusinessProfile,
                   storages.isEmpty,
-                  !showOnboarding else { return }
+                  !showOnboarding,
+                  !showLanguageOnboarding,
+                  !showBusinessProfile else { return }
             UserDefaults.standard.set(true, forKey: Self.postLoginOnboardingKey)
             showPostLoginOnboarding = true
         }

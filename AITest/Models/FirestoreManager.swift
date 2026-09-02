@@ -133,6 +133,15 @@ class FirestoreManager: ObservableObject {
         return db.collection("users").document(uid)
     }
 
+    /// Personal profile data belongs to the authenticated person, even while
+    /// they are viewing another owner's shared workspace.
+    private func personalUserRef() throws -> DocumentReference {
+        guard let uid = currentUID else {
+            throw FirestoreError.notAuthenticated
+        }
+        return db.collection("users").document(uid)
+    }
+
     // MARK: - Errors
 
     enum FirestoreError: LocalizedError {
@@ -161,6 +170,152 @@ class FirestoreManager: ObservableObject {
             ]
             try? await ref.setData(data, merge: true)
         }
+    }
+
+    /// Loads the authenticated owner's versioned business profile. A malformed
+    /// or incomplete map is treated as missing so required fields are asked again.
+    func fetchBusinessProfile() async throws -> BusinessProfile? {
+        let snapshot = try await personalUserRef().getDocument()
+        guard let map = snapshot.data()?["businessProfile"] as? [String: Any],
+              let schemaVersion = map["schemaVersion"] as? Int,
+              let rawBusinessType = map["businessType"] as? String,
+              let businessType = BusinessType(rawValue: rawBusinessType),
+              let state = map["state"] as? String else {
+            return nil
+        }
+
+        // Version-1 profiles predate the country field and were Indian-only by
+        // construction, so a missing country reads as India. This deliberately
+        // keeps every completed profile valid — no existing owner is re-prompted.
+        let country = (map["country"] as? String)
+            .flatMap { BusinessProfileOptions.countryCodes.contains($0) ? $0 : nil }
+            ?? BusinessProfileOptions.indiaRegionCode
+        // Only emptiness invalidates. Never re-prompt an owner who already gave
+        // us a subdivision simply because a curated list was later edited.
+        guard BusinessProfileValidation.isValidState(state, country: country) else {
+            return nil
+        }
+
+
+        let otherBusinessType = map["otherBusinessType"] as? String
+        if businessType == .other,
+           otherBusinessType?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+            return nil
+        }
+
+        let contactConsent = map["contactConsent"] as? Bool ?? false
+        let normalizedPhone = contactConsent
+            ? (map["phoneNumber"] as? String).flatMap {
+                BusinessProfileValidation.normalizedPhoneNumber(from: $0)
+            }
+            : nil
+
+        return BusinessProfile(
+            schemaVersion: schemaVersion,
+            businessName: (map["businessName"] as? String).flatMap {
+                BusinessProfileValidation.normalizedBusinessName(from: $0)
+            },
+            businessType: businessType,
+            otherBusinessType: otherBusinessType,
+            country: country,
+            state: state,
+            city: (map["city"] as? String).flatMap {
+                BusinessProfileValidation.normalizedCity(from: $0)
+            },
+            phoneNumber: normalizedPhone,
+            contactConsent: normalizedPhone != nil && contactConsent,
+            completedAt: (map["completedAt"] as? Timestamp)?.dateValue()
+        )
+    }
+
+    /// Display-only business name for the workspace currently being viewed.
+    ///
+    /// Deliberately reads `userRef()` (the workspace OWNER) rather than
+    /// `personalUserRef()`: an invited member should see the name of the shop
+    /// they are working in, not their own. Only the name is read — phone number
+    /// and contact consent are never surfaced to members.
+    ///
+    /// Non-throwing: this decorates a header, so a failure must degrade to
+    /// "show nothing" rather than surface an error.
+    func fetchWorkspaceBusinessName() async -> String? {
+        guard let ref = try? userRef(),
+              let snapshot = try? await ref.getDocument(),
+              let map = snapshot.data()?["businessProfile"] as? [String: Any],
+              let raw = map["businessName"] as? String else { return nil }
+        return BusinessProfileValidation.normalizedBusinessName(from: raw)
+    }
+
+    /// Saves business details on the authenticated user's document. Phone is
+    /// persisted only when it is valid and the user has explicitly consented.
+    func saveBusinessProfile(
+        businessName: String?,
+        businessType: BusinessType,
+        otherBusinessType: String?,
+        country: String,
+        state: String,
+        city: String?,
+        phoneNumber: String?,
+        contactConsent: Bool
+    ) async throws -> BusinessProfile {
+        let ref = try personalUserRef()
+        let previousSnapshot = try? await ref.getDocument()
+        let previousMap = previousSnapshot?.data()?["businessProfile"] as? [String: Any]
+        let completedAt: Any = previousMap?["completedAt"] ?? FieldValue.serverTimestamp()
+        let customType = otherBusinessType?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard BusinessProfileValidation.isValid(
+            businessType: businessType,
+            otherBusinessType: customType ?? "",
+            country: country,
+            state: state,
+            phoneInput: phoneNumber ?? "",
+            contactConsent: contactConsent
+        ) else {
+            throw FirestoreError.encodingFailed("Invalid business profile fields")
+        }
+
+        let normalizedPhone = phoneNumber.flatMap {
+            BusinessProfileValidation.normalizedPhoneNumber(from: $0)
+        }
+        let hasConsentedPhone = normalizedPhone != nil && contactConsent
+        let normalizedCity = city.flatMap { BusinessProfileValidation.normalizedCity(from: $0) }
+        let normalizedName = businessName.flatMap {
+            BusinessProfileValidation.normalizedBusinessName(from: $0)
+        }
+        let businessProfileData: [String: Any] = [
+            "schemaVersion": BusinessProfile.currentSchemaVersion,
+            "businessName": normalizedName ?? NSNull(),
+            "businessType": businessType.rawValue,
+            "otherBusinessType": businessType == .other ? (customType ?? "") : NSNull(),
+            "country": country,
+            "state": state.trimmingCharacters(in: .whitespacesAndNewlines),
+            "city": normalizedCity ?? NSNull(),
+            "phoneNumber": hasConsentedPhone ? (normalizedPhone ?? "") : NSNull(),
+            "contactConsent": hasConsentedPhone,
+            "consentVersion": hasConsentedPhone ? BusinessProfile.consentVersion : NSNull(),
+            "consentSource": hasConsentedPhone ? "business_profile" : NSNull(),
+            "consentUpdatedAt": FieldValue.serverTimestamp(),
+            "completedAt": completedAt,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]
+
+        try await ref.setData([
+            "businessProfile": businessProfileData,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+
+        return BusinessProfile(
+            schemaVersion: BusinessProfile.currentSchemaVersion,
+            businessName: normalizedName,
+            businessType: businessType,
+            otherBusinessType: businessType == .other ? customType : nil,
+            country: country,
+            state: state.trimmingCharacters(in: .whitespacesAndNewlines),
+            city: normalizedCity,
+            phoneNumber: hasConsentedPhone ? normalizedPhone : nil,
+            contactConsent: hasConsentedPhone,
+            completedAt: (completedAt as? Timestamp)?.dateValue() ?? Date()
+        )
     }
 
     /// Writes the current isPro status to the user's Firestore document.
