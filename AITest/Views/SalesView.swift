@@ -11,7 +11,6 @@ struct SalesView: View {
     @State private var showingItemPicker = false
     @State private var showingSmartSales = false
     @State private var showingReports = false
-    @State private var showingQuickSale = false
     @State private var preselectedItem: InventoryItem?
     @State private var savedSaleCount = 0
     @State private var showSavedToast = false
@@ -46,20 +45,26 @@ struct SalesView: View {
         }
         .sheet(isPresented: $showingItemPicker) {
             SaleItemPickerSheet { item in
-                preselectedItem = item
                 showingItemPicker = false
+                // Setting the item is what presents the next sheet. The brief
+                // delay lets the picker finish dismissing first — two sheets
+                // cannot transition on the same view in the same runloop turn.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    showingQuickSale = true
+                    preselectedItem = item
                 }
             }
             .sheetStyle()
         }
-        .sheet(isPresented: $showingQuickSale) {
-            if let item = preselectedItem {
-                QuickSaleSheet(item: item)
-                    .environmentObject(currencyManager)
-                    .sheetStyle()
-            }
+        // `.sheet(item:)` hands the item to the closure instead of re-reading
+        // `@State` at presentation time. The previous `isPresented` + `if let`
+        // form captured a stale `preselectedItem`: on the very first sale after
+        // launch that value was still nil, so the closure produced an empty
+        // sheet, and on every later sale it could briefly show the PREVIOUS
+        // item. It also self-clears on dismiss, so no stale value survives.
+        .sheet(item: $preselectedItem) { item in
+            QuickSaleSheet(item: item)
+                .environmentObject(currencyManager)
+                .sheetStyle()
         }
         .sheet(isPresented: $showingSmartSales) {
             SmartSalesEntryView()
