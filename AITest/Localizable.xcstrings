@@ -9153,6 +9153,101 @@
         }
       }
     },
+    "addItem.barcodeSet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "تم ضبط الباركود"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Barcode gesetzt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Barcode set"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Código de barras definido"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Code-barres défini"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "बारकोड सेट हो गया"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Barcode disetel"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "バーコードを設定しました"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಬಾರ್‌ಕೋಡ್ ಹೊಂದಿಸಲಾಗಿದೆ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ബാർകോഡ് സജ്ജമാക്കി"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Código de barras definido"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Штрихкод задан"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "பார்கோடு அமைக்கப்பட்டது"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "బార్‌కోడ్ సెట్ చేయబడింది"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "条码已设置"
+          }
+        }
+      }
+    },
     "Adjust by" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -15849,6 +15944,1146 @@
         }
       }
     },
+    "bulkScan.backToCamera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "الكاميرا"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Kamera"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cámara"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Appareil photo"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "कैमरा"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Kamera"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "カメラ"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಕ್ಯಾಮೆರಾ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ക്യാമറ"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Câmera"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Камера"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "கேமரா"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "కెమెరా"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "相机"
+          }
+        }
+      }
+    },
+    "bulkScan.cameraUnavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "الكاميرا غير متوفرة هنا.\nاستخدم \"إدخال الرمز\" لإضافة الباركود إلى القائمة."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Kamera hier nicht verfügbar.\nNutze „Code eingeben“, um Barcodes zur Liste hinzuzufügen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera not available here.\nUse Type code to add barcodes to the list."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La cámara no está disponible aquí.\nUsa \"Escribir código\" para añadir códigos de barras a la lista."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Appareil photo indisponible ici.\nUtilisez « Saisir le code » pour ajouter des codes-barres à la liste."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "यहाँ कैमरा उपलब्ध नहीं है।\nसूची में बारकोड जोड़ने के लिए \"कोड टाइप करें\" का उपयोग करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Kamera tidak tersedia di sini.\nGunakan \"Ketik kode\" untuk menambahkan barcode ke daftar."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ここではカメラを使用できません。\n「コードを入力」でバーコードをリストに追加してください。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಇಲ್ಲಿ ಕ್ಯಾಮೆರಾ ಲಭ್ಯವಿಲ್ಲ.\nಪಟ್ಟಿಗೆ ಬಾರ್‌ಕೋಡ್ ಸೇರಿಸಲು \"ಕೋಡ್ ಟೈಪ್ ಮಾಡಿ\" ಬಳಸಿ."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ഇവിടെ ക്യാമറ ലഭ്യമല്ല.\nപട്ടികയിൽ ബാർകോഡ് ചേർക്കാൻ \"കോഡ് ടൈപ്പ് ചെയ്യുക\" ഉപയോഗിക്കുക."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Câmera indisponível aqui.\nUse \"Digitar código\" para adicionar códigos de barras à lista."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Камера здесь недоступна.\nИспользуйте «Ввести код», чтобы добавить штрихкоды в список."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "இங்கே கேமரா கிடைக்கவில்லை.\nபட்டியலில் பார்கோடுகளைச் சேர்க்க \"குறியீட்டைத் தட்டச்சு செய்\" ஐப் பயன்படுத்தவும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ఇక్కడ కెమెరా అందుబాటులో లేదు.\nజాబితాకు బార్‌కోడ్‌లను జోడించడానికి \"కోడ్ టైప్ చేయండి\" ఉపయోగించండి."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "此处无法使用相机。\n请使用“输入条码”将条码添加到列表。"
+          }
+        }
+      }
+    },
+    "bulkScan.counter" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "تم مسح %d"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%d gescannt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d scanned"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%d escaneados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%d scannés"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%d स्कैन किए गए"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%d dipindai"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%d 件スキャン"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%d ಸ್ಕ್ಯಾನ್ ಆಗಿದೆ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%d സ്കാൻ ചെയ്തു"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%d escaneados"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Отсканировано: %d"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%d ஸ்கேன் செய்யப்பட்டது"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%d స్కాన్ చేయబడ్డాయి"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已扫描 %d 个"
+          }
+        }
+      }
+    },
+    "bulkScan.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "وجّه الكاميرا إلى الباركود التالي. الرمز نفسه يزيد الكمية."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Auf den nächsten Barcode richten. Derselbe Code erhöht die Menge."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Point at the next barcode. Same code adds quantity."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Apunta al siguiente código de barras. El mismo código suma cantidad."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Visez le code-barres suivant. Le même code augmente la quantité."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "अगले बारकोड पर कैमरा रखें। वही कोड मात्रा बढ़ाता है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Arahkan ke barcode berikutnya. Kode yang sama menambah jumlah."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "次のバーコードにかざしてください。同じコードは数量が加算されます。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಮುಂದಿನ ಬಾರ್‌ಕೋಡ್‌ನತ್ತ ತೋರಿಸಿ. ಅದೇ ಕೋಡ್ ಪ್ರಮಾಣವನ್ನು ಸೇರಿಸುತ್ತದೆ."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "അടുത്ത ബാർകോഡിലേക്ക് ചൂണ്ടുക. അതേ കോഡ് അളവ് കൂട്ടും."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aponte para o próximo código de barras. O mesmo código soma quantidade."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Наведите на следующий штрихкод. Тот же код увеличивает количество."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "அடுத்த பார்கோடை நோக்கிக் காட்டவும். அதே குறியீடு அளவைச் சேர்க்கும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "తదుపరి బార్‌కోడ్‌ను చూపండి. అదే కోడ్ పరిమాణాన్ని జోడిస్తుంది."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "对准下一个条码。相同条码会累加数量。"
+          }
+        }
+      }
+    },
+    "bulkScan.manual" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "إدخال الرمز"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Code eingeben"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type code"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escribir código"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Saisir le code"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "कोड टाइप करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ketik kode"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "コードを入力"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಕೋಡ್ ಟೈಪ್ ಮಾಡಿ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "കോഡ് ടൈപ്പ് ചെയ്യുക"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Digitar código"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ввести код"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "குறியீட்டைத் தட்டச்சு செய்"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "కోడ్ టైప్ చేయండి"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "输入条码"
+          }
+        }
+      }
+    },
+    "bulkScan.manualMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "اكتب رقم الباركود ثم تابع المسح."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gib die Barcode-Nummer ein und scanne dann weiter."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type the barcode number, then keep scanning."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escribe el número del código de barras y sigue escaneando."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Saisissez le numéro du code-barres, puis continuez à scanner."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "बारकोड नंबर टाइप करें, फिर स्कैन करते रहें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ketik nomor barcode, lalu lanjutkan memindai."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "バーコード番号を入力して、スキャンを続けてください。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಬಾರ್‌ಕೋಡ್ ಸಂಖ್ಯೆ ಟೈಪ್ ಮಾಡಿ, ನಂತರ ಸ್ಕ್ಯಾನ್ ಮುಂದುವರಿಸಿ."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ബാർകോഡ് നമ്പർ ടൈപ്പ് ചെയ്ത് സ്കാൻ തുടരുക."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Digite o número do código de barras e continue escaneando."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Введите номер штрихкода и продолжайте сканировать."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "பார்கோடு எண்ணைத் தட்டச்சு செய்து, ஸ்கேன் செய்வதைத் தொடரவும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "బార్‌కోడ్ నంబర్ టైప్ చేసి, స్కాన్ కొనసాగించండి."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "输入条码号，然后继续扫描。"
+          }
+        }
+      }
+    },
+    "bulkScan.manualPlaceholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "مثال: 5012345678900"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "z. B. 5012345678900"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. 5012345678900"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "p. ej. 5012345678900"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ex. 5012345678900"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "उदा. 5012345678900"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mis. 5012345678900"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "例：5012345678900"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಉದಾ. 5012345678900"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ഉദാ. 5012345678900"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ex. 5012345678900"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "напр. 5012345678900"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "எ.கா. 5012345678900"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ఉదా. 5012345678900"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "例如 5012345678900"
+          }
+        }
+      }
+    },
+    "bulkScan.manualTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "أدخل الباركود"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Barcode eingeben"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter barcode"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Introducir código de barras"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Saisir le code-barres"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "बारकोड दर्ज करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Masukkan barcode"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "バーコードを入力"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಬಾರ್‌ಕೋಡ್ ನಮೂದಿಸಿ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ബാർകോഡ് നൽകുക"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Inserir código de barras"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Введите штрихкод"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "பார்கோடை உள்ளிடவும்"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "బార్‌కోడ్ నమోదు చేయండి"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "输入条码"
+          }
+        }
+      }
+    },
+    "bulkScan.pickStorage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "حفظ عمليات المسح في"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Scans speichern in"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save scans to"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Guardar escaneos en"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Enregistrer les scans dans"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "स्कैन यहाँ सहेजें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Simpan hasil pindai ke"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "スキャンの保存先"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಸ್ಕ್ಯಾನ್‌ಗಳನ್ನು ಇಲ್ಲಿ ಉಳಿಸಿ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "സ്കാനുകൾ ഇവിടെ സംരക്ഷിക്കുക"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Salvar escaneamentos em"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Сохранить сканы в"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ஸ்கேன்களை இங்கே சேமி"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "స్కాన్‌లను ఇక్కడ సేవ్ చేయండి"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "扫描结果保存到"
+          }
+        }
+      }
+    },
+    "bulkScan.reviewTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "مراجعة عمليات المسح"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Scans prüfen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review scans"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Revisar escaneos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vérifier les scans"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "स्कैन की समीक्षा करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tinjau hasil pindai"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "スキャンを確認"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಸ್ಕ್ಯಾನ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "സ്കാനുകൾ പരിശോധിക്കുക"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Revisar escaneamentos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Проверить сканы"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ஸ்கேன்களைச் சரிபார்க்கவும்"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "స్కాన్‌లను సమీక్షించండి"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "检查扫描结果"
+          }
+        }
+      }
+    },
+    "bulkScan.saveFailed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "تعذّر حفظ عمليات المسح هذه. حاول مرة أخرى."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Diese Scans konnten nicht gespeichert werden. Bitte versuche es erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't save these scans. Please try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudieron guardar estos escaneos. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Impossible d'enregistrer ces scans. Veuillez réessayer."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ये स्कैन सहेजे नहीं जा सके। कृपया फिर से प्रयास करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tidak dapat menyimpan hasil pindai ini. Silakan coba lagi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "スキャンを保存できませんでした。もう一度お試しください。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಈ ಸ್ಕ್ಯಾನ್‌ಗಳನ್ನು ಉಳಿಸಲಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ഈ സ്കാനുകൾ സംരക്ഷിക്കാനായില്ല. വീണ്ടും ശ്രമിക്കുക."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Não foi possível salvar estes escaneamentos. Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Не удалось сохранить сканы. Попробуйте ещё раз."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "இந்த ஸ்கேன்களைச் சேமிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ఈ స్కాన్‌లను సేవ్ చేయలేకపోయాం. దయచేసి మళ్లీ ప్రయత్నించండి."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "无法保存这些扫描结果。请重试。"
+          }
+        }
+      }
+    },
+    "bulkScan.toolbar" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "مسح باركود مجمّع"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Massen-Barcode-Scan"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bulk barcode scan"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escaneo masivo de códigos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Scan de codes-barres en masse"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "बल्क बारकोड स्कैन"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pindai barcode massal"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "一括バーコードスキャン"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಬೃಹತ್ ಬಾರ್‌ಕೋಡ್ ಸ್ಕ್ಯಾನ್"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ബൾക്ക് ബാർകോഡ് സ്കാൻ"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escaneamento em massa"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Массовое сканирование"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "மொத்த பார்கோடு ஸ்கேன்"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "బల్క్ బార్‌కోడ్ స్కాన్"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "批量条码扫描"
+          }
+        }
+      }
+    },
     "Business" : {
       "comment" : "A label displayed above the section for entering business details.",
       "isCommentAutoGenerated" : true
@@ -18424,6 +19659,196 @@
         }
       }
     },
+    "businessProfile.regionSearch" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ابحث عن ولاية أو منطقة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bundesland oder Region suchen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search state or region"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Buscar estado o región"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rechercher un état ou une région"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "राज्य या क्षेत्र खोजें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cari negara bagian atau wilayah"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "州・地域を検索"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ರಾಜ್ಯ ಅಥವಾ ಪ್ರದೇಶ ಹುಡುಕಿ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "സംസ്ഥാനം അല്ലെങ്കിൽ പ്രദേശം തിരയുക"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Buscar estado ou região"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Поиск штата или региона"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "மாநிலம் அல்லது பகுதியைத் தேடு"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "రాష్ట్రం లేదా ప్రాంతాన్ని వెతకండి"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "搜索州或地区"
+          }
+        }
+      }
+    },
+    "businessProfile.regionTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "الولاية / المنطقة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bundesland / Region"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "State / Region"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estado / Región"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "État / Région"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "राज्य / क्षेत्र"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Negara bagian / Wilayah"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "州・地域"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ರಾಜ್ಯ / ಪ್ರದೇಶ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "സംസ്ഥാനം / പ്രദേശം"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estado / Região"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Штат / Регион"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "மாநிலம் / பகுதி"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "రాష్ట్రం / ప్రాంతం"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "州 / 地区"
+          }
+        }
+      }
+    },
     "businessProfile.saveChanges" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -19370,6 +20795,101 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "什么类型的生意？"
+          }
+        }
+      }
+    },
+    "businessProfile.useTyped" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "استخدم \"%@\""
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "\"%@\" verwenden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use \"%@\""
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usar \"%@\""
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Utiliser « %@ »"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "\"%@\" का उपयोग करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gunakan \"%@\""
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "「%@」を使う"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "\"%@\" ಬಳಸಿ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "\"%@\" ഉപയോഗിക്കുക"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usar \"%@\""
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Использовать «%@»"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "\"%@\" ஐப் பயன்படுத்து"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "\"%@\" ఉపయోగించండి"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "使用“%@”"
           }
         }
       }
@@ -38648,6 +40168,386 @@
         }
       }
     },
+    "forceUpdate.button" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "حدّث الآن"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Jetzt aktualisieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update now"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Actualizar ahora"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mettre à jour"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "अभी अपडेट करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Perbarui sekarang"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "今すぐ更新"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಈಗ ಅಪ್‌ಡೇಟ್ ಮಾಡಿ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ഇപ്പോൾ അപ്‌ഡേറ്റ് ചെയ്യുക"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Atualizar agora"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Обновить"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "இப்போது புதுப்பிக்கவும்"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ఇప్పుడే అప్‌డేట్ చేయండి"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "立即更新"
+          }
+        }
+      }
+    },
+    "forceUpdate.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "لم يعد هذا الإصدار من Stoqly مدعومًا. حدّث إلى أحدث إصدار لمواصلة استخدام التطبيق."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Diese Version von Stoqly wird nicht mehr unterstützt. Aktualisiere auf die neueste Version, um die App weiter zu nutzen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This version of Stoqly is no longer supported. Update to the latest version to keep using the app."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esta versión de Stoqly ya no es compatible. Actualiza a la última versión para seguir usando la app."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cette version de Stoqly n'est plus prise en charge. Mettez à jour vers la dernière version pour continuer à utiliser l'app."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stoqly का यह संस्करण अब समर्थित नहीं है। ऐप का उपयोग जारी रखने के लिए नवीनतम संस्करण में अपडेट करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Versi Stoqly ini tidak lagi didukung. Perbarui ke versi terbaru untuk terus menggunakan aplikasi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "このバージョンの Stoqly はサポートが終了しました。引き続きご利用いただくには最新版に更新してください。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stoqly ಯ ಈ ಆವೃತ್ತಿಗೆ ಇನ್ನು ಬೆಂಬಲವಿಲ್ಲ. ಆ್ಯಪ್ ಬಳಸುವುದನ್ನು ಮುಂದುವರಿಸಲು ಇತ್ತೀಚಿನ ಆವೃತ್ತಿಗೆ ಅಪ್‌ಡೇಟ್ ಮಾಡಿ."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stoqly-യുടെ ഈ പതിപ്പിന് ഇനി പിന്തുണയില്ല. ആപ്പ് ഉപയോഗിക്കുന്നത് തുടരാൻ ഏറ്റവും പുതിയ പതിപ്പിലേക്ക് അപ്‌ഡേറ്റ് ചെയ്യുക."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esta versão do Stoqly não é mais compatível. Atualize para a versão mais recente para continuar usando o app."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Эта версия Stoqly больше не поддерживается. Обновитесь до последней версии, чтобы продолжить пользоваться приложением."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stoqly இன் இந்தப் பதிப்பு இனி ஆதரிக்கப்படாது. செயலியைத் தொடர்ந்து பயன்படுத்த சமீபத்திய பதிப்பிற்குப் புதுப்பிக்கவும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stoqly యొక్క ఈ వెర్షన్‌కు ఇకపై మద్దతు లేదు. యాప్‌ను ఉపయోగించడం కొనసాగించడానికి తాజా వెర్షన్‌కు అప్‌డేట్ చేయండి."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "此版本的 Stoqly 已不再受支持。请更新到最新版本以继续使用。"
+          }
+        }
+      }
+    },
+    "forceUpdate.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "التحديث مطلوب"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Update erforderlich"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update required"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Actualización necesaria"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mise à jour requise"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "अपडेट आवश्यक है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pembaruan diperlukan"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "アップデートが必要です"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಅಪ್‌ಡೇಟ್ ಅಗತ್ಯವಿದೆ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "അപ്‌ഡേറ്റ് ആവശ്യമാണ്"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Atualização necessária"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Требуется обновление"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "புதுப்பிப்பு தேவை"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "అప్‌డేట్ అవసరం"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "需要更新"
+          }
+        }
+      }
+    },
+    "forceUpdate.versionNote" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "إصدارك: %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Deine Version: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your version: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu versión: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Votre version : %@"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "आपका संस्करण: %@"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Versi Anda: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "現在のバージョン: %@"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ನಿಮ್ಮ ಆವೃತ್ತಿ: %@"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "നിങ്ങളുടെ പതിപ്പ്: %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sua versão: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ваша версия: %@"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "உங்கள் பதிப்பு: %@"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "మీ వెర్షన్: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "您的版本：%@"
+          }
+        }
+      }
+    },
     "Forgot Password" : {
       "comment" : "The title of the \"Forgot Password\" view.",
       "extractionState" : "manual",
@@ -43565,6 +45465,101 @@
         }
       }
     },
+    "image.saveFailed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "تعذّر حفظ تغييرات المخزون. حاول مرة أخرى."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Deine Bestandsänderungen konnten nicht gespeichert werden. Bitte versuche es erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't save your inventory changes. Please try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudieron guardar los cambios de inventario. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Impossible d'enregistrer vos modifications d'inventaire. Veuillez réessayer."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "आपके इन्वेंटरी बदलाव सहेजे नहीं जा सके। कृपया फिर से प्रयास करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tidak dapat menyimpan perubahan inventaris Anda. Silakan coba lagi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "在庫の変更を保存できませんでした。もう一度お試しください。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ನಿಮ್ಮ ದಾಸ್ತಾನು ಬದಲಾವಣೆಗಳನ್ನು ಉಳಿಸಲಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "നിങ്ങളുടെ ഇൻവെന്ററി മാറ്റങ്ങൾ സംരക്ഷിക്കാനായില്ല. വീണ്ടും ശ്രമിക്കുക."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Não foi possível salvar suas alterações de estoque. Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Не удалось сохранить изменения в инвентаре. Попробуйте ещё раз."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "உங்கள் சரக்கு மாற்றங்களைச் சேமிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "మీ ఇన్వెంటరీ మార్పులను సేవ్ చేయలేకపోయాం. దయచేసి మళ్లీ ప్రయత్నించండి."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "无法保存您的库存更改。请重试。"
+          }
+        }
+      }
+    },
     "Import %lld Item%@ into %@" : {
       "comment" : "A button label that triggers an import action, indicating that the user is about to import a specified number of items into a specified storage. The first argument is the count of items to be imported. The second argument is the name of the storage into which the items will be imported.",
       "extractionState" : "manual",
@@ -46323,6 +48318,101 @@
         }
       }
     },
+    "invite_accept_local_save_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "تعذّر حفظ عضوية الفريق على هذا الجهاز. حاول مرة أخرى."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Teammitgliedschaft konnte auf diesem Gerät nicht gespeichert werden. Versuche es erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't save team membership on this device. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudo guardar la membresía del equipo en este dispositivo. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Impossible d'enregistrer l'adhésion à l'équipe sur cet appareil. Réessayez."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "इस डिवाइस पर टीम सदस्यता सहेजी नहीं जा सकी। फिर से प्रयास करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tidak dapat menyimpan keanggotaan tim di perangkat ini. Coba lagi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "この端末にチームのメンバーシップを保存できませんでした。もう一度お試しください。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಈ ಸಾಧನದಲ್ಲಿ ತಂಡದ ಸದಸ್ಯತ್ವವನ್ನು ಉಳಿಸಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ഈ ഉപകരണത്തിൽ ടീം അംഗത്വം സംരക്ഷിക്കാനായില്ല. വീണ്ടും ശ്രമിക്കുക."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Não foi possível salvar a associação à equipe neste dispositivo. Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Не удалось сохранить участие в команде на этом устройстве. Попробуйте ещё раз."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "இந்தச் சாதனத்தில் குழு உறுப்பினர் நிலையைச் சேமிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ఈ పరికరంలో టీమ్ సభ్యత్వాన్ని సేవ్ చేయలేకపోయాం. మళ్లీ ప్రయత్నించండి."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "无法在此设备上保存团队成员身份。请重试。"
+          }
+        }
+      }
+    },
     "Invoice import requires Pro" : {
       "comment" : "A description below the \"Import Invoice\" section, explaining that it requires Pro.",
       "extractionState" : "manual",
@@ -48944,6 +51034,101 @@
         }
       }
     },
+    "itemList.scanToFind" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "امسح للعثور على صنف"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Scannen, um Artikel zu finden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan to Find Item"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escanear para buscar artículo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Scanner pour trouver un article"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "आइटम खोजने के लिए स्कैन करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pindai untuk menemukan item"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "スキャンして商品を検索"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಐಟಂ ಹುಡುಕಲು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ഇനം കണ്ടെത്താൻ സ്കാൻ ചെയ്യുക"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escanear para encontrar item"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Сканировать для поиска товара"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "பொருளைக் கண்டறிய ஸ்கேன் செய்"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "వస్తువును కనుగొనడానికి స్కాన్ చేయండి"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "扫描查找商品"
+          }
+        }
+      }
+    },
     "items" : {
       "comment" : "A label describing the number of items.",
       "extractionState" : "manual",
@@ -51469,14 +53654,6 @@
           }
         }
       }
-    },
-    "Load Test Sales Fixture" : {
-      "comment" : "A button that loads a test sales fixture for review when pressed.",
-      "isCommentAutoGenerated" : true
-    },
-    "Load Test Shelf Fixture" : {
-      "comment" : "A button that loads a test fixture for smart count reviews.",
-      "isCommentAutoGenerated" : true
     },
     "Loading ad..." : {
       "comment" : "A text indicator while an ad is loading.",
@@ -62128,6 +64305,101 @@
         }
       }
     },
+    "Not selected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "غير محدد"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nicht ausgewählt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not selected"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No seleccionado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Non sélectionné"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "चयनित नहीं"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tidak dipilih"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "未選択"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಆಯ್ಕೆಯಾಗಿಲ್ಲ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "തിരഞ്ഞെടുത്തിട്ടില്ല"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Não selecionado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Не выбрано"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "தேர்ந்தெடுக்கப்படவில்லை"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ఎంపిక చేయలేదు"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "未选择"
+          }
+        }
+      }
+    },
     "Not synced" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -67844,104 +70116,7 @@
         }
       }
     },
-    "paywall.trial.header" : {
-      "comment" : "Paywall: 7-day free trial banner shown above the plan buttons. TODO(i18n): machine-drafted, pending human translator review.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "تجربة مجانية لمدة 7 أيام — يمكنك الإلغاء في أي وقت"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "7 Tage kostenlos testen — jederzeit kündbar"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "7-day free trial — cancel anytime"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Prueba gratis de 7 días: cancela cuando quieras"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Essai gratuit de 7 jours — annulable à tout moment"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "7 दिन का मुफ़्त ट्रायल — कभी भी रद्द करें"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Uji coba gratis 7 hari — batalkan kapan saja"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "7日間の無料トライアル — いつでもキャンセル可能"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "7 ದಿನಗಳ ಉಚಿತ ಟ್ರಯಲ್ — ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "7 ദിവസത്തെ സൗജന്യ ട്രയൽ — എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Teste grátis de 7 dias — cancele quando quiser"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "7 дней бесплатно — отмена в любой момент"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "7 நாள் இலவச சோதனை — எப்போது வேண்டுமானாலும் ரத்து செய்யலாம்"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "7 రోజుల ఉచిత ట్రయల్ — ఎప్పుడైనా రద్దు చేసుకోవచ్చు"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "7 天免费试用 — 随时可取消"
-          }
-        }
-      }
-    },
-    "paywall.trial.legal" : {
-      "comment" : "Paywall: auto-renew legal disclosure under the plan buttons. TODO(i18n): machine-drafted, pending human translator review.",
+    "paywall.renewalLegal" : {
       "extractionState" : "manual",
       "localizations" : {
         "ar" : {
@@ -67958,14 +70133,14 @@
         },
         "en" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "Renews automatically. Cancel any time in App Store settings."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Se renueva automáticamente. Cancela cuando quieras en los ajustes de App Store."
+            "value" : "Se renueva automáticamente. Cancela cuando quieras en los ajustes de la App Store."
           }
         },
         "fr" : {
@@ -67977,7 +70152,7 @@
         "hi" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "अपने आप नवीनीकृत होता है। App Store सेटिंग्स में कभी भी रद्द करें।"
+            "value" : "स्वतः नवीनीकृत होता है। App Store सेटिंग्स में कभी भी रद्द करें।"
           }
         },
         "id" : {
@@ -67989,19 +70164,19 @@
         "ja" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "自動的に更新されます。App Store の設定からいつでもキャンセルできます。"
+            "value" : "自動更新されます。App Store の設定からいつでも解約できます。"
           }
         },
         "kn" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "ಸ್ವಯಂಚಾಲಿತವಾಗಿ ನವೀಕರಣಗೊಳ್ಳುತ್ತದೆ. App Store ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ."
+            "value" : "ಸ್ವಯಂಚಾಲಿತವಾಗಿ ನವೀಕರಣಗೊಳ್ಳುತ್ತದೆ. App Store ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಮಾಡಿ."
           }
         },
         "ml" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "സ്വയമേവ പുതുക്കപ്പെടും. App Store ക്രമീകരണങ്ങളിൽ എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം."
+            "value" : "സ്വയമേവ പുതുക്കുന്നു. App Store ക്രമീകരണങ്ങളിൽ എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം."
           }
         },
         "pt-BR" : {
@@ -68013,7 +70188,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Продлевается автоматически. Отменить можно в любой момент в настройках App Store."
+            "value" : "Продлевается автоматически. Отменить можно в настройках App Store в любое время."
           }
         },
         "ta" : {
@@ -68025,205 +70200,13 @@
         "te" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "స్వయంచాలకంగా పునరుద్ధరించబడుతుంది. App Store సెట్టింగ్‌లలో ఎప్పుడైనా రద్దు చేసుకోవచ్చు."
+            "value" : "స్వయంచాలకంగా రెన్యూ అవుతుంది. App Store సెట్టింగ్‌లలో ఎప్పుడైనా రద్దు చేయండి."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "自动续订。可随时在 App Store 设置中取消。"
-          }
-        }
-      }
-    },
-    "paywall.trial.subtitle_monthly" : {
-      "comment" : "Paywall: price after the free trial ends. %@ is the StoreKit localized price — keep the placeholder, never a literal amount or currency symbol. TODO(i18n): machine-drafted, pending human translator review.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ثم %@/شهر"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Danach %@/Monat"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Then %@/month"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Luego %@/mes"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Puis %@/mois"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "फिर %@/माह"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Lalu %@/bulan"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "その後 %@/月"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ನಂತರ %@/ತಿಂಗಳು"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "പിന്നീട് %@/മാസം"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Depois %@/mês"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Затем %@/месяц"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "பிறகு %@/மாதம்"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "తర్వాత %@/నెల"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "之后 %@/月"
-          }
-        }
-      }
-    },
-    "paywall.trial.subtitle_yearly" : {
-      "comment" : "Paywall: price after the free trial ends. %@ is the StoreKit localized price — keep the placeholder, never a literal amount or currency symbol. TODO(i18n): machine-drafted, pending human translator review.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ثم %@/سنة"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Danach %@/Jahr"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Then %@/year"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Luego %@/año"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Puis %@/an"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "फिर %@/वर्ष"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Lalu %@/tahun"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "その後 %@/年"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ನಂತರ %@/ವರ್ಷ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "പിന്നീട് %@/വർഷം"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Depois %@/ano"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Затем %@/год"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "பிறகு %@/ஆண்டு"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "తర్వాత %@/సంవత్సరం"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "之后 %@/年"
           }
         }
       }
@@ -70303,9 +72286,6 @@
           }
         }
       }
-    },
-    "Preview feedback prompt" : {
-
     },
     "Price Above Unit Cost" : {
       "extractionState" : "manual",
@@ -85514,6 +87494,101 @@
         }
       }
     },
+    "Selected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "محدد"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ausgewählt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Seleccionado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sélectionné"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "चयनित"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dipilih"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "選択済み"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಆಯ್ಕೆಯಾಗಿದೆ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "തിരഞ്ഞെടുത്തു"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Selecionado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Выбрано"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "தேர்ந்தெடுக்கப்பட்டது"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ఎంపిక చేయబడింది"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已选择"
+          }
+        }
+      }
+    },
     "Sell: %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -94360,6 +96435,101 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "团队成员 (%lld)"
+          }
+        }
+      }
+    },
+    "team_error_not_authenticated" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "يجب تسجيل الدخول."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Du musst angemeldet sein."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You must be signed in."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Debes iniciar sesión."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vous devez être connecté."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "आपको साइन इन करना होगा।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Anda harus masuk."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "サインインが必要です。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ನೀವು ಸೈನ್ ಇನ್ ಆಗಿರಬೇಕು."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "നിങ്ങൾ സൈൻ ഇൻ ചെയ്തിരിക്കണം."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Você precisa estar conectado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Необходимо войти в аккаунт."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "நீங்கள் உள்நுழைந்திருக்க வேண்டும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "మీరు సైన్ ఇన్ చేసి ఉండాలి."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "您需要先登录。"
           }
         }
       }
@@ -107265,2096 +109435,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "您的工作区"
-          }
-        }
-      }
-    },
-    "businessProfile.regionTitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "الولاية / المنطقة"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Bundesland / Region"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "State / Region"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Estado / Región"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "État / Région"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "राज्य / क्षेत्र"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Negara bagian / Wilayah"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "州・地域"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ರಾಜ್ಯ / ಪ್ರದೇಶ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "സംസ്ഥാനം / പ്രദേശം"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Estado / Região"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Штат / Регион"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "மாநிலம் / பகுதி"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "రాష్ట్రం / ప్రాంతం"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "州 / 地区"
-          }
-        }
-      }
-    },
-    "businessProfile.regionSearch" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ابحث عن ولاية أو منطقة"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Bundesland oder Region suchen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search state or region"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Buscar estado o región"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Rechercher un état ou une région"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "राज्य या क्षेत्र खोजें"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Cari negara bagian atau wilayah"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "州・地域を検索"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ರಾಜ್ಯ ಅಥವಾ ಪ್ರದೇಶ ಹುಡುಕಿ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "സംസ്ഥാനം അല്ലെങ്കിൽ പ്രദേശം തിരയുക"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Buscar estado ou região"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Поиск штата или региона"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "மாநிலம் அல்லது பகுதியைத் தேடு"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "రాష్ట్రం లేదా ప్రాంతాన్ని వెతకండి"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "搜索州或地区"
-          }
-        }
-      }
-    },
-    "businessProfile.useTyped" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "استخدم \"%@\""
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "\"%@\" verwenden"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Use \"%@\""
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Usar \"%@\""
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Utiliser « %@ »"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "\"%@\" का उपयोग करें"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Gunakan \"%@\""
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "「%@」を使う"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "\"%@\" ಬಳಸಿ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "\"%@\" ഉപയോഗിക്കുക"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Usar \"%@\""
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Использовать «%@»"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "\"%@\" ஐப் பயன்படுத்து"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "\"%@\" ఉపయోగించండి"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "使用“%@”"
-          }
-        }
-      }
-    },
-    "Not selected" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "غير محدد"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Nicht ausgewählt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not selected"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "No seleccionado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Non sélectionné"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "चयनित नहीं"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Tidak dipilih"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "未選択"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಆಯ್ಕೆಯಾಗಿಲ್ಲ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "തിരഞ്ഞെടുത്തിട്ടില്ല"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Não selecionado"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Не выбрано"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "தேர்ந்தெடுக்கப்படவில்லை"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ఎంపిక చేయలేదు"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "未选择"
-          }
-        }
-      }
-    },
-    "Selected" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "محدد"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ausgewählt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Selected"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Seleccionado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Sélectionné"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "चयनित"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Dipilih"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "選択済み"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಆಯ್ಕೆಯಾಗಿದೆ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "തിരഞ്ഞെടുത്തു"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Selecionado"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Выбрано"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "தேர்ந்தெடுக்கப்பட்டது"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ఎంపిక చేయబడింది"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "已选择"
-          }
-        }
-      }
-    },
-    "addItem.barcodeSet" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "تم ضبط الباركود"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Barcode gesetzt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Barcode set"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Código de barras definido"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Code-barres défini"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "बारकोड सेट हो गया"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Barcode disetel"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "バーコードを設定しました"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಬಾರ್‌ಕೋಡ್ ಹೊಂದಿಸಲಾಗಿದೆ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ബാർകോഡ് സജ്ജമാക്കി"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Código de barras definido"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Штрихкод задан"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "பார்கோடு அமைக்கப்பட்டது"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "బార్‌కోడ్ సెట్ చేయబడింది"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "条码已设置"
-          }
-        }
-      }
-    },
-    "bulkScan.backToCamera" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "الكاميرا"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Kamera"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Camera"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Cámara"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Appareil photo"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "कैमरा"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Kamera"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "カメラ"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಕ್ಯಾಮೆರಾ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ക്യാമറ"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Câmera"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Камера"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "கேமரா"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "కెమెరా"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "相机"
-          }
-        }
-      }
-    },
-    "bulkScan.cameraUnavailable" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "الكاميرا غير متوفرة هنا.\nاستخدم \"إدخال الرمز\" لإضافة الباركود إلى القائمة."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Kamera hier nicht verfügbar.\nNutze „Code eingeben“, um Barcodes zur Liste hinzuzufügen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Camera not available here.\nUse Type code to add barcodes to the list."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "La cámara no está disponible aquí.\nUsa \"Escribir código\" para añadir códigos de barras a la lista."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Appareil photo indisponible ici.\nUtilisez « Saisir le code » pour ajouter des codes-barres à la liste."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "यहाँ कैमरा उपलब्ध नहीं है।\nसूची में बारकोड जोड़ने के लिए \"कोड टाइप करें\" का उपयोग करें।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Kamera tidak tersedia di sini.\nGunakan \"Ketik kode\" untuk menambahkan barcode ke daftar."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ここではカメラを使用できません。\n「コードを入力」でバーコードをリストに追加してください。"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಇಲ್ಲಿ ಕ್ಯಾಮೆರಾ ಲಭ್ಯವಿಲ್ಲ.\nಪಟ್ಟಿಗೆ ಬಾರ್‌ಕೋಡ್ ಸೇರಿಸಲು \"ಕೋಡ್ ಟೈಪ್ ಮಾಡಿ\" ಬಳಸಿ."
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ഇവിടെ ക്യാമറ ലഭ്യമല്ല.\nപട്ടികയിൽ ബാർകോഡ് ചേർക്കാൻ \"കോഡ് ടൈപ്പ് ചെയ്യുക\" ഉപയോഗിക്കുക."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Câmera indisponível aqui.\nUse \"Digitar código\" para adicionar códigos de barras à lista."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Камера здесь недоступна.\nИспользуйте «Ввести код», чтобы добавить штрихкоды в список."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "இங்கே கேமரா கிடைக்கவில்லை.\nபட்டியலில் பார்கோடுகளைச் சேர்க்க \"குறியீட்டைத் தட்டச்சு செய்\" ஐப் பயன்படுத்தவும்."
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ఇక్కడ కెమెరా అందుబాటులో లేదు.\nజాబితాకు బార్‌కోడ్‌లను జోడించడానికి \"కోడ్ టైప్ చేయండి\" ఉపయోగించండి."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "此处无法使用相机。\n请使用“输入条码”将条码添加到列表。"
-          }
-        }
-      }
-    },
-    "bulkScan.counter" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "تم مسح %d"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%d gescannt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d scanned"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%d escaneados"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%d scannés"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%d स्कैन किए गए"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%d dipindai"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%d 件スキャン"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%d ಸ್ಕ್ಯಾನ್ ಆಗಿದೆ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%d സ്കാൻ ചെയ്തു"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%d escaneados"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Отсканировано: %d"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%d ஸ்கேன் செய்யப்பட்டது"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%d స్కాన్ చేయబడ్డాయి"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "已扫描 %d 个"
-          }
-        }
-      }
-    },
-    "bulkScan.hint" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "وجّه الكاميرا إلى الباركود التالي. الرمز نفسه يزيد الكمية."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Auf den nächsten Barcode richten. Derselbe Code erhöht die Menge."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Point at the next barcode. Same code adds quantity."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Apunta al siguiente código de barras. El mismo código suma cantidad."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Visez le code-barres suivant. Le même code augmente la quantité."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "अगले बारकोड पर कैमरा रखें। वही कोड मात्रा बढ़ाता है।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Arahkan ke barcode berikutnya. Kode yang sama menambah jumlah."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "次のバーコードにかざしてください。同じコードは数量が加算されます。"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಮುಂದಿನ ಬಾರ್‌ಕೋಡ್‌ನತ್ತ ತೋರಿಸಿ. ಅದೇ ಕೋಡ್ ಪ್ರಮಾಣವನ್ನು ಸೇರಿಸುತ್ತದೆ."
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "അടുത്ത ബാർകോഡിലേക്ക് ചൂണ്ടുക. അതേ കോഡ് അളവ് കൂട്ടും."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Aponte para o próximo código de barras. O mesmo código soma quantidade."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Наведите на следующий штрихкод. Тот же код увеличивает количество."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "அடுத்த பார்கோடை நோக்கிக் காட்டவும். அதே குறியீடு அளவைச் சேர்க்கும்."
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "తదుపరి బార్‌కోడ్‌ను చూపండి. అదే కోడ్ పరిమాణాన్ని జోడిస్తుంది."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "对准下一个条码。相同条码会累加数量。"
-          }
-        }
-      }
-    },
-    "bulkScan.manual" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "إدخال الرمز"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Code eingeben"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Type code"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Escribir código"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Saisir le code"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "कोड टाइप करें"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ketik kode"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "コードを入力"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಕೋಡ್ ಟೈಪ್ ಮಾಡಿ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "കോഡ് ടൈപ്പ് ചെയ്യുക"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Digitar código"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ввести код"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "குறியீட்டைத் தட்டச்சு செய்"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "కోడ్ టైప్ చేయండి"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "输入条码"
-          }
-        }
-      }
-    },
-    "bulkScan.manualMessage" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "اكتب رقم الباركود ثم تابع المسح."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Gib die Barcode-Nummer ein und scanne dann weiter."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Type the barcode number, then keep scanning."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Escribe el número del código de barras y sigue escaneando."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Saisissez le numéro du code-barres, puis continuez à scanner."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "बारकोड नंबर टाइप करें, फिर स्कैन करते रहें।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ketik nomor barcode, lalu lanjutkan memindai."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "バーコード番号を入力して、スキャンを続けてください。"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಬಾರ್‌ಕೋಡ್ ಸಂಖ್ಯೆ ಟೈಪ್ ಮಾಡಿ, ನಂತರ ಸ್ಕ್ಯಾನ್ ಮುಂದುವರಿಸಿ."
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ബാർകോഡ് നമ്പർ ടൈപ്പ് ചെയ്ത് സ്കാൻ തുടരുക."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Digite o número do código de barras e continue escaneando."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Введите номер штрихкода и продолжайте сканировать."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "பார்கோடு எண்ணைத் தட்டச்சு செய்து, ஸ்கேன் செய்வதைத் தொடரவும்."
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "బార్‌కోడ్ నంబర్ టైప్ చేసి, స్కాన్ కొనసాగించండి."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "输入条码号，然后继续扫描。"
-          }
-        }
-      }
-    },
-    "bulkScan.manualPlaceholder" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "مثال: 5012345678900"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "z. B. 5012345678900"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "e.g. 5012345678900"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "p. ej. 5012345678900"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ex. 5012345678900"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "उदा. 5012345678900"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "mis. 5012345678900"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "例：5012345678900"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಉದಾ. 5012345678900"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ഉദാ. 5012345678900"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ex. 5012345678900"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "напр. 5012345678900"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "எ.கா. 5012345678900"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ఉదా. 5012345678900"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "例如 5012345678900"
-          }
-        }
-      }
-    },
-    "bulkScan.manualTitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "أدخل الباركود"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Barcode eingeben"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter barcode"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Introducir código de barras"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Saisir le code-barres"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "बारकोड दर्ज करें"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Masukkan barcode"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "バーコードを入力"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಬಾರ್‌ಕೋಡ್ ನಮೂದಿಸಿ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ബാർകോഡ് നൽകുക"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Inserir código de barras"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Введите штрихкод"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "பார்கோடை உள்ளிடவும்"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "బార్‌కోడ్ నమోదు చేయండి"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "输入条码"
-          }
-        }
-      }
-    },
-    "bulkScan.pickStorage" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "حفظ عمليات المسح في"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Scans speichern in"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Save scans to"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Guardar escaneos en"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Enregistrer les scans dans"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "स्कैन यहाँ सहेजें"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Simpan hasil pindai ke"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "スキャンの保存先"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಸ್ಕ್ಯಾನ್‌ಗಳನ್ನು ಇಲ್ಲಿ ಉಳಿಸಿ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "സ്കാനുകൾ ഇവിടെ സംരക്ഷിക്കുക"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Salvar escaneamentos em"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Сохранить сканы в"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ஸ்கேன்களை இங்கே சேமி"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "స్కాన్‌లను ఇక్కడ సేవ్ చేయండి"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "扫描结果保存到"
-          }
-        }
-      }
-    },
-    "bulkScan.reviewTitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "مراجعة عمليات المسح"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Scans prüfen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Review scans"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Revisar escaneos"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Vérifier les scans"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "स्कैन की समीक्षा करें"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Tinjau hasil pindai"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "スキャンを確認"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಸ್ಕ್ಯಾನ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "സ്കാനുകൾ പരിശോധിക്കുക"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Revisar escaneamentos"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Проверить сканы"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ஸ்கேன்களைச் சரிபார்க்கவும்"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "స్కాన్‌లను సమీక్షించండి"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "检查扫描结果"
-          }
-        }
-      }
-    },
-    "bulkScan.saveFailed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "تعذّر حفظ عمليات المسح هذه. حاول مرة أخرى."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Diese Scans konnten nicht gespeichert werden. Bitte versuche es erneut."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't save these scans. Please try again."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "No se pudieron guardar estos escaneos. Inténtalo de nuevo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Impossible d'enregistrer ces scans. Veuillez réessayer."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ये स्कैन सहेजे नहीं जा सके। कृपया फिर से प्रयास करें।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Tidak dapat menyimpan hasil pindai ini. Silakan coba lagi."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "スキャンを保存できませんでした。もう一度お試しください。"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಈ ಸ್ಕ್ಯಾನ್‌ಗಳನ್ನು ಉಳಿಸಲಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ."
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ഈ സ്കാനുകൾ സംരക്ഷിക്കാനായില്ല. വീണ്ടും ശ്രമിക്കുക."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Não foi possível salvar estes escaneamentos. Tente novamente."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Не удалось сохранить сканы. Попробуйте ещё раз."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "இந்த ஸ்கேன்களைச் சேமிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்."
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ఈ స్కాన్‌లను సేవ్ చేయలేకపోయాం. దయచేసి మళ్లీ ప్రయత్నించండి."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "无法保存这些扫描结果。请重试。"
-          }
-        }
-      }
-    },
-    "bulkScan.toolbar" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "مسح باركود مجمّع"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Massen-Barcode-Scan"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bulk barcode scan"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Escaneo masivo de códigos"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Scan de codes-barres en masse"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "बल्क बारकोड स्कैन"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Pindai barcode massal"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "一括バーコードスキャン"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಬೃಹತ್ ಬಾರ್‌ಕೋಡ್ ಸ್ಕ್ಯಾನ್"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ബൾക്ക് ബാർകോഡ് സ്കാൻ"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Escaneamento em massa"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Массовое сканирование"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "மொத்த பார்கோடு ஸ்கேன்"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "బల్క్ బార్‌కోడ్ స్కాన్"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "批量条码扫描"
-          }
-        }
-      }
-    },
-    "image.saveFailed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "تعذّر حفظ تغييرات المخزون. حاول مرة أخرى."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Deine Bestandsänderungen konnten nicht gespeichert werden. Bitte versuche es erneut."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't save your inventory changes. Please try again."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "No se pudieron guardar los cambios de inventario. Inténtalo de nuevo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Impossible d'enregistrer vos modifications d'inventaire. Veuillez réessayer."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "आपके इन्वेंटरी बदलाव सहेजे नहीं जा सके। कृपया फिर से प्रयास करें।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Tidak dapat menyimpan perubahan inventaris Anda. Silakan coba lagi."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "在庫の変更を保存できませんでした。もう一度お試しください。"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ನಿಮ್ಮ ದಾಸ್ತಾನು ಬದಲಾವಣೆಗಳನ್ನು ಉಳಿಸಲಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ."
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "നിങ്ങളുടെ ഇൻവെന്ററി മാറ്റങ്ങൾ സംരക്ഷിക്കാനായില്ല. വീണ്ടും ശ്രമിക്കുക."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Não foi possível salvar suas alterações de estoque. Tente novamente."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Не удалось сохранить изменения в инвентаре. Попробуйте ещё раз."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "உங்கள் சரக்கு மாற்றங்களைச் சேமிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்."
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "మీ ఇన్వెంటరీ మార్పులను సేవ్ చేయలేకపోయాం. దయచేసి మళ్లీ ప్రయత్నించండి."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "无法保存您的库存更改。请重试。"
-          }
-        }
-      }
-    },
-    "invite_accept_local_save_failed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "تعذّر حفظ عضوية الفريق على هذا الجهاز. حاول مرة أخرى."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Teammitgliedschaft konnte auf diesem Gerät nicht gespeichert werden. Versuche es erneut."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't save team membership on this device. Try again."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "No se pudo guardar la membresía del equipo en este dispositivo. Inténtalo de nuevo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Impossible d'enregistrer l'adhésion à l'équipe sur cet appareil. Réessayez."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "इस डिवाइस पर टीम सदस्यता सहेजी नहीं जा सकी। फिर से प्रयास करें।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Tidak dapat menyimpan keanggotaan tim di perangkat ini. Coba lagi."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "この端末にチームのメンバーシップを保存できませんでした。もう一度お試しください。"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಈ ಸಾಧನದಲ್ಲಿ ತಂಡದ ಸದಸ್ಯತ್ವವನ್ನು ಉಳಿಸಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ."
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ഈ ഉപകരണത്തിൽ ടീം അംഗത്വം സംരക്ഷിക്കാനായില്ല. വീണ്ടും ശ്രമിക്കുക."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Não foi possível salvar a associação à equipe neste dispositivo. Tente novamente."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Не удалось сохранить участие в команде на этом устройстве. Попробуйте ещё раз."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "இந்தச் சாதனத்தில் குழு உறுப்பினர் நிலையைச் சேமிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்."
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ఈ పరికరంలో టీమ్ సభ్యత్వాన్ని సేవ్ చేయలేకపోయాం. మళ్లీ ప్రయత్నించండి."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "无法在此设备上保存团队成员身份。请重试。"
-          }
-        }
-      }
-    },
-    "itemList.scanToFind" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "امسح للعثور على صنف"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Scannen, um Artikel zu finden"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scan to Find Item"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Escanear para buscar artículo"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Scanner pour trouver un article"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "आइटम खोजने के लिए स्कैन करें"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Pindai untuk menemukan item"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "スキャンして商品を検索"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ಐಟಂ ಹುಡುಕಲು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ഇനം കണ്ടെത്താൻ സ്കാൻ ചെയ്യുക"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Escanear para encontrar item"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Сканировать для поиска товара"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "பொருளைக் கண்டறிய ஸ்கேன் செய்"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "వస్తువును కనుగొనడానికి స్కాన్ చేయండి"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "扫描查找商品"
-          }
-        }
-      }
-    },
-    "team_error_not_authenticated" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "يجب تسجيل الدخول."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Du musst angemeldet sein."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You must be signed in."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Debes iniciar sesión."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Vous devez être connecté."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "आपको साइन इन करना होगा।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Anda harus masuk."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "サインインが必要です。"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ನೀವು ಸೈನ್ ಇನ್ ಆಗಿರಬೇಕು."
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "നിങ്ങൾ സൈൻ ഇൻ ചെയ്തിരിക്കണം."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Você precisa estar conectado."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Необходимо войти в аккаунт."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "நீங்கள் உள்நுழைந்திருக்க வேண்டும்."
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "మీరు సైన్ ఇన్ చేసి ఉండాలి."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "您需要先登录。"
           }
         }
       }
