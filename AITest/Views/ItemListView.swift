@@ -21,12 +21,18 @@ struct ItemListView: View {
     @State private var showingFullCount: InventoryItem? = nil
     @State private var pendingFullCountItem: InventoryItem? = nil
     @State private var showingScanToFind = false
+    @State private var showingBulkBarcodeScan = false
+    @State private var showingBulkStoragePicker = false
+    @State private var bulkScanStorage: Storage?
     @State private var scanToFindResult: InventoryItem? = nil
     /// Bridges the scanned code across the fullScreenCover dismissal. The
     /// look-up (found-vs-not-found) happens in the cover's `onDismiss` so the
     /// follow-up sheet only opens once the scanner has fully gone away —
     /// otherwise SwiftUI drops the next presentation.
     @State private var pendingScanResult: String? = nil
+    @State private var pendingScanSymbology: String? = nil
+    @State private var pendingScanDurationMs = 0
+    @State private var barcodeScanStartedAt = Date()
     /// Triggers `AddItemToStorageView` pre-filled with the scanned barcode
     /// when no existing item matches. Wrapped in a per-scan `UUID` so the
     /// sheet re-presents even if the user scans the same not-found barcode
@@ -77,12 +83,25 @@ struct ItemListView: View {
                         .accessibilityLabel("Import Invoice")
                         .accessibilityIdentifier("globalInvoiceImportButton")
 
-                        Button(action: { showingScanToFind = true }) {
+                        Button(action: { barcodeToolbarTapped() }) {
                             Image(systemName: "barcode.viewfinder")
                                 .font(.title2)
                                 .foregroundColor(.stoqlyPrimary)
+                                .overlay(alignment: .bottomTrailing) {
+                                    if teamManager.canEdit && subscriptionManager.canUseBarcodeScannerPro {
+                                        Image(systemName: "plus.circle.fill")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(.stoqlyAccent)
+                                            .background(Circle().fill(Color(.systemBackground)))
+                                    }
+                                }
                         }
-                        .accessibilityLabel("Scan to Find Item")
+                        .accessibilityLabel(
+                            teamManager.canEdit && subscriptionManager.canUseBarcodeScannerPro
+                                ? L("bulkScan.toolbar", "Bulk barcode scan")
+                                : L("itemList.scanToFind", "Scan to Find Item")
+                        )
+                        .accessibilityIdentifier("itemListBarcodeButton")
 
                         Button(action: { showingSmartCount = true }) {
                             Image(systemName: "sparkles")
@@ -261,7 +280,9 @@ struct ItemListView: View {
             .navigationBarHidden(true)
         }
         .sheet(isPresented: $showingAddItem) {
-            AddItemToStorageView()
+            NavigationStack {
+                AddItemToStorageView()
+            }
                 .sheetStyle()
         }
         .sheet(isPresented: $showingExport) {
@@ -278,7 +299,9 @@ struct ItemListView: View {
                 .sheetStyle()
         }
         .sheet(item: $showingEditItem) { item in
-            EditItemView(item: item)
+            NavigationStack {
+                EditItemView(item: item)
+            }
                 .sheetStyle()
         }
         .sheet(item: $showingQuickCount, onDismiss: {
@@ -296,22 +319,59 @@ struct ItemListView: View {
             CountItemView(item: item)
                 .sheetStyle()
         }
-        // "Scan to Find" — looks up the scanned code in the existing items.
-        //   Match found       → presents ItemDetailView (existing behaviour).
-        //   No match          → presents AddItemToStorageView pre-filled with
-        //                       the scanned barcode, so the user can add it
-        //                       on the spot.
-        //
-        // The lookup runs in `onDismiss` (not in `onScan`) so the next sheet
-        // is presented AFTER the fullScreenCover has fully torn down —
-        // otherwise SwiftUI drops the second presentation on iOS 16/17.
+        // Pro bulk from the Items toolbar. Review stays inside this cover.
+        .fullScreenCover(isPresented: $showingBulkBarcodeScan) {
+            if let storage = bulkScanStorage {
+                BulkBarcodeScanFlowView(
+                    storage: storage,
+                    source: "item_list",
+                    onComplete: { savedCount in
+                        toastMessage = String(
+                            format: L("toast.itemsUpdated", "%1$d item%2$@ updated"),
+                            savedCount,
+                            savedCount == 1 ? "" : "s"
+                        )
+                    }
+                )
+            }
+        }
+        .confirmationDialog(
+            L("bulkScan.pickStorage", "Save scans to"),
+            isPresented: $showingBulkStoragePicker,
+            titleVisibility: .visible
+        ) {
+            ForEach(storages, id: \.id) { storage in
+                Button(storage.name) {
+                    openBulkBarcodeScan(in: storage)
+                }
+            }
+            Button(L("Cancel", "Cancel"), role: .cancel) {}
+        }
+        // Free / view-only: one-shot Scan to Find.
+        // Match → ItemDetailView. Miss → Add Item pre-filled.
+        // Lookup runs in onDismiss so the follow-up sheet presents after
+        // this cover tears down (iOS 16/17 drops the second presentation
+        // if both fire in the same pass).
         .fullScreenCover(
             isPresented: $showingScanToFind,
             onDismiss: {
                 guard let code = pendingScanResult else { return }
+                let symbology = pendingScanSymbology
+                let durationMs = pendingScanDurationMs
                 pendingScanResult = nil
+                pendingScanSymbology = nil
+                pendingScanDurationMs = 0
                 let found = items.first(where: { $0.barcode == code && !$0.barcode.isEmpty }) != nil
-                AnalyticsManager.shared.track(.barcodeScanResult(found: found, enriched: false))
+                AnalyticsManager.shared.track(
+                    .barcodeScanResult(
+                        outcome: found ? "found" : "not_found",
+                        provider: "none",
+                        symbology: symbology,
+                        code: code,
+                        durationMs: durationMs,
+                        reason: found ? "local_inventory_match" : "local_inventory_miss"
+                    )
+                )
                 if let foundItem = items.first(where: { $0.barcode == code && !$0.barcode.isEmpty }) {
                     scanToFindResult = foundItem
                 } else {
@@ -320,16 +380,21 @@ struct ItemListView: View {
             }
         ) {
             BarcodeScannerView(
-                onScan: { code, _ in
+                onScan: { code, symbology in
                     pendingScanResult = code
+                    pendingScanSymbology = symbology
+                    pendingScanDurationMs = max(0, Int(Date().timeIntervalSince(barcodeScanStartedAt) * 1_000))
                     showingScanToFind = false
                 },
                 onCancel: {
                     pendingScanResult = nil
+                    pendingScanSymbology = nil
+                    pendingScanDurationMs = 0
                     showingScanToFind = false
                 }
             )
             .onAppear {
+                barcodeScanStartedAt = Date()
                 AnalyticsManager.shared.track(.barcodeScanInitiated)
             }
         }
@@ -343,7 +408,9 @@ struct ItemListView: View {
             .sheetStyle()
         }
         .sheet(item: $scannedBarcodeToAdd) { prefill in
-            AddItemToStorageView(initialBarcode: prefill.code)
+            NavigationStack {
+                AddItemToStorageView(initialBarcode: prefill.code)
+            }
                 .sheetStyle()
         }
         .alert("Delete Item", isPresented: Binding(
@@ -380,6 +447,7 @@ struct ItemListView: View {
         }
         .onAppear {
             viewModel.bind(modelContext: modelContext, items: items, storages: storages)
+            AdManager.shared.noteBannerOpportunity(sourceScreen: "ItemList")
         }
         .onChange(of: items) { _, newItems in
             viewModel.updateItems(newItems)
@@ -428,6 +496,37 @@ struct ItemListView: View {
         } else {
             showingAddItem = true
         }
+    }
+
+    /// Pro + can-edit: keep-open bulk into the filtered storage, or a picker
+    /// when "All Storages" is selected. Free: existing one-shot Scan to Find.
+    private func barcodeToolbarTapped() {
+        guard teamManager.canEdit, subscriptionManager.canUseBarcodeScannerPro else {
+            showingScanToFind = true
+            return
+        }
+        beginBulkBarcodeScan()
+    }
+
+    private func beginBulkBarcodeScan() {
+        if storages.isEmpty {
+            showingNoStorageAlert = true
+            return
+        }
+        if let selected = viewModel.selectedStorage {
+            openBulkBarcodeScan(in: selected)
+            return
+        }
+        if storages.count == 1, let only = storages.first {
+            openBulkBarcodeScan(in: only)
+            return
+        }
+        showingBulkStoragePicker = true
+    }
+
+    private func openBulkBarcodeScan(in storage: Storage) {
+        bulkScanStorage = storage
+        showingBulkBarcodeScan = true
     }
 }
 
@@ -517,6 +616,7 @@ struct AddItemToStorageView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
     @Query private var storages: [Storage]
     @Query private var uoms: [UOM]
@@ -531,7 +631,24 @@ struct AddItemToStorageView: View {
     /// pass that toggles `showingBarcodeScanner` (which causes SwiftUI to
     /// drop the value or cascade-dismiss the parent sheet).
     @State private var pendingScannedBarcode: String?
+    @State private var pendingScannedSymbology: String?
+    @State private var pendingScanDurationMs = 0
+    @State private var barcodeScanStartedAt = Date()
     @State private var didTrackAddItemStarted = false
+    @State private var didAttemptInitialBarcodeEnrichment = false
+    @State private var selectedPhotoData: Data?
+    @State private var isShowingMoreDetails = false
+    @State private var showingAddStorage = false
+    @State private var showingSmartCount = false
+    @State private var addItemOpenedAt = Date()
+    @State private var didSaveAddItem = false
+    @State private var didEmitAddItemClose = false
+    @State private var didAbandonForBackground = false
+    @State private var didOpenPhotoPicker = false
+    /// Sticky: user dismissed the in-form scanner without a code. The live
+    /// `showingBarcodeScanner` flag is false by the time Cancel / onDisappear
+    /// can run, so this is what makes `barcode_scan_open` reachable.
+    @State private var didLeaveBarcodeScannerWithoutCode = false
 
     init(initialBarcode: String = "") {
         self.initialBarcode = initialBarcode
@@ -542,10 +659,87 @@ struct AddItemToStorageView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            Form {
-                if subscriptionManager.isPro && !templates.isEmpty && teamManager.canEdit {
-                    Section {
+        Form {
+            Section(header: Text("Primary")) {
+                TextField("Item Name", text: $formVM.name)
+                    .accessibilityIdentifier("itemNameField")
+
+                HStack {
+                    Text("Quantity")
+                    Spacer()
+                    TextField("0", text: $formVM.currentQuantity)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityLabel("Current Quantity")
+                        .accessibilityIdentifier("currentQuantityInput")
+                }
+
+                Picker("Storage", selection: $formVM.selectedStorage) {
+                    Text("Select Storage").tag(nil as Storage?)
+                    ForEach(storages, id: \.id) { storage in
+                        HStack {
+                            Circle()
+                                .fill(Color(hex: storage.color) ?? .blue)
+                                .frame(width: 12, height: 12)
+                            Text(storage.name)
+                        }
+                        .tag(storage as Storage?)
+                    }
+                }
+                .pickerStyle(MenuPickerStyle())
+
+                Button {
+                    showingAddStorage = true
+                } label: {
+                    Label("Add Storage", systemImage: "plus.circle")
+                        .foregroundColor(.accentColor)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+            }
+
+            AIEntryChip(feature: .smartCount, screen: "add_item", style: .formSection) {
+                showingSmartCount = true
+            }
+
+            Section {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isShowingMoreDetails.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("More details")
+                            .fontWeight(.semibold)
+                        if let photoSummaryText {
+                            Text(photoSummaryText)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.secondary.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                        if !formVM.barcode.isEmpty {
+                            Text(L("addItem.barcodeSet", "Barcode set"))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.secondary.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                        Spacer()
+                        Image(systemName: isShowingMoreDetails ? "chevron.up" : "chevron.down")
+                            .foregroundColor(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                .accessibilityIdentifier("moreDetailsButton")
+
+                if isShowingMoreDetails {
+                    if subscriptionManager.isPro && !templates.isEmpty && teamManager.canEdit {
                         Button {
                             showingTemplatePicker = true
                         } label: {
@@ -553,12 +747,9 @@ struct AddItemToStorageView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.accentColor)
                         }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                }
 
-                Section(header: Text("Item Information")) {
-                    TextField("Item Name", text: $formVM.name)
-                        .accessibilityIdentifier("itemNameField")
                     TextField("Description (Optional)", text: $formVM.description, axis: .vertical)
                         .lineLimit(3)
                     TextField("SKU (Optional)", text: $formVM.sku)
@@ -571,6 +762,7 @@ struct AddItemToStorageView: View {
                                     .font(.title3)
                                     .foregroundColor(.stoqlyPrimary)
                             }
+                            .buttonStyle(PlainButtonStyle())
                         }
                     }
                     // Phase 3 — Smart barcode lookup loading indicator.
@@ -583,18 +775,34 @@ struct AddItemToStorageView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                }
-
-                Section(header: Text("Category")) {
                     Picker("Category", selection: $formVM.category) {
                         ForEach(InventoryItem.predefinedCategories, id: \.self) { cat in
                             Text(cat).tag(cat)
                         }
                     }
                     .pickerStyle(.navigationLink)
-                }
 
-                Section(header: Text("Expiry")) {
+                    Picker("Unit of Measure (UOM)", selection: $formVM.selectedUOM) {
+                        Text("Select UOM").tag(nil as UOM?)
+                        ForEach(uoms, id: \.id) { uom in
+                            Text("\(uom.name) (\(uom.symbol))").tag(uom as UOM?)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+
+                    TextField("Min Quantity", text: $formVM.minQuantity)
+                        .keyboardType(.decimalPad)
+                        .accessibilityIdentifier("minQuantityInput")
+                    TextField("Max Quantity", text: $formVM.maxQuantity)
+                        .keyboardType(.decimalPad)
+                        .accessibilityIdentifier("maxQuantityInput")
+                    TextField("Unit Cost", text: $formVM.unitCost)
+                        .keyboardType(.decimalPad)
+                        .accessibilityIdentifier("unitCostInput")
+                    TextField("Selling Price", text: $formVM.sellingPrice)
+                        .keyboardType(.decimalPad)
+                        .accessibilityIdentifier("addItemSellingPrice")
+
                     Toggle("Has Expiry Date", isOn: $formVM.hasExpiryDate.animation(.easeInOut(duration: 0.2)))
                     if formVM.hasExpiryDate {
                         DatePicker(
@@ -607,52 +815,19 @@ struct AddItemToStorageView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                }
 
-                Section(header: Text("Storage & UOM")) {
-                    Picker("Storage", selection: $formVM.selectedStorage) {
-                        Text("Select Storage").tag(nil as Storage?)
-                        ForEach(storages, id: \.id) { storage in
-                            HStack {
-                                Circle()
-                                    .fill(Color(hex: storage.color) ?? .blue)
-                                    .frame(width: 12, height: 12)
-                                Text(storage.name)
-                            }
-                            .tag(storage as Storage?)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                    
-                    Picker("Unit of Measure (UOM)", selection: $formVM.selectedUOM) {
-                        Text("Select UOM").tag(nil as UOM?)
-                        ForEach(uoms, id: \.id) { uom in
-                            Text("\(uom.name) (\(uom.symbol))").tag(uom as UOM?)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                }
-                
-                Section(header: Text("Quantity & Pricing")) {
-                    TextField("Current Quantity", text: $formVM.currentQuantity)
-                        .keyboardType(.decimalPad)
-                        .accessibilityIdentifier("currentQuantityInput")
-                    
-                    TextField("Min Quantity", text: $formVM.minQuantity)
-                        .keyboardType(.decimalPad)
-                        .accessibilityIdentifier("minQuantityInput")
-                    
-                    TextField("Max Quantity", text: $formVM.maxQuantity)
-                        .keyboardType(.decimalPad)
-                        .accessibilityIdentifier("maxQuantityInput")
-                    
-                    TextField("Unit Cost", text: $formVM.unitCost)
-                        .keyboardType(.decimalPad)
+                    ItemPhotoSection(
+                        selectedPhotoData: $selectedPhotoData,
+                        existingPhotoURL: nil,
+                        showsSectionContainer: false,
+                        onPickerTapped: { didOpenPhotoPicker = true }
+                    )
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
+        }
+        .scrollDismissesKeyboard(.interactively)
             // IMPORTANT: the scanner's `.fullScreenCover` MUST be attached
-            // INSIDE the NavigationStack (here, on the Form), not as a sibling
+            // to the Form, not as a sibling
             // of `.sheet(isPresented: $showingItemLimitPaywall)` below. With
             // two presentation modifiers (a `.sheet` + a `.fullScreenCover`)
             // at the same level on this view, iOS 16/17 routes the cover's
@@ -672,29 +847,47 @@ struct AddItemToStorageView: View {
                 isPresented: $showingBarcodeScanner,
                 onDismiss: {
                     if let code = pendingScannedBarcode {
+                        didLeaveBarcodeScannerWithoutCode = false
+                        let symbology = pendingScannedSymbology
+                        let durationMs = pendingScanDurationMs
                         formVM.barcode = code
                         pendingScannedBarcode = nil
-                        // Phase 3 — kick off smart enrichment lookup. Gated on
-                        // `isPro` inside `enrichFromBarcode`, so free users
-                        // get no network call. Fire-and-forget — never blocks
-                        // the UI.
-                        Task {
-                            await formVM.enrichFromBarcode(code, uoms: uoms)
+                        pendingScannedSymbology = nil
+                        pendingScanDurationMs = 0
+                        if !isShowingMoreDetails {
+                            isShowingMoreDetails = true
                         }
+                        // Phase 3 — kick off smart enrichment lookup.
+                        // Fire-and-forget — never blocks the UI.
+                        Task {
+                            await formVM.enrichFromBarcode(
+                                code,
+                                symbology: symbology,
+                                scanDurationMs: durationMs,
+                                uoms: uoms
+                            )
+                        }
+                    } else {
+                        didLeaveBarcodeScannerWithoutCode = true
                     }
                 }
             ) {
                 BarcodeScannerView(
-                    onScan: { code, _ in
+                    onScan: { code, symbology in
                         pendingScannedBarcode = code
+                        pendingScannedSymbology = symbology
+                        pendingScanDurationMs = max(0, Int(Date().timeIntervalSince(barcodeScanStartedAt) * 1_000))
                         showingBarcodeScanner = false
                     },
                     onCancel: {
                         pendingScannedBarcode = nil
+                        pendingScannedSymbology = nil
+                        pendingScanDurationMs = 0
                         showingBarcodeScanner = false
                     }
                 )
                 .onAppear {
+                    barcodeScanStartedAt = Date()
                     AnalyticsManager.shared.track(.barcodeScanInitiated)
                 }
             }
@@ -704,8 +897,17 @@ struct AddItemToStorageView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
+                        emitAddItemAbandonedIfNeeded(stage: addItemAbandonmentStage)
                         dismiss()
                     }
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        saveItem()
+                    }
+                    .disabled(!formVM.canSaveNew)
+                    .accessibilityIdentifier("addItemSaveButton")
                 }
 
                 ToolbarItemGroup(placement: .keyboard) {
@@ -718,27 +920,7 @@ struct AddItemToStorageView: View {
                     }
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        if SubscriptionManager.shared.canAddItem(currentItemCount: selectedStorageItemCount) {
-                            formVM.analyticsSource = initialBarcode.isEmpty ? "fab" : "barcode"
-                            formVM.analyticsInputMethod = initialBarcode.isEmpty ? "manual" : "barcode"
-                            if formVM.saveNew() {
-                                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                                dismiss()
-                            } else {
-                                showingItemLimitPaywall = true
-                            }
-                        } else {
-                            showingItemLimitPaywall = true
-                        }
-                    } label: {
-                        Text("Save")
-                            .accessibilityIdentifier("addItemSaveButton")
-                    }
-                }
             }
-        }
         .sheet(isPresented: $showingTemplatePicker) {
             TemplatePickerView(templates: templates) { selected in
                 formVM.name = selected.name
@@ -757,11 +939,20 @@ struct AddItemToStorageView: View {
             PaywallView(source: "item_limit", trigger: "item_cap")
                 .sheetStyle()
         }
+        .sheet(isPresented: $showingAddStorage) {
+            AddStorageView(onStorageAdded: { newStorage in
+                formVM.selectedStorage = newStorage
+            })
+            .sheetStyle()
+        }
+        .sheet(isPresented: $showingSmartCount) {
+            SmartCountView(preselectedStorage: formVM.selectedStorage).sheetStyle()
+        }
         .onAppear {
             if !didTrackAddItemStarted {
                 didTrackAddItemStarted = true
-                let source = initialBarcode.isEmpty ? "fab" : "barcode_scan"
-                AnalyticsManager.shared.track(.addItemStarted(source: source))
+                addItemOpenedAt = Date()
+                AnalyticsManager.shared.track(.addItemStarted(source: addItemAnalyticsSource))
             }
             formVM.bind(modelContext: modelContext)
             if uoms.isEmpty {
@@ -773,6 +964,9 @@ struct AddItemToStorageView: View {
             if formVM.selectedUOM == nil, let defaultUOM = uoms.first(where: { $0.isDefault }) {
                 formVM.selectedUOM = defaultUOM
             }
+            if formVM.selectedStorage == nil {
+                formVM.selectedStorage = storages.first
+            }
             // Pre-fill the scanned barcode if we were presented from the
             // "Scan to Find → not found" flow. Guarded by `barcode.isEmpty`
             // so reopening the view (e.g. user dismisses the keyboard and
@@ -782,11 +976,18 @@ struct AddItemToStorageView: View {
                 formVM.barcode = initialBarcode
             }
             // Phase 3 addendum — same enrichment as the in-form scanner path,
-            // for barcodes pre-filled via `initialBarcode`. Pro-gated inside
-            // `enrichFromBarcode`; free users get no network call / no banner.
-            if !formVM.barcode.isEmpty {
+            // for barcodes pre-filled via `initialBarcode`.
+            // Scan-to-Find already emitted its single terminal result before
+            // presenting this form, so this automatic follow-up must not emit
+            // a contradictory second barcode_scan_result.
+            if !initialBarcode.isEmpty && !didAttemptInitialBarcodeEnrichment {
+                didAttemptInitialBarcodeEnrichment = true
                 Task {
-                    await formVM.enrichFromBarcode(formVM.barcode, uoms: uoms)
+                    await formVM.enrichFromBarcode(
+                        initialBarcode,
+                        shouldTrackResult: false,
+                        uoms: uoms
+                    )
                 }
             }
         }
@@ -795,10 +996,117 @@ struct AddItemToStorageView: View {
                 formVM.selectedUOM = defaultUOM
             }
         }
+        .onChange(of: storages.count) { _, _ in
+            if formVM.selectedStorage == nil {
+                formVM.selectedStorage = storages.first
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                emitAddItemAbandonedIfNeeded(stage: "backgrounded", includeLegacyCancellation: false)
+                didAbandonForBackground = didEmitAddItemClose && !didSaveAddItem
+            } else if phase == .active, didAbandonForBackground, !didSaveAddItem {
+                didAbandonForBackground = false
+                didEmitAddItemClose = false
+                didLeaveBarcodeScannerWithoutCode = false
+                addItemOpenedAt = Date()
+                AnalyticsManager.shared.track(.addItemStarted(source: addItemAnalyticsSource))
+            }
+        }
+        .onDisappear {
+            guard scenePhase == .active else { return }
+            guard !showingBarcodeScanner,
+                  !showingSmartCount,
+                  !showingItemLimitPaywall,
+                  !showingTemplatePicker,
+                  !showingAddStorage else { return }
+            emitAddItemAbandonedIfNeeded(stage: addItemAbandonmentStage)
+        }
+    }
+
+    private var addItemAnalyticsSource: String {
+        initialBarcode.isEmpty ? "fab" : "barcode_scan"
+    }
+
+    private var photoSummaryText: String? {
+        selectedPhotoData == nil ? nil : "1 photo"
+    }
+
+    private func emitAddItemAbandonedIfNeeded(
+        stage: String,
+        includeLegacyCancellation: Bool = true
+    ) {
+        guard !didSaveAddItem, !didEmitAddItemClose else { return }
+        didEmitAddItemClose = true
+        let seconds = max(0, Int(Date().timeIntervalSince(addItemOpenedAt)))
+        AnalyticsManager.shared.track(
+            .addItemAbandoned(source: addItemAnalyticsSource, stage: stage, secondsInForm: seconds)
+        )
+        if includeLegacyCancellation {
+            AnalyticsManager.shared.track(.addItemCancelled(source: addItemAnalyticsSource, seconds: seconds))
+        }
+    }
+
+    private var addItemAbandonmentStage: String {
+        if showingBarcodeScanner || didLeaveBarcodeScannerWithoutCode { return "barcode_scan_open" }
+        if formVM.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "name_empty" }
+        let quantityText = formVM.currentQuantity.trimmingCharacters(in: .whitespacesAndNewlines)
+        if quantityText.isEmpty || Double(quantityText) == nil { return "quantity_empty" }
+        if didOpenPhotoPicker && selectedPhotoData == nil { return "photo_picker_open" }
+        if isShowingMoreDetails { return "more_details_open" }
+        return "cancelled"
+    }
+
+    private func saveItem() {
+        guard SubscriptionManager.shared.canAddItem(currentItemCount: selectedStorageItemCount) else {
+            showingItemLimitPaywall = true
+            return
+        }
+
+        formVM.analyticsSource = initialBarcode.isEmpty ? "fab" : "barcode"
+        formVM.analyticsInputMethod = initialBarcode.isEmpty ? "manual" : "barcode"
+
+        // TODO(iOS-B2): fire item_create_completed{entry_source, duration_ms}
+        //               via AmplitudeManager helper.
+        guard formVM.saveNew() else {
+            if let storage = formVM.selectedStorage,
+               SubscriptionManager.shared.freeItemCapReached(storage: storage, context: modelContext) {
+                showingItemLimitPaywall = true
+            }
+            return
+        }
+
+        didSaveAddItem = true
+        didEmitAddItemClose = true
+        let savedItem = formVM.lastSavedItem
+        AnalyticsManager.shared.track(
+            .addItemCompleted(
+                source: addItemAnalyticsSource,
+                hasBarcode: !(savedItem?.barcode ?? formVM.barcode).isEmpty,
+                hasPhoto: selectedPhotoData != nil || savedItem?.photoURL != nil,
+                durationMs: max(0, Int(Date().timeIntervalSince(addItemOpenedAt) * 1_000))
+            )
+        )
+
+        if let photoData = selectedPhotoData, let item = savedItem {
+            Task {
+                do {
+                    let url = try await FirestoreManager.shared.uploadItemPhoto(photoData, itemId: item.id)
+                    item.photoURL = url
+                    modelContext.safeSave(context: "AddItem")
+                    FirestoreManager.shared.syncItem(item)
+                } catch {
+                    print("Photo upload failed: \(error.localizedDescription)")
+                }
+            }
+        }
+
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        dismiss()
     }
 }
 
 #Preview {
     ItemListView()
         .modelContainer(for: [Storage.self, InventoryItem.self, UOM.self, InventoryCount.self], inMemory: true)
-} 
+}

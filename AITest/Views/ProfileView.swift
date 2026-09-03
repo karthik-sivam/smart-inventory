@@ -9,6 +9,7 @@ struct ProfileView: View {
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
     @EnvironmentObject private var firestoreManager: FirestoreManager
     @StateObject private var authManager = AuthManager.shared
+    @StateObject private var teamManager = TeamManager.shared
 
     @State private var showSignOutAlert = false
     @State private var showDeleteAccountAlert = false
@@ -19,6 +20,10 @@ struct ProfileView: View {
     @State private var showPaywall = false
     @State private var showSettings = false
     @State private var showFeedback = false
+    @State private var showBusinessProfile = false
+
+    /// Optional, so the row is omitted entirely rather than reserving empty space.
+    @State private var workspaceBusinessName: String?
 
     var body: some View {
         NavigationStack {
@@ -88,6 +93,28 @@ struct ProfileView: View {
                                 }
                             }
 
+                            if let workspaceBusinessName {
+                                HStack(spacing: 5) {
+                                    Image(systemName: teamManager.isInTeamWorkspace
+                                          ? "person.2.fill" : "storefront.fill")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .accessibilityHidden(true)
+                                    Text(workspaceBusinessName)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                }
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel(String(
+                                    format: teamManager.isInTeamWorkspace
+                                        ? L("profile.workspaceA11y", "Workspace: %@")
+                                        : L("profile.businessA11y", "Business: %@"),
+                                    workspaceBusinessName))
+                                .accessibilityIdentifier("workspaceBusinessName")
+                            }
+
                             Text(authManager.currentUser?.email ?? "")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
@@ -123,6 +150,30 @@ struct ProfileView: View {
                     .padding(.vertical, 8)
                 }
 
+                if teamManager.isOwner && !teamManager.isInTeamWorkspace {
+                    Section("Business") {
+                        Button { showBusinessProfile = true } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "building.2")
+                                    .foregroundStyle(.blue)
+                                    .frame(width: 24)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Business details")
+                                        .foregroundStyle(.primary)
+                                    Text("Business type, State, and optional contact number")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .accessibilityIdentifier("editBusinessProfile")
+                    }
+                }
+
                 // MARK: - Subscription / Upgrade
                 Section {
                     if subscriptionManager.isPro {
@@ -153,7 +204,7 @@ struct ProfileView: View {
 
                         // Manual sync trigger
                         Button {
-                            Task { await firestoreManager.pullFromCloud(modelContext: modelContext) }
+                            Task { await firestoreManager.pullFromCloud(modelContext: modelContext, context: "manual") }
                         } label: {
                             HStack {
                                 Label("Sync Now", systemImage: "arrow.triangle.2.circlepath.icloud")
@@ -333,8 +384,21 @@ struct ProfileView: View {
                 .environmentObject(AuthManager.shared)
                 .sheetStyle()
         }
+        .sheet(isPresented: $showBusinessProfile) {
+            BusinessProfileView(
+                isPresented: $showBusinessProfile,
+                mode: .edit
+            ) { profile in
+                workspaceBusinessName = profile.businessName
+            }
+            .environmentObject(firestoreManager)
+            .sheetStyle()
+        }
         .task {
             await subscriptionManager.loadProducts()
+        }
+        .task(id: teamManager.activeWorkspaceOwnerUID) {
+            workspaceBusinessName = await firestoreManager.fetchWorkspaceBusinessName()
         }
     }
 

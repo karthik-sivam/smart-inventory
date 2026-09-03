@@ -4,5 +4,10 @@ appId: com.vishuddhi.stoqly
 - tapOn:
     id: "addItemButton"
 - extendedWaitUntil:
+    visible: "More details"
+    timeout: 10000
+- tapOn:
+    id: "moreDetailsButton"
+- extendedWaitUntil:
     visible: "SKU (Optional)"
     timeout: 10000

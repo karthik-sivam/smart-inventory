@@ -1,5 +1,7 @@
 import Foundation
 import AmplitudeSwift
+import Network
+import UIKit
 
 // MARK: - AnalyticsManager
 //
@@ -23,10 +25,23 @@ final class AnalyticsManager: @unchecked Sendable {
 
     // MARK: - Singleton
     static let shared = AnalyticsManager()
-    private init() {}
+    private init() {
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            self?.isOffline = path.status != .satisfied
+        }
+        pathMonitor.start(queue: pathQueue)
+        Task { @MainActor [weak self] in
+            self?.cachedDeviceClass = Self.deviceClassOnMain()
+        }
+    }
 
     private var amplitude: Amplitude?
     private var isConfigured = false
+    private let fallbackSessionId = UUID().uuidString
+    private let pathMonitor = NWPathMonitor()
+    private let pathQueue = DispatchQueue(label: "stoqly.analytics.path")
+    private var isOffline = false
+    private var cachedDeviceClass = "phone"
 
     // MARK: - Configure (call once in AppDelegate, after FirebaseApp.configure())
 
@@ -68,6 +83,26 @@ final class AnalyticsManager: @unchecked Sendable {
         amplitude?.identify(identify: identify)
     }
 
+    /// Updates only coarse business traits. Phone numbers, the business name, and
+    /// custom "Other" descriptions intentionally never leave Firestore for Amplitude.
+    /// City is sent, but only after `analyticsCity(from:)` canonicalizes it and
+    /// rejects anything containing a digit.
+    func identifyBusinessProfile(userId: String, profile: BusinessProfile) {
+        amplitude?.setUserId(userId: userId)
+        let identify = Identify()
+        identify.set(property: "business_profile_version", value: profile.schemaVersion)
+        identify.set(property: "business_type", value: profile.businessType.rawValue)
+        identify.set(property: "business_state", value: profile.state)
+        // Named `business_city` so it never collides with Amplitude's own
+        // IP-derived `city` / `region` user properties.
+        if let city = profile.city.flatMap({ BusinessProfileValidation.analyticsCity(from: $0) }) {
+            identify.set(property: "business_city", value: city)
+        }
+        identify.set(property: "phone_provided", value: profile.phoneNumber != nil)
+        identify.set(property: "contact_opt_in", value: profile.contactConsent)
+        amplitude?.identify(identify: identify)
+    }
+
     /// Call on sign-out to disassociate future events from this user.
     func reset() {
         amplitude?.reset()
@@ -76,11 +111,51 @@ final class AnalyticsManager: @unchecked Sendable {
     // MARK: - Track
 
     func track(_ event: StoqlyEvent) {
+        var props = event.properties
+        for (key, value) in standardProperties() {
+            if props[key] == nil {
+                props[key] = value
+            }
+        }
+        #if DEBUG
+        if event.isAdLifecycleEvent {
+            // TODO(iOS-F4): remove this debug print after CEO sees the first Amplitude reads
+            NSLog("📊 [iOS-F4] Amplitude event: \(event.name) \(props)")
+        }
+        #endif
         guard isConfigured else { return }
         amplitude?.track(
             eventType: event.name,
-            eventProperties: event.properties
+            eventProperties: props
         )
+    }
+
+    // MARK: - Standard properties (docs/event-taxonomy.md)
+
+    private func standardProperties() -> [String: Any] {
+        [
+            "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
+            "platform": "ios",
+            "is_offline": isOffline,
+            "device_class": cachedDeviceClass,
+            "session_id": sessionIdString
+        ]
+    }
+
+    private var sessionIdString: String {
+        if let amplitude {
+            return String(amplitude.getSessionId())
+        }
+        return fallbackSessionId
+    }
+
+    @MainActor
+    private static func deviceClassOnMain() -> String {
+        switch UIDevice.current.userInterfaceIdiom {
+        case .pad: return "tablet"
+        case .phone: return "phone"
+        default: return "other"
+        }
     }
 }
 
@@ -93,6 +168,12 @@ enum StoqlyEvent {
     case userSignedUp(method: String)                      // method: "email" | "google"
     case userSignedIn(method: String)
     case userSignedOut
+
+    // ── Business Profile ─────────────────────────────────────────────────────────
+    case businessProfilePromptShown(audience: String)
+    case businessProfileCompleted(source: String, audience: String, businessType: String, state: String, city: String?, hasPhone: Bool, contactConsent: Bool, durationMs: Int)
+    case businessProfileUpdated(source: String, businessType: String, state: String, city: String?, hasPhone: Bool, contactConsent: Bool)
+    case businessProfileSaveFailed(source: String)
 
     // ── Storages ─────────────────────────────────────────────────────────────────
     case storageCreated(color: String)
@@ -107,13 +188,32 @@ enum StoqlyEvent {
 
     // ── Barcode ──────────────────────────────────────────────────────────────────
     case barcodeScanInitiated
-    case barcodeScanResult(found: Bool, enriched: Bool)
+    case barcodeBulkScanStarted(source: String)
+    case barcodeBulkScanCompleted(scannedCount: Int, newCount: Int, updatedCount: Int, durationMs: Int)
+    case barcodeBulkScanAbandoned(stage: String, scannedCount: Int, durationMs: Int)
+    case barcodeScanResult(
+        outcome: String,
+        provider: String,
+        symbology: String?,
+        code: String?,          // commercial product ID (EAN/UPC/ISBN/GTIN) — not PII; never omit when a code was read
+        durationMs: Int,
+        reason: String?
+    )
 
     // ── Smart Count / AI ─────────────────────────────────────────────────────────
     case smartCountOpened
     case smartCountModeSelected(mode: String)              // "voice" | "photo" | "sheet"
     case smartCountCompleted(mode: String, itemCount: Int, capturedExtraFields: [String]?)
     case smartCountFailed(mode: String, reason: String)
+
+    // ── AI request terminals (iOS-D1b) ───────────────────────────────────────────
+    // One started → exactly one of succeeded / empty / failed per model call.
+    // feature: voice_count | voice_sales | photo_count | photo_sales | sheet_count
+    //          | sheet_sales | sheet_import | identify_product | ask_ai_help
+    case aiRequestStarted(feature: String, mode: String?, inputSizeKB: Int?)
+    case aiRequestSucceeded(feature: String, mode: String?, itemCount: Int, durationMs: Int, provider: String)
+    case aiRequestEmpty(feature: String, mode: String?, durationMs: Int, reason: String)
+    case aiRequestFailed(feature: String, mode: String?, stage: String, errorClass: String, reason: String, durationMs: Int?)
 
     // ── Bulk Import ──────────────────────────────────────────────────────────────
     case bulkImportCompleted(itemCount: Int, format: String)  // format: "csv" | "xlsx"
@@ -126,6 +226,9 @@ enum StoqlyEvent {
     case removeAdsPurchased
     case restorePurchaseTapped
 
+    // plan is "monthly" | "yearly". These sit ALONGSIDE paywall_shown /
+    // paywall_cta_tapped / subscription_started — none of those changed.
+
     // ── Key Screens ──────────────────────────────────────────────────────────────
     case dashboardViewed
     case reorderListViewed(itemCount: Int)
@@ -133,6 +236,7 @@ enum StoqlyEvent {
     case categoryExplorerViewed
     case settingsViewed
     case exportCompleted(format: String)                   // "csv" | "pdf"
+    case exportFailed(format: String, reason: String)      // iOS-D1d; pair with exportCompleted
 
     // ── Sales & Movements (Phase 7A) ─────────────────────────────────────────────
     case saleRecorded(itemId: String, qty: Double, sellingPrice: Double, costPrice: Double, profit: Double, storageId: String, mode: String)
@@ -145,10 +249,16 @@ enum StoqlyEvent {
     case smartSalesOpened
     case smartSalesModeSelected(mode: String)
     case smartSalesCompleted(mode: String, saleCount: Int)
+    case smartSalesFailed(mode: String, reason: String)  // iOS-D1b; parity with smartCountFailed
 
-    // ── Errors / Crashes (non-fatal, for awareness) ───────────────────────────────
-    case syncFailed(reason: String)
-    case barcodeEnrichmentFailed
+    // ── Sync (iOS-D1d) ────────────────────────────────────────────────────────────
+    // Session pair on pullFromCloud / background flush. context:
+    //   "cold_launch" | "foreground" | "manual" | "background_task"
+    // Per-document write failures keep firing syncFailed with context "write"
+    // (no started) so queued retries stay diagnosable.
+    case syncStarted(context: String)
+    case syncCompleted(context: String, docsUpdated: Int, durationMs: Int)
+    case syncFailed(context: String, errorClass: String, reason: String, durationMs: Int?)
 
     // ── Journey backbone (S24) ───────────────────────────────────────────────────
     case screenViewed(name: String, referrer: String?)
@@ -168,8 +278,18 @@ enum StoqlyEvent {
 
     // ── Flow START events (S24) ──────────────────────────────────────────────────
     case addItemStarted(source: String)
+    case addItemMoreDetailsToggled(context: String, expanded: Bool) // context: "add_item" | "edit_item"
     case saleEntryStarted(mode: String)
     case purchaseEntryStarted(mode: String)
+
+    // ── Flow terminal events (iOS-D1c) ──────────────────────────────────────────
+    case addItemCompleted(source: String, hasBarcode: Bool, hasPhoto: Bool, durationMs: Int)
+    case addItemAbandoned(source: String, stage: String, secondsInForm: Int)
+    case saleEntryCompleted(mode: String, itemCount: Int, durationMs: Int)
+    case saleEntryAbandoned(mode: String, stage: String)
+    case purchaseEntryCompleted(mode: String, itemCount: Int, durationMs: Int)
+    case purchaseEntryAbandoned(mode: String, stage: String)
+    case restorePurchaseResult(outcome: String, restoredCount: Int, reason: String?)
 
     // ── Onboarding funnel (S24) ──────────────────────────────────────────────────
     case onboardingStarted
@@ -179,7 +299,6 @@ enum StoqlyEvent {
 
     // ── Blockers (S24) ───────────────────────────────────────────────────────────
     case permissionResult(type: String, granted: Bool)
-    case aiRequestFailed(feature: String, reason: String)
     case emptyStateShown(screen: String)
 
     // ── Engagement depth (S24) ───────────────────────────────────────────────────
@@ -188,6 +307,7 @@ enum StoqlyEvent {
     case languageChanged(toLanguage: String)
     case aiHelpQuestionAsked(question: String)
     case reorderEmailSent(supplierCount: Int, itemCount: Int)
+    case reorderEmailFailed(reason: String)                // iOS-D1d; pair with reorderEmailSent
     case voiceEngineUsed(engine: String, language: String)
     case languageChosenAtOnboarding(language: String)
     case feedbackSubmitted(type: String)
@@ -207,6 +327,16 @@ enum StoqlyEvent {
     case purchaseEntryCancelled(mode: String)
     case swipeActionUsed(screen: String, action: String)
     case buttonTapped(screen: String, control: String)
+    case aiEntryChipShown(screen: String, feature: String)
+    case aiEntryChipTapped(screen: String, feature: String)
+
+    // ── AdMob lifecycle (iOS-F4) ───────────────────────────────────────────────
+    case adRequested(unitId: String, format: String, sourceScreen: String, isPro: Bool, suppressed: Bool)
+    case adLoaded(unitId: String, format: String, latencyMs: Int)
+    case adFailedToLoad(unitId: String, format: String, errorCode: Int, errorDomain: String, errorLocalized: String)
+    case adImpression(unitId: String, format: String, sourceScreen: String)
+    case adClicked(unitId: String, format: String, sourceScreen: String)
+    case adDismissed(unitId: String, format: String, dwellMs: Int)
 
     // MARK: Event name + properties
 
@@ -215,6 +345,11 @@ enum StoqlyEvent {
         case .userSignedUp:              return "user_signed_up"
         case .userSignedIn:              return "user_signed_in"
         case .userSignedOut:             return "user_signed_out"
+
+        case .businessProfilePromptShown:return "business_profile_prompt_shown"
+        case .businessProfileCompleted:  return "business_profile_completed"
+        case .businessProfileUpdated:    return "business_profile_updated"
+        case .businessProfileSaveFailed: return "business_profile_save_failed"
 
         case .storageCreated:            return "storage_created"
         case .storageDeleted:            return "storage_deleted"
@@ -226,12 +361,20 @@ enum StoqlyEvent {
         case .itemCounted:               return "item_counted"
 
         case .barcodeScanInitiated:      return "barcode_scan_initiated"
+        case .barcodeBulkScanStarted:    return "barcode_bulk_scan_started"
+        case .barcodeBulkScanCompleted:  return "barcode_bulk_scan_completed"
+        case .barcodeBulkScanAbandoned:  return "barcode_bulk_scan_abandoned"
         case .barcodeScanResult:         return "barcode_scan_result"
 
         case .smartCountOpened:          return "smart_count_opened"
         case .smartCountModeSelected:    return "smart_count_mode_selected"
         case .smartCountCompleted:       return "smart_count_completed"
         case .smartCountFailed:          return "smart_count_failed"
+
+        case .aiRequestStarted:          return "ai_request_started"
+        case .aiRequestSucceeded:        return "ai_request_succeeded"
+        case .aiRequestEmpty:            return "ai_request_empty"
+        case .aiRequestFailed:           return "ai_request_failed"
 
         case .bulkImportCompleted:       return "bulk_import_completed"
         case .bulkImportFailed:          return "bulk_import_failed"
@@ -242,12 +385,14 @@ enum StoqlyEvent {
         case .removeAdsPurchased:        return "remove_ads_purchased"
         case .restorePurchaseTapped:     return "restore_purchase_tapped"
 
+
         case .dashboardViewed:           return "dashboard_viewed"
         case .reorderListViewed:         return "reorder_list_viewed"
         case .expiryTimelineViewed:      return "expiry_timeline_viewed"
         case .categoryExplorerViewed:    return "category_explorer_viewed"
         case .settingsViewed:            return "settings_viewed"
         case .exportCompleted:           return "export_completed"
+        case .exportFailed:              return "export_failed"
 
         case .saleRecorded:              return "sale_recorded"
         case .movementLogged:            return "movement_logged"
@@ -258,9 +403,11 @@ enum StoqlyEvent {
         case .smartSalesOpened:          return "smart_sales_opened"
         case .smartSalesModeSelected:    return "smart_sales_mode_selected"
         case .smartSalesCompleted:       return "smart_sales_completed"
+        case .smartSalesFailed:          return "smart_sales_failed"
 
+        case .syncStarted:               return "sync_started"
+        case .syncCompleted:             return "sync_completed"
         case .syncFailed:                return "sync_failed"
-        case .barcodeEnrichmentFailed:   return "barcode_enrichment_failed"
 
         case .screenViewed:              return "screen_viewed"
 
@@ -276,8 +423,16 @@ enum StoqlyEvent {
         case .paywallDismissed:          return "paywall_dismissed"
 
         case .addItemStarted:            return "add_item_started"
+        case .addItemMoreDetailsToggled: return "add_item_more_details_toggled"
         case .saleEntryStarted:          return "sale_entry_started"
         case .purchaseEntryStarted:      return "purchase_entry_started"
+        case .addItemCompleted:          return "add_item_completed"
+        case .addItemAbandoned:          return "add_item_abandoned"
+        case .saleEntryCompleted:        return "sale_entry_completed"
+        case .saleEntryAbandoned:        return "sale_entry_abandoned"
+        case .purchaseEntryCompleted:    return "purchase_entry_completed"
+        case .purchaseEntryAbandoned:    return "purchase_entry_abandoned"
+        case .restorePurchaseResult:     return "restore_purchase_result"
 
         case .onboardingStarted:         return "onboarding_started"
         case .onboardingStepViewed:       return "onboarding_step_viewed"
@@ -285,7 +440,6 @@ enum StoqlyEvent {
         case .onboardingSkipped:         return "onboarding_skipped"
 
         case .permissionResult:          return "permission_result"
-        case .aiRequestFailed:            return "ai_request_failed"
         case .emptyStateShown:           return "empty_state_shown"
 
         case .searchPerformed:           return "search_performed"
@@ -294,6 +448,7 @@ enum StoqlyEvent {
         case .languageChosenAtOnboarding: return "language_chosen_at_onboarding"
         case .aiHelpQuestionAsked:        return "ai_help_question_asked"
         case .reorderEmailSent:           return "reorder_email_sent"
+        case .reorderEmailFailed:         return "reorder_email_failed"
         case .voiceEngineUsed:            return "voice_engine_used"
         case .feedbackSubmitted:          return "feedback_submitted"
         case .feedbackPromptShown:        return "feedback_prompt_shown"
@@ -310,6 +465,15 @@ enum StoqlyEvent {
         case .purchaseEntryCancelled:     return "purchase_entry_cancelled"
         case .swipeActionUsed:            return "swipe_action_used"
         case .buttonTapped:               return "button_tapped"
+        case .aiEntryChipShown:           return "ai_entry_chip_shown"
+        case .aiEntryChipTapped:          return "ai_entry_chip_tapped"
+
+        case .adRequested:                return "ad_requested"
+        case .adLoaded:                   return "ad_loaded"
+        case .adFailedToLoad:             return "ad_failed_to_load"
+        case .adImpression:               return "ad_impression"
+        case .adClicked:                  return "ad_clicked"
+        case .adDismissed:                return "ad_dismissed"
         }
     }
 
@@ -318,6 +482,37 @@ enum StoqlyEvent {
         case .userSignedUp(let method):       return ["method": method]
         case .userSignedIn(let method):       return ["method": method]
         case .userSignedOut:                  return [:]
+
+        case .businessProfilePromptShown(let audience):
+            return ["audience": audience, "profile_version": BusinessProfile.currentSchemaVersion]
+        case .businessProfileCompleted(let source, let audience, let type, let state, let city, let hasPhone, let consent, let duration):
+            // `business_city` is deliberately NOT named `city`: Amplitude already
+            // derives `city` and `region` from IP, and those must keep working.
+            var props: [String: Any] = [
+                "source": source,
+                "audience": audience,
+                "business_type": type,
+                "business_state": state,
+                "phone_provided": hasPhone,
+                "contact_opt_in": consent,
+                "duration_ms": duration,
+                "profile_version": BusinessProfile.currentSchemaVersion
+            ]
+            if let city { props["business_city"] = city }
+            return props
+        case .businessProfileUpdated(let source, let type, let state, let city, let hasPhone, let consent):
+            var props: [String: Any] = [
+                "source": source,
+                "business_type": type,
+                "business_state": state,
+                "phone_provided": hasPhone,
+                "contact_opt_in": consent,
+                "profile_version": BusinessProfile.currentSchemaVersion
+            ]
+            if let city { props["business_city"] = city }
+            return props
+        case .businessProfileSaveFailed(let source):
+            return ["source": source, "profile_version": BusinessProfile.currentSchemaVersion]
 
         case .storageCreated(let color):      return ["color": color]
         case .storageDeleted:                 return [:]
@@ -330,7 +525,27 @@ enum StoqlyEvent {
         case .itemCounted(let s):             return ["storage_name": s]
 
         case .barcodeScanInitiated:           return [:]
-        case .barcodeScanResult(let f, let e):return ["found": f, "enriched": e]
+        case .barcodeBulkScanStarted(let source):
+            return ["source": source]
+        case .barcodeBulkScanCompleted(let scanned, let newCount, let updated, let durationMs):
+            return [
+                "scanned_count": scanned,
+                "new_count": newCount,
+                "updated_count": updated,
+                "duration_ms": durationMs
+            ]
+        case .barcodeBulkScanAbandoned(let stage, let scanned, let durationMs):
+            return ["stage": stage, "scanned_count": scanned, "duration_ms": durationMs]
+        case .barcodeScanResult(let outcome, let provider, let symbology, let code, let durationMs, let reason):
+            var props: [String: Any] = [
+                "outcome": outcome,
+                "provider": provider,
+                "duration_ms": durationMs
+            ]
+            if let symbology, !symbology.isEmpty { props["symbology"] = symbology }
+            if let code, !code.isEmpty { props["code"] = code }
+            if let reason, !reason.isEmpty { props["reason"] = reason }
+            return props
 
         case .smartCountOpened:               return [:]
         case .smartCountModeSelected(let m):  return ["mode": m]
@@ -342,6 +557,39 @@ enum StoqlyEvent {
             return props
         case .smartCountFailed(let m, let r): return ["mode": m, "reason": r]
 
+        case .aiRequestStarted(let feature, let mode, let inputSizeKB):
+            var props: [String: Any] = ["feature": feature]
+            if let mode, !mode.isEmpty { props["mode"] = mode }
+            if let inputSizeKB { props["input_size_kb"] = inputSizeKB }
+            return props
+        case .aiRequestSucceeded(let feature, let mode, let itemCount, let durationMs, let provider):
+            var props: [String: Any] = [
+                "feature": feature,
+                "item_count": itemCount,
+                "duration_ms": durationMs,
+                "provider": provider
+            ]
+            if let mode, !mode.isEmpty { props["mode"] = mode }
+            return props
+        case .aiRequestEmpty(let feature, let mode, let durationMs, let reason):
+            var props: [String: Any] = [
+                "feature": feature,
+                "duration_ms": durationMs,
+                "reason": reason
+            ]
+            if let mode, !mode.isEmpty { props["mode"] = mode }
+            return props
+        case .aiRequestFailed(let feature, let mode, let stage, let errorClass, let reason, let durationMs):
+            var props: [String: Any] = [
+                "feature": feature,
+                "stage": stage,
+                "error_class": errorClass,
+                "reason": reason
+            ]
+            if let mode, !mode.isEmpty { props["mode"] = mode }
+            if let durationMs { props["duration_ms"] = durationMs }
+            return props
+
         case .bulkImportCompleted(let n, let fmt):
             return ["item_count": n, "format": fmt]
         case .bulkImportFailed(let r):        return ["reason": r]
@@ -350,6 +598,7 @@ enum StoqlyEvent {
             var props: [String: Any] = ["source": src]
             if let trigger, !trigger.isEmpty { props["trigger"] = trigger }
             return props
+
         case .subscriptionStarted(let plan):  return ["plan": plan]
         case .subscriptionCancelled:          return [:]
         case .removeAdsPurchased:             return [:]
@@ -361,6 +610,7 @@ enum StoqlyEvent {
         case .categoryExplorerViewed:         return [:]
         case .settingsViewed:                 return [:]
         case .exportCompleted(let fmt):       return ["format": fmt]
+        case .exportFailed(let fmt, let r):   return ["format": fmt, "reason": r]
 
         case .saleRecorded(let itemId, let qty, let sp, let cp, let profit, let storageId, let mode):
             return [
@@ -384,9 +634,21 @@ enum StoqlyEvent {
         case .smartSalesModeSelected(let m):  return ["mode": m]
         case .smartSalesCompleted(let m, let n):
             return ["mode": m, "sale_count": n]
+        case .smartSalesFailed(let m, let r):
+            return ["mode": m, "reason": r]
 
-        case .syncFailed(let r):              return ["reason": r]
-        case .barcodeEnrichmentFailed:        return [:]
+        case .syncStarted(let context):
+            return ["context": context]
+        case .syncCompleted(let context, let docs, let durationMs):
+            return ["context": context, "docs_updated": docs, "duration_ms": durationMs]
+        case .syncFailed(let context, let errorClass, let r, let durationMs):
+            var props: [String: Any] = [
+                "context": context,
+                "error_class": errorClass,
+                "reason": r
+            ]
+            if let durationMs { props["duration_ms"] = durationMs }
+            return props
 
         case .screenViewed(let name, let referrer):
             var props: [String: Any] = ["screen": name]
@@ -405,8 +667,31 @@ enum StoqlyEvent {
         case .paywallDismissed:               return [:]
 
         case .addItemStarted(let source):     return ["source": source]
+        case .addItemMoreDetailsToggled(let context, let expanded):
+            return ["context": context, "expanded": expanded]
         case .saleEntryStarted(let mode):     return ["mode": mode]
         case .purchaseEntryStarted(let mode): return ["mode": mode]
+        case .addItemCompleted(let source, let hasBarcode, let hasPhoto, let durationMs):
+            return [
+                "source": source,
+                "has_barcode": hasBarcode,
+                "has_photo": hasPhoto,
+                "duration_ms": durationMs
+            ]
+        case .addItemAbandoned(let source, let stage, let secondsInForm):
+            return ["source": source, "stage": stage, "seconds_in_form": secondsInForm]
+        case .saleEntryCompleted(let mode, let itemCount, let durationMs):
+            return ["mode": mode, "item_count": itemCount, "duration_ms": durationMs]
+        case .saleEntryAbandoned(let mode, let stage):
+            return ["mode": mode, "stage": stage]
+        case .purchaseEntryCompleted(let mode, let itemCount, let durationMs):
+            return ["mode": mode, "item_count": itemCount, "duration_ms": durationMs]
+        case .purchaseEntryAbandoned(let mode, let stage):
+            return ["mode": mode, "stage": stage]
+        case .restorePurchaseResult(let outcome, let restoredCount, let reason):
+            var props: [String: Any] = ["outcome": outcome, "restored_count": restoredCount]
+            if let reason, !reason.isEmpty { props["reason"] = reason }
+            return props
 
         case .onboardingStarted:              return [:]
         case .onboardingStepViewed(let step, let name):
@@ -416,8 +701,6 @@ enum StoqlyEvent {
 
         case .permissionResult(let type, let granted):
             return ["type": type, "granted": granted]
-        case .aiRequestFailed(let feature, let reason):
-            return ["feature": feature, "reason": reason]
         case .emptyStateShown(let screen):    return ["screen": screen]
 
         case .searchPerformed(let scope, let resultCount):
@@ -431,6 +714,8 @@ enum StoqlyEvent {
             return ["question": String(text.prefix(500)), "question_length": text.count]
         case .reorderEmailSent(let supplierCount, let itemCount):
             return ["supplier_count": supplierCount, "item_count": itemCount]
+        case .reorderEmailFailed(let r):
+            return ["reason": r]
         case .voiceEngineUsed(let engine, let language):
             return ["engine": engine, "language": language]
         case .languageChosenAtOnboarding(let language):
@@ -471,6 +756,44 @@ enum StoqlyEvent {
             return ["screen": screen, "action": action]
         case .buttonTapped(let screen, let control):
             return ["screen": screen, "control": control]
+        case .aiEntryChipShown(let screen, let feature),
+             .aiEntryChipTapped(let screen, let feature):
+            return ["screen": screen, "feature": feature]
+
+        case .adRequested(let unitId, let format, let sourceScreen, let isPro, let suppressed):
+            return [
+                "unit_id": unitId,
+                "format": format,
+                "source_screen": sourceScreen,
+                "is_pro": isPro,
+                "suppressed": suppressed
+            ]
+        case .adLoaded(let unitId, let format, let latencyMs):
+            return ["unit_id": unitId, "format": format, "latency_ms": latencyMs]
+        case .adFailedToLoad(let unitId, let format, let errorCode, let errorDomain, let errorLocalized):
+            return [
+                "unit_id": unitId,
+                "format": format,
+                "error_code": errorCode,
+                "error_domain": errorDomain,
+                "error_localized": errorLocalized
+            ]
+        case .adImpression(let unitId, let format, let sourceScreen):
+            return ["unit_id": unitId, "format": format, "source_screen": sourceScreen]
+        case .adClicked(let unitId, let format, let sourceScreen):
+            return ["unit_id": unitId, "format": format, "source_screen": sourceScreen]
+        case .adDismissed(let unitId, let format, let dwellMs):
+            return ["unit_id": unitId, "format": format, "dwell_ms": dwellMs]
+        }
+    }
+
+    /// AdMob lifecycle events that get a temporary DEBUG console dump (iOS-F4).
+    var isAdLifecycleEvent: Bool {
+        switch self {
+        case .adRequested, .adLoaded, .adFailedToLoad, .adImpression, .adClicked, .adDismissed:
+            return true
+        default:
+            return false
         }
     }
 }

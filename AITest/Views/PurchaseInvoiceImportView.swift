@@ -6,7 +6,7 @@ import SwiftData
 
 struct PurchaseInvoiceImportView: View {
     let defaultStorage: Storage?
-    var onCompleted: (() -> Void)? = nil
+    var onCompleted: ((Int) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
@@ -16,6 +16,9 @@ struct PurchaseInvoiceImportView: View {
     @State private var showingPDF = false
     @State private var showingCSV = false
     @State private var showingPaywall = false
+    @State private var didTrackPurchaseEntryStarted = false
+    @State private var purchaseEntryOpenedAt = Date()
+    @State private var didEmitPurchaseTerminal = false
 
     var body: some View {
         NavigationStack {
@@ -54,17 +57,20 @@ struct PurchaseInvoiceImportView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button("Done") {
+                        emitPurchaseAbandonedIfNeeded(stage: "cancelled")
+                        dismiss()
+                    }
                 }
             }
         }
         .onAppear {
-            AnalyticsManager.shared.track(.purchaseEntryStarted(mode: "invoice"))
+            beginPurchaseEntryIfNeeded()
         }
         .sheet(isPresented: $showingPhoto) {
             PurchaseInvoicePhotoView(
                 defaultStorage: defaultStorage,
-                onCompleted: { onCompleted?(); dismiss() }
+                onCompleted: { count in completePurchaseEntry(itemCount: count) }
             )
                 .environmentObject(currencyManager)
                 .sheetStyle()
@@ -72,7 +78,7 @@ struct PurchaseInvoiceImportView: View {
         .sheet(isPresented: $showingPDF) {
             PurchaseInvoicePDFView(
                 defaultStorage: defaultStorage,
-                onCompleted: { onCompleted?(); dismiss() }
+                onCompleted: { count in completePurchaseEntry(itemCount: count) }
             )
                 .environmentObject(currencyManager)
                 .sheetStyle()
@@ -80,7 +86,7 @@ struct PurchaseInvoiceImportView: View {
         .sheet(isPresented: $showingCSV) {
             PurchaseInvoiceCSVView(
                 defaultStorage: defaultStorage,
-                onCompleted: { onCompleted?(); dismiss() }
+                onCompleted: { count in completePurchaseEntry(itemCount: count) }
             )
                 .environmentObject(currencyManager)
                 .sheetStyle()
@@ -88,11 +94,15 @@ struct PurchaseInvoiceImportView: View {
         .sheet(isPresented: $showingPaywall) {
             PaywallView(source: "pro_feature").sheetStyle()
         }
+        .onDisappear {
+            guard !showingPhoto, !showingPDF, !showingCSV, !showingPaywall else { return }
+            emitPurchaseAbandonedIfNeeded(stage: "cancelled")
+        }
     }
 
     private func modeCard(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
         let isPro = subscriptionManager.isPro
-        return Button(action: isPro ? action : { showingPaywall = true }) {
+        return Button(action: { openPurchaseMode(action) }) {
             HStack(spacing: 16) {
                 Image(systemName: icon).font(.title3).foregroundColor(isPro ? color : .secondary)
                     .frame(width: 44, height: 44)
@@ -110,13 +120,56 @@ struct PurchaseInvoiceImportView: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("purchaseInvoiceMode_\(title.lowercased().replacingOccurrences(of: " ", with: "_"))")
     }
+
+    private func beginPurchaseEntryIfNeeded() {
+        guard !didTrackPurchaseEntryStarted else { return }
+        didTrackPurchaseEntryStarted = true
+        didEmitPurchaseTerminal = false
+        purchaseEntryOpenedAt = Date()
+        AnalyticsManager.shared.track(.purchaseEntryStarted(mode: "invoice"))
+    }
+
+    private func openPurchaseMode(_ action: () -> Void) {
+        guard subscriptionManager.isPro else {
+            emitPurchaseAbandonedIfNeeded(stage: "paywall")
+            showingPaywall = true
+            return
+        }
+        if didEmitPurchaseTerminal {
+            didTrackPurchaseEntryStarted = false
+            didEmitPurchaseTerminal = false
+        }
+        beginPurchaseEntryIfNeeded()
+        action()
+    }
+
+    private func completePurchaseEntry(itemCount: Int) {
+        guard didTrackPurchaseEntryStarted, !didEmitPurchaseTerminal else { return }
+        didEmitPurchaseTerminal = true
+        AnalyticsManager.shared.track(
+            .purchaseEntryCompleted(
+                mode: "invoice",
+                itemCount: itemCount,
+                durationMs: max(0, Int(Date().timeIntervalSince(purchaseEntryOpenedAt) * 1_000))
+            )
+        )
+        onCompleted?(itemCount)
+        dismiss()
+    }
+
+    private func emitPurchaseAbandonedIfNeeded(stage: String) {
+        guard didTrackPurchaseEntryStarted, !didEmitPurchaseTerminal else { return }
+        didEmitPurchaseTerminal = true
+        AnalyticsManager.shared.track(.purchaseEntryAbandoned(mode: "invoice", stage: stage))
+        AnalyticsManager.shared.track(.purchaseEntryCancelled(mode: "invoice"))
+    }
 }
 
 // MARK: - Photo mode
 
 struct PurchaseInvoicePhotoView: View {
     let defaultStorage: Storage?
-    var onCompleted: (() -> Void)? = nil
+    var onCompleted: ((Int) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
     @Query(sort: \InventoryItem.name) private var allItems: [InventoryItem]
@@ -138,7 +191,7 @@ struct PurchaseInvoicePhotoView: View {
                     PurchaseReviewView(
                         rows: $parsedRows,
                         defaultStorage: defaultStorage,
-                        onConfirm: { onCompleted?() ?? dismiss() },
+                        onConfirm: { count in onCompleted?(count) ?? dismiss() },
                         onCancel: { step = 0 }
                     )
                     .environmentObject(currencyManager)
@@ -209,7 +262,7 @@ struct PurchaseInvoicePhotoView: View {
 
 struct PurchaseInvoicePDFView: View {
     let defaultStorage: Storage?
-    var onCompleted: (() -> Void)? = nil
+    var onCompleted: ((Int) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
     @Query(sort: \InventoryItem.name) private var allItems: [InventoryItem]
@@ -231,7 +284,7 @@ struct PurchaseInvoicePDFView: View {
                     PurchaseReviewView(
                         rows: $parsedRows,
                         defaultStorage: defaultStorage,
-                        onConfirm: { onCompleted?() ?? dismiss() },
+                        onConfirm: { count in onCompleted?(count) ?? dismiss() },
                         onCancel: { step = 0 }
                     )
                     .environmentObject(currencyManager)
@@ -475,7 +528,7 @@ final class PurchaseInvoiceCSVViewModel: ObservableObject {
 
 struct PurchaseInvoiceCSVView: View {
     let defaultStorage: Storage?
-    var onCompleted: (() -> Void)? = nil
+    var onCompleted: ((Int) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
 
@@ -539,9 +592,9 @@ struct PurchaseInvoiceCSVView: View {
                 PurchaseReviewView(
                     rows: $parsedRows,
                     defaultStorage: defaultStorage,
-                    onConfirm: {
+                    onConfirm: { count in
                         showingReview = false
-                        onCompleted?() ?? dismiss()
+                        onCompleted?(count) ?? dismiss()
                     },
                     onCancel: { showingReview = false }
                 )

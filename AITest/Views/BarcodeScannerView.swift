@@ -35,16 +35,23 @@ import AVFoundation
 
 // MARK: - ScannerNavigationController
 
+@MainActor
+private protocol ScannerNavigationLifecycleDelegate: AnyObject {
+    func scannerDidAppear()
+}
+
 /// A UINavigationController subclass whose sole job is to call
 /// `scanner.startScanning()` once the view hierarchy is fully on screen.
 /// DataScannerViewController silently ignores startScanning() if called
 /// before viewDidAppear, so this is the reliable hook.
 private final class ScannerNavigationController: UINavigationController {
     weak var scanner: DataScannerViewController?
+    weak var scannerLifecycleDelegate: ScannerNavigationLifecycleDelegate?
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         try? scanner?.startScanning()
+        scannerLifecycleDelegate?.scannerDidAppear()
     }
 }
 
@@ -60,6 +67,12 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
     }
 
     func makeUIViewController(context: Context) -> UIViewController {
+        let cameraAuthorization = AVCaptureDevice.authorizationStatus(for: .video)
+        if cameraAuthorization == .denied || cameraAuthorization == .restricted {
+            context.coordinator.cameraPermissionDenied(status: cameraAuthorization)
+            return context.coordinator.makeFallbackViewController()
+        }
+
         // Apple-Silicon simulators report isSupported == true (they inherit the
         // host's ANE) but the AVFoundation capture XPC has no real camera to
         // attach to, so DataScannerViewController emits a stream of -17281 /
@@ -97,6 +110,7 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
         // ScannerNavigationController calls startScanning() in viewDidAppear.
         let nav = ScannerNavigationController(rootViewController: scanner)
         nav.scanner = scanner
+        nav.scannerLifecycleDelegate = context.coordinator
         nav.navigationBar.tintColor = .white
         nav.navigationBar.barStyle = .black
         nav.navigationBar.isTranslucent = true
@@ -122,7 +136,7 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
 
     // MARK: - Coordinator
 
-    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
+    final class Coordinator: NSObject, DataScannerViewControllerDelegate, ScannerNavigationLifecycleDelegate {
 
         let onScan: (String, String) -> Void
         let onCancel: () -> Void
@@ -131,6 +145,14 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
         /// the manual-entry alert still has a presenter.
         weak var fallbackPresenter: UIViewController?
         private var hasScanned = false
+        private var hasTerminalOutcome = false
+        /// A denied/restricted camera still offers manual entry. Defer the
+        /// camera-denied terminal event until the user leaves that fallback;
+        /// a successful manual entry is completed by the parent lookup path.
+        private var fallbackTerminalOutcome: (outcome: String, reason: String)?
+        private let startedAt = CFAbsoluteTimeGetCurrent()
+        private var noCodeTimer: Timer?
+        private static let noCodeTimeoutSeconds: TimeInterval = 30
 
         init(onScan: @escaping (String, String) -> Void, onCancel: @escaping () -> Void) {
             self.onScan = onScan
@@ -150,6 +172,7 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
                   !payload.isEmpty else { return }
 
             hasScanned = true
+            finishWithoutResultEvent()
             let symbology = barcode.observation.symbology.rawValue
 
             // Stop scanning so it doesn't fire again while we dismiss.
@@ -159,9 +182,13 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
 
             // onScan is called on the main thread; the caller's closure sets
             // formVM.barcode and dismisses the sheet.
+            // Do NOT recordCompletion(.barcodeScanned) here. That opens
+            // RealAdIntegrationView's interstitial fullScreenCover from the
+            // tab root, which SwiftUI uses to tear down this scanner (and
+            // the Add Item sheet under it). Free-tier ads fire on itemAdded
+            // after Save instead.
             DispatchQueue.main.async { [weak self] in
                 self?.onScan(payload, symbology)
-                AdManager.shared.recordCompletion(event: .barcodeScanned)
             }
         }
 
@@ -169,6 +196,13 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
 
         @objc func cancelTapped() {
             scanner?.stopScanning()
+            let fallbackOutcome = fallbackTerminalOutcome
+            trackTerminalOutcome(
+                outcome: fallbackOutcome?.outcome ?? "scanner_cancelled",
+                provider: "none",
+                symbology: nil,
+                reason: fallbackOutcome?.reason ?? "user_tapped_cancel"
+            )
             onCancel()
         }
 
@@ -176,6 +210,8 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
             // Prefer the real scanner as presenter; fall back to the simulator
             // / unsupported-device VC so the alert always has somewhere to go.
             guard let presenter: UIViewController = scanner ?? fallbackPresenter else { return }
+            pauseNoCodeTimer()
+            scanner?.stopScanning()
             let alert = UIAlertController(
                 title: "Enter Barcode",
                 message: "Type the barcode number manually.",
@@ -187,13 +223,20 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
                 tf.autocorrectionType = .no
                 tf.autocapitalizationType = .allCharacters
             }
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
+                self?.resumeLiveScannerIfNeeded()
+            })
             alert.addAction(UIAlertAction(title: "Use", style: .default) { [weak self] _ in
-                guard let code = alert.textFields?.first?.text, !code.isEmpty else { return }
-                self?.hasScanned = true
-                self?.scanner?.stopScanning()
+                guard let self else { return }
+                guard let code = alert.textFields?.first?.text, !code.isEmpty else {
+                    self.resumeLiveScannerIfNeeded()
+                    return
+                }
+                self.hasScanned = true
+                self.finishWithoutResultEvent()
+                self.scanner?.stopScanning()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
-                self?.onScan(code, "Manual")
+                self.onScan(code, "Manual")
             })
             presenter.present(alert, animated: true)
         }
@@ -206,7 +249,8 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
 
             // Wrap in a UINavigationController so Cancel is reachable from
             // the nav bar — matches the live scanner's chrome.
-            let nav = UINavigationController(rootViewController: vc)
+            let nav = ScannerNavigationController(rootViewController: vc)
+            nav.scannerLifecycleDelegate = self
             nav.navigationBar.tintColor = .white
             nav.navigationBar.barStyle = .black
             nav.navigationBar.isTranslucent = true
@@ -248,6 +292,92 @@ struct BarcodeScannerView: UIViewControllerRepresentable {
             // even though `scanner` is nil on this code path.
             fallbackPresenter = vc
             return nav
+        }
+
+        // MARK: Analytics lifecycle
+
+        func scannerDidAppear() {
+            // Fallback controllers (simulator, unsupported hardware, denied
+            // permission) have no live scanner and must never time out an
+            // in-progress manual entry.
+            guard scanner != nil else { return }
+            startNoCodeTimerIfNeeded()
+        }
+
+        private func startNoCodeTimerIfNeeded() {
+            guard scanner != nil,
+                  !hasScanned,
+                  !hasTerminalOutcome,
+                  noCodeTimer == nil else { return }
+            noCodeTimer = Timer.scheduledTimer(
+                timeInterval: Self.noCodeTimeoutSeconds,
+                target: self,
+                selector: #selector(noCodeTimeoutFired),
+                userInfo: nil,
+                repeats: false
+            )
+        }
+
+        private func resumeLiveScannerIfNeeded() {
+            guard let scanner,
+                  !hasScanned,
+                  !hasTerminalOutcome else { return }
+            try? scanner.startScanning()
+            startNoCodeTimerIfNeeded()
+        }
+
+        func cameraPermissionDenied(status: AVAuthorizationStatus) {
+            fallbackTerminalOutcome = (
+                outcome: "camera_denied",
+                reason: "AVCaptureDevice authorizationStatus=\(status.rawValue)"
+            )
+        }
+
+        @objc private func noCodeTimeoutFired() {
+            guard scanner != nil, !hasScanned, !hasTerminalOutcome else { return }
+            scanner?.stopScanning()
+            trackTerminalOutcome(
+                outcome: "no_code_detected",
+                provider: "none",
+                symbology: nil,
+                reason: "scanner_timeout_30s"
+            )
+            onCancel()
+        }
+
+        private func finishWithoutResultEvent() {
+            guard !hasTerminalOutcome else { return }
+            hasTerminalOutcome = true
+            pauseNoCodeTimer()
+        }
+
+        private func pauseNoCodeTimer() {
+            noCodeTimer?.invalidate()
+            noCodeTimer = nil
+        }
+
+        private func trackTerminalOutcome(
+            outcome: String,
+            provider: String,
+            symbology: String?,
+            code: String? = nil,
+            durationMs: Int? = nil,
+            reason: String?
+        ) {
+            guard !hasTerminalOutcome else { return }
+            hasTerminalOutcome = true
+            pauseNoCodeTimer()
+            let elapsedMs = durationMs ?? max(0, Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1_000))
+            AnalyticsManager.shared.track(
+                .barcodeScanResult(
+                    outcome: outcome,
+                    provider: provider,
+                    symbology: symbology,
+                    code: code,
+                    durationMs: elapsedMs,
+                    reason: reason
+                )
+            )
         }
     }
 }

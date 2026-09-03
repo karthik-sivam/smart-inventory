@@ -55,7 +55,7 @@ All Phase 3 sub-items are shipped. See `automation_results.rtf` for per-item det
 | 3.6 | Batch Expiry Tracking — `InventoryBatch` model, FIFO display, QuickCount "Track as new batch" | ✅ COMPLETED 2026-05-13 |
 | 3.7 | Deletion Confirmation Toast — `ToastView` wired in ItemListView, StorageDetailView, StorageListView | ✅ COMPLETED |
 | 3.8a | Search & Spotlight — search history chips, `SpotlightManager`, deep-link handler | ✅ COMPLETED |
-| 3.8b | Monetisation Polish — storage cap indicator, contextual paywall, trial expiry banner | ✅ COMPLETED |
+| 3.8b | Monetisation Polish — storage cap indicator, contextual paywall, Pro expiry banner | ✅ COMPLETED |
 | 3.9 | Performance & Sync — write debounce (1.5s), background flush, foreground pull throttle (15min), concurrent Firestore writes (`withTaskGroup`), search debounce (250ms) | ✅ COMPLETED |
 | 3.10 | Phase 3 Maestro — flows 34–36, branding sweep | ✅ COMPLETED WITH ISSUES (known flow failures are pre-existing, spec items pass) |
 
@@ -68,6 +68,7 @@ All Phase 4 parts shipped. See `automation_results.rtf` for per-section details.
 | Part | Feature | Status |
 |------|---------|--------|
 | 4 Part 1 | `performedBy` on all ActivityEvents, `TeamMember` model, `TeamManager` singleton, workspace switching, invite send/accept/decline, `TeamMembersView` | ✅ COMPLETED |
+| 4 Part 1b | Additive `inviteId` on members + atomic invite-acceptance WriteBatch (parity with Android). See `docs/team-workspace-contract.md`. | ✅ COMPLETED |
 | 4 Part 2 | Role gates (`canEdit`, `canDeleteItem`, `canDeleteStorage`), viewer read-only banner, workspace indicator, `ItemTemplate` model + Firestore sync, `TemplatePickerView`, "Save as Template" | ✅ COMPLETED |
 | 4 Part 3 | Templates Maestro flows 63–71 | ✅ COMPLETED WITH ISSUES |
 
@@ -171,7 +172,7 @@ Added directly to `StorageDetailView.swift`:
 Before any App Store submission:
 
 - [ ] **Revert `SubscriptionManager.isPro` to `false`** (currently `true` for testing)
-- [ ] **Remove debug prints** in `BarcodeEnrichmentService.swift` (`print("[Enrichment]...")`)
+- [x] **Remove debug prints** in `BarcodeEnrichmentService.swift` (`print("[Enrichment]...")`) — none remain (iOS-A2)
 - [ ] Run full Maestro suite — all flows pass (or known failures documented)
 - [ ] Manual test on physical device (not just simulator)
 - [ ] Verify Firestore security rules are production-ready

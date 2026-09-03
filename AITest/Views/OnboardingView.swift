@@ -49,7 +49,7 @@ struct OnboardingView: View {
             icon: "icloud.fill",
             iconColors: [.green, .teal],
             title: "Your Data, Everywhere",
-            subtitle: "Start free on one device. Upgrade to Pro for cloud sync, AI insights, and team collaboration.",
+            subtitle: "Cloud sync is free. Pro unlocks AI-powered counts, sales, and purchase imports, plus advanced analytics and team collaboration.",
             accentColor: .green
         )
     ]

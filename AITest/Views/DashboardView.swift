@@ -246,9 +246,9 @@ struct DashboardView: View {
                     .frame(height: 0)
 
                     VStack(spacing: 16) {
-                        // Pro-access expiry banner (Stoqly has no trial — this is the
-                        // subscription/grant expiry, worded as "Pro", never "trial")
-                        if let days = subscriptionManager.trialDaysRemaining, days <= 3 {
+                        // Pro-access expiry banner. Stoqly has no free trial; this is
+                        // the paid subscription / manual grant expiry.
+                        if let days = subscriptionManager.proDaysRemaining, days <= 3 {
                             HStack(spacing: 10) {
                                 Image(systemName: "clock.fill")
                                     .foregroundColor(.stoqlyWarning)
@@ -494,6 +494,7 @@ struct DashboardView: View {
         .onAppear {
             initializeStandardUOMs()
             AnalyticsManager.shared.track(.dashboardViewed)
+            AdManager.shared.noteBannerOpportunity(sourceScreen: "Dashboard")
             FeedbackPromptManager.recordInstallIfNeeded()
             if !didEvaluateFeedbackPrompt {
                 didEvaluateFeedbackPrompt = true
@@ -1010,7 +1011,7 @@ private struct InventoryHealthCard: View {
         // +40 proportional to % of items counted in last 30 days
         let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
         let recentlyCounted = items.filter { item in
-            item.countHistory.map(\.countDate).max().map { $0 >= thirtyDaysAgo } ?? false
+            item.effectiveLastCountedAt.map { $0 >= thirtyDaysAgo } ?? false
         }.count
         let countFraction = Double(recentlyCounted) / Double(items.count)
         pts += Int(countFraction * 40)
@@ -1089,7 +1090,7 @@ private struct HealthDetailView: View {
     private var uncountedItems: [InventoryItem] {
         let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
         return items.filter { item in
-            guard let lastCount = item.countHistory.map(\.countDate).max() else { return true }
+            guard let lastCount = item.effectiveLastCountedAt else { return true }
             return lastCount < thirtyDaysAgo
         }
     }
@@ -1305,7 +1306,7 @@ private struct SmartInsightsCard: View {
         let deadStock = items.filter { item in
             guard item.currentQuantity > 0 else { return false }
             guard item.createdAt < thirtyDaysAgo else { return false }
-            if let lastCount = item.countHistory.map(\.countDate).max() {
+            if let lastCount = item.effectiveLastCountedAt {
                 return lastCount < sixtyDaysAgo
             }
             return true
@@ -1343,7 +1344,7 @@ private struct SmartInsightsCard: View {
         }
 
         let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-        let neverCounted = items.filter { $0.countHistory.isEmpty && $0.createdAt < sevenDaysAgo }
+        let neverCounted = items.filter { $0.hasNeverBeenCounted && $0.createdAt < sevenDaysAgo }
         if !neverCounted.isEmpty {
             result.append(Insight(
                 icon: "questionmark.circle",

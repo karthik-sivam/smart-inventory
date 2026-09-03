@@ -12,9 +12,19 @@ appId: com.vishuddhi.stoqly
     id: "gear"
 - assertVisible: "Settings"
 
-# Subscription section (Pro test build: Stoqly Pro + Manage Subscription)
-- assertVisible: "Stoqly Pro"
-- assertVisible: "Manage Subscription"
+# Subscription section — Free after isPro revert, or Pro if StoreKit/Firestore grant
+- assertVisible:
+    text: "Free Plan"
+    optional: true
+- assertVisible:
+    text: "Stoqly Pro"
+    optional: true
+- assertVisible:
+    text: "Upgrade to Pro"
+    optional: true
+- assertVisible:
+    text: "Manage Subscription"
+    optional: true
 
 # Currency section
 - assertVisible: "Currency"

@@ -1,0 +1,52 @@
+# Flow 82 — Edit Item auto-expands More details when optional fields exist
+# Creates an item with a description, opens Edit, and asserts Description is
+# visible without tapping "More details".
+appId: com.vishuddhi.stoqly
+env:
+  TEST_EMAIL: test@smartinventory.dev
+  TEST_PASSWORD: Test@1234
+---
+- runFlow: 00_signin_helper.yaml
+- assertVisible: "Stoqly"
+- runFlow: open_test_warehouse.yaml
+- tapOn:
+    id: "addItemButton"
+- extendedWaitUntil:
+    visible: "More details"
+    timeout: 10000
+- tapOn:
+    id: "itemNameField"
+- eraseText: 80
+- inputText: "Auto Expand Edit Item"
+- tapOn:
+    id: "currentQuantityInput"
+- eraseText: 10
+- inputText: "3"
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true
+- tapOn:
+    id: "moreDetailsButton"
+- extendedWaitUntil:
+    visible: "Description (Optional)"
+    timeout: 10000
+- tapOn: "Description (Optional)"
+- inputText: "Has a description so edit auto-expands"
+- tapOn:
+    text: "Done"
+    optional: true
+- hideKeyboard:
+    optional: true
+- tapOn:
+    id: "addItemSaveButton"
+- extendedWaitUntil:
+    visible: "Auto Expand Edit Item"
+    timeout: 15000
+- swipe:
+    direction: LEFT
+    on: "Auto Expand Edit Item"
+- tapOn: "Edit"
+- assertVisible: "Edit Item"
+- assertVisible: "Description (Optional)"

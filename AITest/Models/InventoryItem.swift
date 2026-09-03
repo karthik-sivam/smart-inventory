@@ -28,8 +28,39 @@ final class InventoryItem {
 
     @Relationship var storage: Storage?
     @Relationship var uom: UOM?
+    /// When this item was last counted. Optional with a default, so SwiftData
+    /// migrates existing stores automatically and every pre-existing item simply
+    /// starts as nil.
+    ///
+    /// This exists because `countHistory` is NOT restored from Firestore —
+    /// counts are pushed up but never pulled back, so after a sign-out, reinstall
+    /// or new device every item looked "never counted". A single date on the item
+    /// document survives the round trip, whereas rehydrating the whole counts
+    /// subcollection would be N queries on every cold start.
+    ///
+    /// Never read this directly for "has it been counted" — use
+    /// `effectiveLastCountedAt`, which falls back to local history so users
+    /// upgrading from 1.4 behave correctly before the backfill runs.
+    var lastCountedAt: Date? = nil
+
     @Relationship(deleteRule: .cascade) var countHistory: [InventoryCount] = []
     @Relationship(deleteRule: .cascade) var batches: [InventoryBatch] = []
+
+    /// Last count time from whichever source knows: the synced field first, then
+    /// local history. Local history wins when it is newer, so a count made on
+    /// this device is never masked by a stale synced value.
+    var effectiveLastCountedAt: Date? {
+        let newestLocal = countHistory.map(\.countDate).max()
+        switch (lastCountedAt, newestLocal) {
+        case let (stored?, local?): return max(stored, local)
+        case let (stored?, nil):    return stored
+        case let (nil, local?):     return local
+        case (nil, nil):            return nil
+        }
+    }
+
+    /// True only when we have no evidence of a count from either source.
+    var hasNeverBeenCounted: Bool { effectiveLastCountedAt == nil }
 
     static let predefinedCategories: [String] = [
         "Uncategorised",

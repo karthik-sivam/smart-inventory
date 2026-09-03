@@ -7,12 +7,35 @@ appId: com.vishuddhi.stoqly
     clearState: true
     arguments:
       UITestResetOnboarding: true
-# Fresh install: notification + ATT sheets can cover onboarding (iOS 18+)
+# Fresh install: language step + notification/ATT can cover the 4-page walkthrough
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Choose your language"
+    timeout: 25000
+    optional: true
 - tapOn:
     text: "Don’t Allow"
     optional: true
 - tapOn:
+    text: "Don't Allow"
+    optional: true
+- tapOn:
     text: "Ask App Not to Track"
+    optional: true
+- tapOn:
+    text: "Dismiss"
+    optional: true
+- tapOn:
+    id: "onboardingLanguageContinue"
+    optional: true
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Don’t Allow"
+    optional: true
+- tapOn:
+    text: "Don't Allow"
     optional: true
 - waitForAnimationToEnd
 # SplashScreenView ~4s, then fullScreenCover onboarding; title uses accessibility id

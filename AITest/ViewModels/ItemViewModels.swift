@@ -127,12 +127,13 @@ final class ItemFormViewModel: ObservableObject {
     @Published var expiryDate: Date = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
     @Published var existingPhotoURL: String? = nil
     /// Drives the "Looking up product..." banner in Add/Edit Item forms while
-    /// a barcode enrichment lookup is in flight. Phase 3 — Pro only.
+    /// a barcode enrichment lookup is in flight.
     @Published var isEnriching: Bool = false
     /// Tracks which template was used to pre-fill this add-item form (if any).
     var sourceTemplateId: UUID? = nil
     var analyticsSource: String = "fab"
     var analyticsInputMethod: String = "manual"
+    @Published private(set) var lastSavedItem: InventoryItem?
 
     private var modelContext: ModelContext?
 
@@ -140,10 +141,10 @@ final class ItemFormViewModel: ObservableObject {
         self.modelContext = modelContext
     }
 
-    /// Phase 3 — Pro-only smart barcode enrichment. Looks the scanned code up
-    /// in external product databases (Open Food Facts → UPCItemDB) and
-    /// pre-fills the form fields that are still empty. Free users get no
-    /// network call; the barcode field is still populated by the caller.
+    /// Looks the scanned code up in external product databases (Open Food Facts
+    /// → UPCItemDB) and pre-fills form fields that are still empty. Free and
+    /// Pro both get this on single scan; Pro bulk scan uses the same service
+    /// from the review queue. The barcode field is populated by the caller.
     ///
     /// Field-fill semantics:
     ///   - `name`         — filled only if empty
@@ -154,19 +155,32 @@ final class ItemFormViewModel: ObservableObject {
     ///                      picked one yet)
     /// Never overwrites user-entered values.
     @MainActor
-    func enrichFromBarcode(_ barcode: String, uoms: [UOM]) async {
-        guard SubscriptionManager.shared.isPro else {
-            AnalyticsManager.shared.track(.barcodeScanResult(found: false, enriched: false))
-            return
-        }
+    func enrichFromBarcode(
+        _ barcode: String,
+        symbology: String? = nil,
+        scanDurationMs: Int = 0,
+        shouldTrackResult: Bool = true,
+        uoms: [UOM]
+    ) async {
         guard !barcode.isEmpty else { return }
         isEnriching = true
         defer { isEnriching = false }
-        guard let product = await BarcodeEnrichmentService.shared.enrich(barcode: barcode) else {
-            AnalyticsManager.shared.track(.barcodeScanResult(found: false, enriched: false))
+        let result = await BarcodeEnrichmentService.shared.enrichWithOutcome(barcode: barcode)
+        if shouldTrackResult {
+            AnalyticsManager.shared.track(
+                .barcodeScanResult(
+                    outcome: result.outcome,
+                    provider: result.provider,
+                    symbology: symbology,
+                    code: barcode,
+                    durationMs: scanDurationMs + result.durationMs,
+                    reason: result.reason
+                )
+            )
+        }
+        guard let product = result.product else {
             return
         }
-        AnalyticsManager.shared.track(.barcodeScanResult(found: true, enriched: true))
         if name.isEmpty                { name = product.name }
         if description.isEmpty         { description = product.description }
         if category == "Uncategorised" { category = product.category }
@@ -201,19 +215,54 @@ final class ItemFormViewModel: ObservableObject {
         existingPhotoURL = item.photoURL
     }
 
+    var hasValidQuantity: Bool {
+        guard let quantity = Double(currentQuantity.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return false
+        }
+        return quantity.isFinite && quantity >= 0
+    }
+
     var canSaveNew: Bool {
-        !name.isEmpty && selectedStorage != nil && selectedUOM != nil
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasValidQuantity
     }
 
     var canSaveEdit: Bool {
-        !name.isEmpty && !currentQuantity.isEmpty
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasValidQuantity
+    }
+
+    /// Drives Edit Item's initial disclosure state. Auto-generated SKUs and the
+    /// default UOM are defaults, so they do not expand the form by themselves.
+    var hasOptionalDetails: Bool {
+        !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        !barcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        hasUserSuppliedSKU ||
+        category != "Uncategorised" ||
+        (Double(minQuantity) ?? 0) != 0 ||
+        (Double(maxQuantity) ?? 0) != 0 ||
+        (Double(unitCost) ?? 0) != 0 ||
+        (Double(sellingPrice) ?? 0) != 0 ||
+        (Double(lastPurchasePrice) ?? 0) != 0 ||
+        reorderPercentage != 0 ||
+        (selectedUOM != nil && selectedUOM?.isDefault != true) ||
+        hasExpiryDate ||
+        existingPhotoURL != nil
+    }
+
+    private var hasUserSuppliedSKU: Bool {
+        let trimmedSKU = sku.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSKU.isEmpty else { return false }
+        let suffix = trimmedSKU.dropFirst(4)
+        let isGeneratedSKU = trimmedSKU.hasPrefix("SKU-") &&
+            suffix.count == 6 &&
+            suffix.allSatisfy(\.isHexDigit)
+        return !isGeneratedSKU
     }
 
     /// Returns `false` when the free item cap blocked the insert.
     @discardableResult
     func saveNew() -> Bool {
         guard let modelContext else { return false }
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        guard canSaveNew, let qty = Double(currentQuantity) else { return false }
 
         if selectedUOM == nil {
             let uoms = (try? modelContext.fetch(FetchDescriptor<UOM>())) ?? []
@@ -229,7 +278,6 @@ final class ItemFormViewModel: ObservableObject {
             return false
         }
 
-        let qty = Double(currentQuantity) ?? 0
         let item = InventoryItem(
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             description: description,
@@ -261,7 +309,11 @@ final class ItemFormViewModel: ObservableObject {
             modelContext.insert(initialBatch)
         }
 
-        modelContext.safeSave(context: "saveNew item")
+        guard modelContext.safeSave(context: "AddItem") else {
+            modelContext.rollback()
+            return false
+        }
+        lastSavedItem = item
 
         AnalyticsManager.shared.track(.itemAdded(
             category: item.category,
@@ -289,7 +341,9 @@ final class ItemFormViewModel: ObservableObject {
         return true
     }
 
-    func saveEdits(to item: InventoryItem) {
+    @discardableResult
+    func saveEdits(to item: InventoryItem) -> Bool {
+        guard canSaveEdit, let modelContext else { return false }
         let previousQty = item.currentQuantity
         item.name            = name
         item.itemDescription = description
@@ -317,27 +371,29 @@ final class ItemFormViewModel: ObservableObject {
         item.category        = category
         item.expiryDate      = hasExpiryDate ? expiryDate : nil
         item.updatedAt       = Date()
-        modelContext?.safeSave(context: "saveEdits item")
-
-        if let ctx = modelContext {
-            let editEvent = ActivityEvent(
-                eventType: "ItemUpdated",
-                itemName: name,
-                storageName: selectedStorage?.name ?? "Unknown",
-                quantityBefore: previousQty,
-                quantityAfter: Double(currentQuantity) ?? previousQty,
-                performedBy: AuthManager.shared.actorName
-            )
-            ctx.insert(editEvent)
-            ctx.safeSave(context: "saveEdits activity event")
-            FirestoreManager.shared.syncActivity(editEvent)
+        guard modelContext.safeSave(context: "EditItem") else {
+            modelContext.rollback()
+            return false
         }
+
+        let editEvent = ActivityEvent(
+            eventType: "ItemUpdated",
+            itemName: name,
+            storageName: selectedStorage?.name ?? "Unknown",
+            quantityBefore: previousQty,
+            quantityAfter: Double(currentQuantity) ?? previousQty,
+            performedBy: AuthManager.shared.actorName
+        )
+        modelContext.insert(editEvent)
+        modelContext.safeSave(context: "saveEdits activity event")
+        FirestoreManager.shared.syncActivity(editEvent)
 
         // Sync to Firestore
         FirestoreManager.shared.syncItem(item)
         SpotlightManager.shared.index(item)
 
         AdManager.shared.recordCompletion(event: .itemUpdated)
+        return true
     }
 }
 
@@ -427,6 +483,7 @@ final class CountItemViewModel: ObservableObject {
         // Explicitly append to countHistory so the inverse relationship is
         // always populated regardless of SwiftData's auto-linking behavior.
         item.countHistory.append(count)
+item.lastCountedAt = count.countDate
         item.currentQuantity = newQuantity
         item.updatedAt       = Date()
         modelContext.insert(count)

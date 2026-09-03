@@ -8,6 +8,7 @@ struct StorageDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var currencyManager: CurrencyManager
+    @EnvironmentObject private var subscriptionManager: SubscriptionManager
     @StateObject private var viewModel = StorageDetailViewModel()
     @StateObject private var teamManager = TeamManager.shared
     @State private var searchText = ""
@@ -24,6 +25,8 @@ struct StorageDetailView: View {
     @State private var toastMessage: String? = nil
     @State private var showingQuickSaleItem: InventoryItem? = nil
     @State private var showingSmartCount = false
+    @State private var showingBulkBarcodeScan = false
+    @State private var showingBarcodeBulkPaywall = false
     @State private var showingInvoiceImport = false
     @State private var savedPurchaseCount = 0
     @State private var showPurchaseToast = false
@@ -98,6 +101,28 @@ struct StorageDetailView: View {
                     }
                     .accessibilityLabel("Smart Count")
                     .accessibilityIdentifier("smart-count-button")
+
+                    if teamManager.canEdit {
+                        Button {
+                            if subscriptionManager.canUseBarcodeScannerPro {
+                                showingBulkBarcodeScan = true
+                            } else {
+                                showingBarcodeBulkPaywall = true
+                            }
+                        } label: {
+                            Image(systemName: "barcode.viewfinder")
+                                .font(.title2)
+                                .foregroundColor(.stoqlyPrimary)
+                                .overlay(alignment: .bottomTrailing) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(.stoqlyAccent)
+                                        .background(Circle().fill(Color(.systemBackground)))
+                                }
+                        }
+                        .accessibilityLabel(L("bulkScan.toolbar", "Bulk barcode scan"))
+                        .accessibilityIdentifier("bulkBarcodeScanButton")
+                    }
 
                     if teamManager.canEdit {
                         Button { showingInvoiceImport = true } label: {
@@ -264,7 +289,9 @@ struct StorageDetailView: View {
             searchText = ""
             selectedCategory = nil
         }) {
-            AddItemView(storage: storage)
+            NavigationStack {
+                AddItemView(storage: storage)
+            }
                 .sheetStyle()
         }
         .sheet(isPresented: $showingEditStorage) {
@@ -272,7 +299,9 @@ struct StorageDetailView: View {
                 .sheetStyle()
         }
         .sheet(item: $showingEditItem) { item in
-            EditItemView(item: item)
+            NavigationStack {
+                EditItemView(item: item)
+            }
                 .sheetStyle()
         }
         .sheet(isPresented: $showingItemLimitPaywall) {
@@ -292,6 +321,23 @@ struct StorageDetailView: View {
                 }
             )
             .sheetStyle()
+        }
+        .fullScreenCover(isPresented: $showingBulkBarcodeScan) {
+            BulkBarcodeScanFlowView(
+                storage: storage,
+                source: "storage_detail",
+                onComplete: { savedCount in
+                    toastMessage = String(
+                        format: L("toast.itemsUpdated", "%1$d item%2$@ updated"),
+                        savedCount,
+                        savedCount == 1 ? "" : "s"
+                    )
+                }
+            )
+        }
+        .sheet(isPresented: $showingBarcodeBulkPaywall) {
+            PaywallView(source: "barcode_bulk", trigger: "bulk_scan")
+                .sheetStyle()
         }
         .sheet(isPresented: $showingInvoiceImport) {
             PurchaseInvoiceImportView(defaultStorage: storage)
@@ -500,6 +546,7 @@ struct AddItemView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
     @Query private var uoms: [UOM]
     @Query(sort: \ItemTemplate.name) private var templates: [ItemTemplate]
@@ -515,6 +562,7 @@ struct AddItemView: View {
     @State private var minQuantity = ""
     @State private var maxQuantity = ""
     @State private var unitCost = ""
+    @State private var sellingPrice = ""
     @State private var selectedUOM: UOM?
     @State private var category = "Uncategorised"
     @State private var hasExpiryDate = false
@@ -524,44 +572,132 @@ struct AddItemView: View {
     /// in `onDismiss` so we don't mutate `barcode` in the same render pass
     /// that toggles `showingBarcodeScanner`.
     @State private var pendingScannedBarcode: String?
+    @State private var pendingScannedSymbology: String?
+    @State private var pendingScanDurationMs = 0
+    @State private var barcodeScanStartedAt = Date()
     @State private var isEnriching = false
     @State private var sourceTemplateId: UUID? = nil
     @State private var didTrackAddItemStarted = false
     @State private var addItemOpenedAt = Date()
     @State private var didSaveAddItem = false
     @State private var didEmitAddItemClose = false
+    @State private var didAbandonForBackground = false
+    @State private var didOpenPhotoPicker = false
+    /// Sticky: user dismissed the in-form scanner without a code. The live
+    /// `showingBarcodeScanner` flag is false by the time Cancel / onDisappear
+    /// can run, so this is what makes `barcode_scan_open` reachable.
+    @State private var didLeaveBarcodeScannerWithoutCode = false
     @State private var showingItemLimitPaywall = false
+    @State private var isShowingMoreDetails = false
+    @State private var showingSmartCount = false
 
     enum Field: Hashable {
         case name, description, sku, barcode
-        case currentQuantity, minQuantity, maxQuantity, unitCost
+        case currentQuantity, minQuantity, maxQuantity, unitCost, sellingPrice
     }
     @FocusState private var focusedField: Field?
 
     var body: some View {
-        NavigationStack {
-            Form {
-                ItemPhotoSection(
-                    selectedPhotoData: $selectedPhotoData,
-                    existingPhotoURL: nil
-                )
+        Form {
+            Section {
+                TextField("Item Name", text: $name)
+                    .focused($focusedField, equals: .name)
+                    .accessibilityIdentifier("itemNameField")
 
+                HStack {
+                    Text("Quantity")
+                    Spacer()
+                    TextField("0", text: $currentQuantity)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 100)
+                        .focused($focusedField, equals: .currentQuantity)
+                        .accessibilityLabel("Current Quantity")
+                        .accessibilityIdentifier("currentQuantityInput")
+                }
+
+                HStack {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(hex: storage.color) ?? .blue)
+                        .frame(width: 20, height: 20)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(storage.name)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        if !storage.location.isEmpty {
+                            Text(storage.location)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Spacer()
+                }
+
+            }
+
+            AIEntryChip(feature: .smartCount, screen: "add_item", style: .formSection) {
+                showingSmartCount = true
+            }
+
+            Section {
                 if subscriptionManager.isPro && !templates.isEmpty && teamManager.canEdit {
-                    Section {
+                    HStack {
                         Button {
                             showingTemplatePicker = true
                         } label: {
                             Label("Use Template", systemImage: "doc.on.doc.fill")
                                 .font(.subheadline)
+                                .fontWeight(.medium)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.accentColor.opacity(0.12))
                                 .foregroundColor(.accentColor)
+                                .clipShape(Capsule())
                         }
+                        .buttonStyle(PlainButtonStyle())
+                        Spacer(minLength: 0)
                     }
                 }
 
-                Section(header: Text("Item Information")) {
-                    TextField("Item Name", text: $name)
-                        .focused($focusedField, equals: .name)
-                        .accessibilityIdentifier("itemNameField")
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isShowingMoreDetails.toggle()
+                    }
+                    AnalyticsManager.shared.track(
+                        .addItemMoreDetailsToggled(context: "add_item", expanded: isShowingMoreDetails)
+                    )
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("More details")
+                            .fontWeight(.semibold)
+                        if let photoSummaryText {
+                            Text(photoSummaryText)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.secondary.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                        if !barcode.isEmpty {
+                            Text(L("addItem.barcodeSet", "Barcode set"))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.secondary.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                        Spacer()
+                        Image(systemName: isShowingMoreDetails ? "chevron.up" : "chevron.down")
+                            .foregroundColor(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                .accessibilityIdentifier("moreDetailsButton")
+
+                if isShowingMoreDetails {
                     TextField("Description (Optional)", text: $description, axis: .vertical)
                         .lineLimit(3)
                         .focused($focusedField, equals: .description)
@@ -577,6 +713,7 @@ struct AddItemView: View {
                                     .font(.title3)
                                     .foregroundColor(.stoqlyPrimary)
                             }
+                            .buttonStyle(PlainButtonStyle())
                         }
                     }
                     if isEnriching {
@@ -586,45 +723,12 @@ struct AddItemView: View {
                                 .font(.caption).foregroundColor(.secondary)
                         }
                     }
-                }
-
-                Section(header: Text("Category")) {
                     Picker("Category", selection: $category) {
                         ForEach(InventoryItem.predefinedCategories, id: \.self) { cat in
                             Text(cat).tag(cat)
                         }
                     }
                     .pickerStyle(.navigationLink)
-                }
-
-                Section(header: Text("Expiry")) {
-                    Toggle("Has Expiry Date", isOn: $hasExpiryDate.animation(.easeInOut(duration: 0.2)))
-                    if hasExpiryDate {
-                        DatePicker(
-                            "Expiry Date",
-                            selection: $expiryDate,
-                            in: Date()...,
-                            displayedComponents: .date
-                        )
-                        Text("You'll get a notification 3 days before this item expires.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                Section(header: Text("Quantity & Pricing")) {
-                    HStack {
-                        Text("Current Quantity")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        TextField("0", text: $currentQuantity)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: 100)
-                            .focused($focusedField, equals: .currentQuantity)
-                            .accessibilityLabel("Current Quantity")
-                            .accessibilityIdentifier("currentQuantityInput")
-                    }
 
                     HStack {
                         HStack(spacing: 4) {
@@ -661,58 +765,59 @@ struct AddItemView: View {
                         .keyboardType(.decimalPad)
                         .focused($focusedField, equals: .unitCost)
                         .accessibilityIdentifier("unitCostInput")
-                }
 
-                Section(header: Text("Storage Location")) {
-                    HStack {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color(hex: storage.color) ?? .blue)
-                            .frame(width: 20, height: 20)
+                    TextField("Selling Price", text: $sellingPrice)
+                        .keyboardType(.decimalPad)
+                        .focused($focusedField, equals: .sellingPrice)
+                        .accessibilityIdentifier("addItemSellingPrice")
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(storage.name)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-
-                            if !storage.location.isEmpty {
-                                Text(storage.location)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-
-                        Spacer()
+                    Toggle("Has Expiry Date", isOn: $hasExpiryDate.animation(.easeInOut(duration: 0.2)))
+                    if hasExpiryDate {
+                        DatePicker(
+                            "Expiry Date",
+                            selection: $expiryDate,
+                            in: Date()...,
+                            displayedComponents: .date
+                        )
+                        Text("You'll get a notification 3 days before this item expires.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
+
+                    ItemPhotoSection(
+                        selectedPhotoData: $selectedPhotoData,
+                        existingPhotoURL: nil,
+                        showsSectionContainer: false,
+                        onPickerTapped: { didOpenPhotoPicker = true }
+                    )
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Add Item")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden(true)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        emitAddItemCancelledIfNeeded()
-                        dismiss()
-                    }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .navigationTitle("Add Item")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Cancel") {
+                    emitAddItemAbandonedIfNeeded(stage: addItemAbandonmentStage)
+                    dismiss()
                 }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        saveItem()
-                    } label: {
-                        Text("Save")
-                            .accessibilityIdentifier("addItemSaveButton")
-                    }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Save") {
+                    saveItem()
                 }
-
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        focusedField = nil
-                    }
-                    .accessibilityLabel("Done")
+                .disabled(!canSave)
+                .accessibilityHint(canSave ? Text("") : Text("Enter an item name and quantity to enable."))
+                .accessibilityIdentifier("addItemSaveButton")
+            }
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    focusedField = nil
                 }
+                .accessibilityLabel("Done")
             }
         }
         .sheet(isPresented: $showingTemplatePicker) {
@@ -733,10 +838,13 @@ struct AddItemView: View {
             PaywallView(source: "item_limit", trigger: "item_cap")
                 .sheetStyle()
         }
+        .sheet(isPresented: $showingSmartCount) {
+            SmartCountView(preselectedStorage: storage).sheetStyle()
+        }
         .onAppear {
-            addItemOpenedAt = Date()
             if !didTrackAddItemStarted {
                 didTrackAddItemStarted = true
+                addItemOpenedAt = Date()
                 AnalyticsManager.shared.track(.addItemStarted(source: "storage_detail"))
             }
             if uoms.isEmpty {
@@ -754,8 +862,22 @@ struct AddItemView: View {
                 selectedUOM = defaultUOM
             }
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                emitAddItemAbandonedIfNeeded(stage: "backgrounded", includeLegacyCancellation: false)
+                didAbandonForBackground = didEmitAddItemClose && !didSaveAddItem
+            } else if phase == .active, didAbandonForBackground, !didSaveAddItem {
+                didAbandonForBackground = false
+                didEmitAddItemClose = false
+                didLeaveBarcodeScannerWithoutCode = false
+                addItemOpenedAt = Date()
+                AnalyticsManager.shared.track(.addItemStarted(source: "storage_detail"))
+            }
+        }
         .onDisappear {
-            emitAddItemCancelledIfNeeded()
+            guard scenePhase == .active else { return }
+            guard !showingBarcodeScanner, !showingSmartCount, !showingItemLimitPaywall, !showingTemplatePicker else { return }
+            emitAddItemAbandonedIfNeeded(stage: addItemAbandonmentStage)
         }
         // NOTE: must be `.fullScreenCover`, not `.sheet`. Presenting a camera
         // host as a sheet-inside-a-sheet wedges the AVFoundation capture XPC
@@ -771,14 +893,32 @@ struct AddItemView: View {
             isPresented: $showingBarcodeScanner,
             onDismiss: {
                 if let code = pendingScannedBarcode {
+                    didLeaveBarcodeScannerWithoutCode = false
+                    let symbology = pendingScannedSymbology
+                    let durationMs = pendingScanDurationMs
                     barcode = code
                     pendingScannedBarcode = nil
-                    if subscriptionManager.isPro && name.isEmpty {
+                    pendingScannedSymbology = nil
+                    pendingScanDurationMs = 0
+                    if !isShowingMoreDetails {
+                        isShowingMoreDetails = true
+                    }
+                    if name.isEmpty {
                         Task {
                             isEnriching = true
                             defer { isEnriching = false }
-                            if let product = await BarcodeEnrichmentService.shared.enrich(barcode: code) {
-                                AnalyticsManager.shared.track(.barcodeScanResult(found: true, enriched: true))
+                            let result = await BarcodeEnrichmentService.shared.enrichWithOutcome(barcode: code)
+                            AnalyticsManager.shared.track(
+                                .barcodeScanResult(
+                                    outcome: result.outcome,
+                                    provider: result.provider,
+                                    symbology: symbology,
+                                    code: code,
+                                    durationMs: durationMs + result.durationMs,
+                                    reason: result.reason
+                                )
+                            )
+                            if let product = result.product {
                                 if name.isEmpty { name = product.name }
                                 if description.isEmpty { description = product.description }
                                 if category == "Uncategorised" { category = product.category }
@@ -787,25 +927,41 @@ struct AddItemView: View {
                                         selectedUOM = matched
                                     }
                                 }
-                            } else {
-                                AnalyticsManager.shared.track(.barcodeScanResult(found: false, enriched: false))
                             }
                         }
+                    } else {
+                        AnalyticsManager.shared.track(
+                            .barcodeScanResult(
+                                outcome: "found",
+                                provider: "none",
+                                symbology: symbology,
+                                code: code,
+                                durationMs: durationMs,
+                                reason: "enrichment_skipped_user_entered_name"
+                            )
+                        )
                     }
+                } else {
+                    didLeaveBarcodeScannerWithoutCode = true
                 }
             }
         ) {
             BarcodeScannerView(
-                onScan: { code, _ in
+                onScan: { code, symbology in
                     pendingScannedBarcode = code
+                    pendingScannedSymbology = symbology
+                    pendingScanDurationMs = max(0, Int(Date().timeIntervalSince(barcodeScanStartedAt) * 1_000))
                     showingBarcodeScanner = false
                 },
                 onCancel: {
                     pendingScannedBarcode = nil
+                    pendingScannedSymbology = nil
+                    pendingScanDurationMs = 0
                     showingBarcodeScanner = false
                 }
             )
             .onAppear {
+                barcodeScanStartedAt = Date()
                 AnalyticsManager.shared.track(.barcodeScanInitiated)
             }
         }
@@ -828,16 +984,46 @@ struct AddItemView: View {
         return refetched.first(where: { $0.isDefault }) ?? refetched.first
     }
 
-    private func emitAddItemCancelledIfNeeded() {
+    private func emitAddItemAbandonedIfNeeded(
+        stage: String,
+        includeLegacyCancellation: Bool = true
+    ) {
         guard !didSaveAddItem, !didEmitAddItemClose else { return }
         didEmitAddItemClose = true
-        let seconds = Int(Date().timeIntervalSince(addItemOpenedAt))
-        AnalyticsManager.shared.track(.addItemCancelled(source: "storage_detail", seconds: seconds))
+        let seconds = max(0, Int(Date().timeIntervalSince(addItemOpenedAt)))
+        AnalyticsManager.shared.track(
+            .addItemAbandoned(source: "storage_detail", stage: stage, secondsInForm: seconds)
+        )
+        if includeLegacyCancellation {
+            AnalyticsManager.shared.track(.addItemCancelled(source: "storage_detail", seconds: seconds))
+        }
+    }
+
+    private var addItemAbandonmentStage: String {
+        if showingBarcodeScanner || didLeaveBarcodeScannerWithoutCode { return "barcode_scan_open" }
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "name_empty" }
+        let quantityText = currentQuantity.trimmingCharacters(in: .whitespacesAndNewlines)
+        if quantityText.isEmpty || Double(quantityText) == nil { return "quantity_empty" }
+        if didOpenPhotoPicker && selectedPhotoData == nil { return "photo_picker_open" }
+        if isShowingMoreDetails { return "more_details_open" }
+        return "cancelled"
+    }
+
+    private var canSave: Bool {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let quantity = Double(currentQuantity.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return false
+        }
+        return quantity.isFinite && quantity >= 0
+    }
+
+    private var photoSummaryText: String? {
+        selectedPhotoData == nil ? nil : "1 photo"
     }
 
     private func saveItem() {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else {
+        guard canSave, let quantity = Double(currentQuantity) else {
             AnalyticsManager.shared.track(.formSubmitAttempted(form: "add_item", valid: false, reason: "empty_name"))
             return
         }
@@ -851,12 +1037,15 @@ struct AddItemView: View {
         }
         AnalyticsManager.shared.track(.formSubmitAttempted(form: "add_item", valid: true, reason: nil))
 
+        // TODO(iOS-B2): fire item_create_completed{entry_source, duration_ms}
+        //               via AmplitudeManager helper.
+
         let item = InventoryItem(
             name: trimmedName,
             description: description,
             sku: sku,
             barcode: barcode,
-            currentQuantity: Double(currentQuantity) ?? 0,
+            currentQuantity: quantity,
             minQuantity: Double(minQuantity) ?? 0,
             maxQuantity: Double(maxQuantity) ?? 0,
             unitCost: Double(unitCost) ?? 0,
@@ -866,12 +1055,13 @@ struct AddItemView: View {
             uom: uom
         )
         item.createdFromTemplateId = sourceTemplateId
+        item.sellingPrice = Double(sellingPrice) ?? 0
         modelContext.insert(item)
 
         // If the item was created with an expiry date and non-zero quantity,
         // record the initial stock as a batch so all expiry dates are tracked
         // consistently in the Batches section.
-        let initialQty = Double(currentQuantity) ?? 0
+        let initialQty = quantity
         if hasExpiryDate, let expiry = item.expiryDate, initialQty > 0 {
             let initialBatch = InventoryBatch(
                 quantity: initialQty,
@@ -882,7 +1072,21 @@ struct AddItemView: View {
             modelContext.insert(initialBatch)
         }
 
-        modelContext.safeSave(context: "addItemToStorage")
+        guard modelContext.safeSave(context: "AddItem") else {
+            modelContext.rollback()
+            return
+        }
+
+        didSaveAddItem = true
+        didEmitAddItemClose = true
+        AnalyticsManager.shared.track(
+            .addItemCompleted(
+                source: "storage_detail",
+                hasBarcode: !item.barcode.isEmpty,
+                hasPhoto: selectedPhotoData != nil || item.photoURL != nil,
+                durationMs: max(0, Int(Date().timeIntervalSince(addItemOpenedAt) * 1_000))
+            )
+        )
 
         AnalyticsManager.shared.track(.itemAdded(
             category: item.category,
@@ -908,7 +1112,7 @@ struct AddItemView: View {
                 do {
                     let url = try await FirestoreManager.shared.uploadItemPhoto(photoData, itemId: itemId)
                     item.photoURL = url
-                    modelContext.safeSave(context: "save photoURL after upload")
+                    modelContext.safeSave(context: "AddItem")
                     FirestoreManager.shared.syncItem(item)
                 } catch {
                     print("Photo upload failed: \(error.localizedDescription)")
@@ -919,7 +1123,6 @@ struct AddItemView: View {
         FirestoreManager.shared.syncItem(item)
         AdManager.shared.recordCompletion(event: .itemAdded)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        didSaveAddItem = true
         dismiss()
     }
 }
@@ -1293,7 +1496,9 @@ struct ItemDetailView: View {
                 .sheetStyle()
         }
         .sheet(isPresented: $showingEditItem) {
-            EditItemView(item: item)
+            NavigationStack {
+                EditItemView(item: item)
+            }
                 .sheetStyle()
         }
         .sheet(isPresented: $showingQuickSale) {
@@ -2302,5 +2507,6 @@ struct CountFirstTimeTipsView: View {
     let storage = Storage(name: "Sample Storage", location: "Warehouse A", description: "Sample description")
     return StorageDetailView(storage: storage)
         .environmentObject(CurrencyManager())
+        .environmentObject(SubscriptionManager.shared)
         .modelContainer(for: [Storage.self, InventoryItem.self, UOM.self, InventoryCount.self], inMemory: true)
-} 
+}

@@ -307,10 +307,13 @@ final class AIInventoryService {
         - Unlimited AI uses for all SmartCount modes.
         - Unlimited team members.
         - Full analytics history (free plan: last 30 days only).
-        - Barcode scanner pro (enriched product data).
+        - Bulk barcode scan on Pro: keep the camera open, queue codes, review, save all. \
+          Entry: Storage detail toolbar, or Items toolbar (pick a storage if All Storages \
+          is selected). Free: one-shot Scan to Find on Items, and one-shot scan inside \
+          Add Item. Lookup fills name and details on that single scan (Free and Pro). \
+          Storage-detail bulk icon shows the Pro paywall for Free.
         - Item photos.
         - Remove Ads (also available as a separate one-time purchase).
-        - Stoqly has NO free trial. Users upgrade directly to Pro from Settings.
         - Subscription products: com.vishuddhi.stoqly.pro.monthly (monthly), \
           com.vishuddhi.stoqly.pro.annual (annual), com.vishuddhi.stoqly.removeads (one-time).
 
@@ -326,7 +329,9 @@ final class AIInventoryService {
         - If you don't know the answer, say "I'm not sure about that — please contact \
           support at support@stoqly.app."
         - Never mention competitors.
-        - Never say Stoqly has a free trial — it does not.
+        - Stoqly does NOT offer a free trial. If asked, say there is no trial and \
+          point the user to the in-app upgrade screen. Never quote a price: \
+          prices differ by country, so tell the user to check that screen.
         - Keep answers to 3–5 sentences max unless a step-by-step is genuinely needed.
         """
 
@@ -556,12 +561,14 @@ final class AIInventoryService {
     private static let salesSystemPrompt = """
     You are a sales log parser for an inventory management app. Extract sale items from the input. \
     Return ONLY a valid JSON array. Each object: {"itemName": string, "quantitySold": number, \
-    "pricePerUnit": number (0 if unknown), "notes": string}. No markdown, no explanation — just the JSON array.
+    "pricePerUnit": number (0 if unknown), "notes": string, "confidence": number}. \
+    No markdown, no explanation — just the JSON array.
 
     Item-name rules:
     - KEEP "itemName" in the SAME language/script the user spoke or wrote it — do NOT translate product names into English.
     - If an inventory list is provided and the item clearly matches one, use that inventory item's EXACT stored name.
     - Only use the spoken/written name for items that do not match the inventory list.
+    - "confidence" 0.0-1.0 indicates how confident you are about that row's item name and quantity extraction.
     """
 
     private static let purchaseSystemPrompt = """

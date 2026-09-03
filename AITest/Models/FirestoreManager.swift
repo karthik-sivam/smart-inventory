@@ -133,6 +133,15 @@ class FirestoreManager: ObservableObject {
         return db.collection("users").document(uid)
     }
 
+    /// Personal profile data belongs to the authenticated person, even while
+    /// they are viewing another owner's shared workspace.
+    private func personalUserRef() throws -> DocumentReference {
+        guard let uid = currentUID else {
+            throw FirestoreError.notAuthenticated
+        }
+        return db.collection("users").document(uid)
+    }
+
     // MARK: - Errors
 
     enum FirestoreError: LocalizedError {
@@ -161,6 +170,152 @@ class FirestoreManager: ObservableObject {
             ]
             try? await ref.setData(data, merge: true)
         }
+    }
+
+    /// Loads the authenticated owner's versioned business profile. A malformed
+    /// or incomplete map is treated as missing so required fields are asked again.
+    func fetchBusinessProfile() async throws -> BusinessProfile? {
+        let snapshot = try await personalUserRef().getDocument()
+        guard let map = snapshot.data()?["businessProfile"] as? [String: Any],
+              let schemaVersion = map["schemaVersion"] as? Int,
+              let rawBusinessType = map["businessType"] as? String,
+              let businessType = BusinessType(rawValue: rawBusinessType),
+              let state = map["state"] as? String else {
+            return nil
+        }
+
+        // Version-1 profiles predate the country field and were Indian-only by
+        // construction, so a missing country reads as India. This deliberately
+        // keeps every completed profile valid — no existing owner is re-prompted.
+        let country = (map["country"] as? String)
+            .flatMap { BusinessProfileOptions.countryCodes.contains($0) ? $0 : nil }
+            ?? BusinessProfileOptions.indiaRegionCode
+        // Only emptiness invalidates. Never re-prompt an owner who already gave
+        // us a subdivision simply because a curated list was later edited.
+        guard BusinessProfileValidation.isValidState(state, country: country) else {
+            return nil
+        }
+
+
+        let otherBusinessType = map["otherBusinessType"] as? String
+        if businessType == .other,
+           otherBusinessType?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+            return nil
+        }
+
+        let contactConsent = map["contactConsent"] as? Bool ?? false
+        let normalizedPhone = contactConsent
+            ? (map["phoneNumber"] as? String).flatMap {
+                BusinessProfileValidation.normalizedPhoneNumber(from: $0)
+            }
+            : nil
+
+        return BusinessProfile(
+            schemaVersion: schemaVersion,
+            businessName: (map["businessName"] as? String).flatMap {
+                BusinessProfileValidation.normalizedBusinessName(from: $0)
+            },
+            businessType: businessType,
+            otherBusinessType: otherBusinessType,
+            country: country,
+            state: state,
+            city: (map["city"] as? String).flatMap {
+                BusinessProfileValidation.normalizedCity(from: $0)
+            },
+            phoneNumber: normalizedPhone,
+            contactConsent: normalizedPhone != nil && contactConsent,
+            completedAt: (map["completedAt"] as? Timestamp)?.dateValue()
+        )
+    }
+
+    /// Display-only business name for the workspace currently being viewed.
+    ///
+    /// Deliberately reads `userRef()` (the workspace OWNER) rather than
+    /// `personalUserRef()`: an invited member should see the name of the shop
+    /// they are working in, not their own. Only the name is read — phone number
+    /// and contact consent are never surfaced to members.
+    ///
+    /// Non-throwing: this decorates a header, so a failure must degrade to
+    /// "show nothing" rather than surface an error.
+    func fetchWorkspaceBusinessName() async -> String? {
+        guard let ref = try? userRef(),
+              let snapshot = try? await ref.getDocument(),
+              let map = snapshot.data()?["businessProfile"] as? [String: Any],
+              let raw = map["businessName"] as? String else { return nil }
+        return BusinessProfileValidation.normalizedBusinessName(from: raw)
+    }
+
+    /// Saves business details on the authenticated user's document. Phone is
+    /// persisted only when it is valid and the user has explicitly consented.
+    func saveBusinessProfile(
+        businessName: String?,
+        businessType: BusinessType,
+        otherBusinessType: String?,
+        country: String,
+        state: String,
+        city: String?,
+        phoneNumber: String?,
+        contactConsent: Bool
+    ) async throws -> BusinessProfile {
+        let ref = try personalUserRef()
+        let previousSnapshot = try? await ref.getDocument()
+        let previousMap = previousSnapshot?.data()?["businessProfile"] as? [String: Any]
+        let completedAt: Any = previousMap?["completedAt"] ?? FieldValue.serverTimestamp()
+        let customType = otherBusinessType?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard BusinessProfileValidation.isValid(
+            businessType: businessType,
+            otherBusinessType: customType ?? "",
+            country: country,
+            state: state,
+            phoneInput: phoneNumber ?? "",
+            contactConsent: contactConsent
+        ) else {
+            throw FirestoreError.encodingFailed("Invalid business profile fields")
+        }
+
+        let normalizedPhone = phoneNumber.flatMap {
+            BusinessProfileValidation.normalizedPhoneNumber(from: $0)
+        }
+        let hasConsentedPhone = normalizedPhone != nil && contactConsent
+        let normalizedCity = city.flatMap { BusinessProfileValidation.normalizedCity(from: $0) }
+        let normalizedName = businessName.flatMap {
+            BusinessProfileValidation.normalizedBusinessName(from: $0)
+        }
+        let businessProfileData: [String: Any] = [
+            "schemaVersion": BusinessProfile.currentSchemaVersion,
+            "businessName": normalizedName ?? NSNull(),
+            "businessType": businessType.rawValue,
+            "otherBusinessType": businessType == .other ? (customType ?? "") : NSNull(),
+            "country": country,
+            "state": state.trimmingCharacters(in: .whitespacesAndNewlines),
+            "city": normalizedCity ?? NSNull(),
+            "phoneNumber": hasConsentedPhone ? (normalizedPhone ?? "") : NSNull(),
+            "contactConsent": hasConsentedPhone,
+            "consentVersion": hasConsentedPhone ? BusinessProfile.consentVersion : NSNull(),
+            "consentSource": hasConsentedPhone ? "business_profile" : NSNull(),
+            "consentUpdatedAt": FieldValue.serverTimestamp(),
+            "completedAt": completedAt,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]
+
+        try await ref.setData([
+            "businessProfile": businessProfileData,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+
+        return BusinessProfile(
+            schemaVersion: BusinessProfile.currentSchemaVersion,
+            businessName: normalizedName,
+            businessType: businessType,
+            otherBusinessType: businessType == .other ? customType : nil,
+            country: country,
+            state: state.trimmingCharacters(in: .whitespacesAndNewlines),
+            city: normalizedCity,
+            phoneNumber: hasConsentedPhone ? normalizedPhone : nil,
+            contactConsent: hasConsentedPhone,
+            completedAt: (completedAt as? Timestamp)?.dateValue() ?? Date()
+        )
     }
 
     /// Writes the current isPro status to the user's Firestore document.
@@ -332,7 +487,7 @@ class FirestoreManager: ObservableObject {
             try await docRef.setData(data, merge: true)
         } catch {
             print("Firestore: Failed to sync storage '\(storage.name)' — \(error.localizedDescription)")
-            AnalyticsManager.shared.track(.syncFailed(reason: error.localizedDescription))
+            trackWriteSyncFailed(error)
             if isRetryableSyncError(error) {
                 queueWrite(kind: .storage, entityId: storage.id.uuidString)
             }
@@ -357,6 +512,10 @@ class FirestoreManager: ObservableObject {
     /// Cancel all debounced writes and push current local state immediately.
     /// Called when the app enters background so mid-session counts are not lost.
     func flushPending(storages: [Storage], items: [InventoryItem]) async {
+        let context = "background_task"
+        let startedAt = CFAbsoluteTimeGetCurrent()
+        AnalyticsManager.shared.track(.syncStarted(context: context))
+
         pendingItemTasks.values.forEach { $0.cancel() }
         pendingStorageTasks.values.forEach { $0.cancel() }
         pendingItemTasks.removeAll()
@@ -364,6 +523,15 @@ class FirestoreManager: ObservableObject {
 
         await pushAllConcurrently(storages: storages, items: items, maxConcurrent: 10)
         await flushPendingWrites(items: items, storages: storages)
+
+        let durationMs = max(0, Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1_000))
+        AnalyticsManager.shared.track(
+            .syncCompleted(
+                context: context,
+                docsUpdated: storages.count + items.count,
+                durationMs: durationMs
+            )
+        )
     }
 
     /// Push storages then items with a MainActor task pool (SwiftData models are not
@@ -445,6 +613,13 @@ class FirestoreManager: ObservableObject {
             "updatedAt": Timestamp(date: item.updatedAt),
             "isDeleted": false
         ]
+        // The counts subcollection is written but never read back, so this date
+        // is what survives a reinstall or a new device. Only ever written, never
+        // cleared to null: a client that has not yet backfilled must not wipe a
+        // value another device already established.
+        if let counted = item.effectiveLastCountedAt {
+            data["lastCountedAt"] = Timestamp(date: counted)
+        }
         if let exp = item.expiryDate {
             data["expiryDate"] = Timestamp(date: exp)
         } else {
@@ -472,7 +647,7 @@ class FirestoreManager: ObservableObject {
             try await docRef.setData(data, merge: true)
         } catch {
             print("Firestore: Failed to sync item '\(item.name)' — \(error.localizedDescription)")
-            AnalyticsManager.shared.track(.syncFailed(reason: error.localizedDescription))
+            trackWriteSyncFailed(error)
             if isRetryableSyncError(error) {
                 queueWrite(kind: .item, entityId: item.id.uuidString)
             }
@@ -533,6 +708,64 @@ class FirestoreManager: ObservableObject {
                 .collection("counts").document(count.id.uuidString)
             try? await countRef.setData(data, merge: true)
         }
+    }
+
+    /// Newest `countDate` per item, read straight from the counts subcollection.
+    ///
+    /// One-time recovery for the `lastCountedAt` migration. Counts have always
+    /// been pushed to Firestore but never pulled back, so any user who signed
+    /// out or reinstalled has cloud history that the device cannot see. This
+    /// reads only the single newest row per item — enough to answer "when was
+    /// this last counted" without rehydrating thousands of records.
+    ///
+    /// Returns only the items it could resolve. A thrown query is skipped rather
+    /// than defaulted, so the caller can tell a partial run from a complete one
+    /// and avoid marking an incomplete migration as done.
+    ///
+    /// - Parameter identifiers: `(itemID, storageID)` pairs, read on the caller's
+    ///   actor so no SwiftData model crosses a task boundary.
+    func latestCountDates(
+        for identifiers: [(itemID: UUID, storageID: UUID)]
+    ) async -> (dates: [UUID: Date], failed: Int) {
+        guard let userDocument = try? userRef(), !identifiers.isEmpty else {
+            return ([:], identifiers.count)
+        }
+
+        var resolved: [UUID: Date] = [:]
+        var failed = 0
+
+        // Bounded concurrency: fast enough for a few hundred items without
+        // opening hundreds of simultaneous connections on a shop's mobile data.
+        let batchSize = 8
+        for chunk in stride(from: 0, to: identifiers.count, by: batchSize).map({
+            Array(identifiers[$0..<min($0 + batchSize, identifiers.count)])
+        }) {
+            await withTaskGroup(of: (UUID, Date?, Bool).self) { group in
+                for entry in chunk {
+                    group.addTask {
+                        let query = userDocument
+                            .collection("storages").document(entry.storageID.uuidString)
+                            .collection("items").document(entry.itemID.uuidString)
+                            .collection("counts")
+                            .order(by: "countDate", descending: true)
+                            .limit(to: 1)
+                        do {
+                            let snapshot = try await query.getDocuments()
+                            let date = (snapshot.documents.first?
+                                .data()["countDate"] as? Timestamp)?.dateValue()
+                            return (entry.itemID, date, false)
+                        } catch {
+                            return (entry.itemID, nil, true)
+                        }
+                    }
+                }
+                for await (itemID, date, didFail) in group {
+                    if didFail { failed += 1 }
+                    else if let date { resolved[itemID] = date }
+                }
+            }
+        }
+        return (resolved, failed)
     }
 
     func syncActivity(_ event: ActivityEvent) {
@@ -619,11 +852,15 @@ class FirestoreManager: ObservableObject {
     /// Returns the number of storages found in Firestore (0 = cloud is empty for this user).
     /// Call on login, on app foreground, or on user-initiated refresh.
     @discardableResult
-    func pullFromCloud(modelContext: ModelContext) async -> Int {
+    func pullFromCloud(modelContext: ModelContext, context: String) async -> Int {
         guard let ref = try? userRef() else {
             syncState = .failed("Not logged in")
             return 0
         }
+
+        let startedAt = CFAbsoluteTimeGetCurrent()
+        AnalyticsManager.shared.track(.syncStarted(context: context))
+        var docsUpdated = 0
 
         syncState = .syncing
         errorMessage = nil
@@ -634,6 +871,7 @@ class FirestoreManager: ObservableObject {
                 .getDocuments()
 
             let cloudStorageCount = storageSnapshot.documents.count
+            docsUpdated += cloudStorageCount
 
             for storageDoc in storageSnapshot.documents {
                 let d = storageDoc.data()
@@ -680,6 +918,7 @@ class FirestoreManager: ObservableObject {
                 let itemSnapshot = try await storageDoc.reference.collection("items")
                     .whereField("isDeleted", isEqualTo: false)
                     .getDocuments()
+                docsUpdated += itemSnapshot.documents.count
 
                 for itemDoc in itemSnapshot.documents {
                     try await mergeItem(from: itemDoc.data(), into: storage, modelContext: modelContext)
@@ -691,6 +930,7 @@ class FirestoreManager: ObservableObject {
             let templateSnapshot = try await ref.collection("itemTemplates")
                 .whereField("isDeleted", isEqualTo: false)
                 .getDocuments()
+            docsUpdated += templateSnapshot.documents.count
 
             for templateDoc in templateSnapshot.documents {
                 let d = templateDoc.data()
@@ -728,6 +968,7 @@ class FirestoreManager: ObservableObject {
                 .order(by: "occurredAt", descending: true)
                 .limit(to: 50)
                 .getDocuments()
+            docsUpdated += activitySnap.documents.count
 
             for doc in activitySnap.documents {
                 let d = doc.data()
@@ -768,6 +1009,7 @@ class FirestoreManager: ObservableObject {
                 .collection("saleEvents")
                 .order(by: "occurredAt", descending: true)
                 .getDocuments()
+            docsUpdated += saleEventsSnap.documents.count
 
             for doc in saleEventsSnap.documents {
                 let d = doc.data()
@@ -808,6 +1050,7 @@ class FirestoreManager: ObservableObject {
                 .collection("inventoryMovements")
                 .order(by: "occurredAt", descending: true)
                 .getDocuments()
+            docsUpdated += movementsSnap.documents.count
 
             for doc in movementsSnap.documents {
                 let d = doc.data()
@@ -854,12 +1097,18 @@ class FirestoreManager: ObservableObject {
             await flushPendingWrites(items: allItems, storages: allStorages)
 
             print("Firestore ✅ Pull complete — \(cloudStorageCount) storages synced.")
+            let durationMs = max(0, Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1_000))
+            AnalyticsManager.shared.track(
+                .syncCompleted(context: context, docsUpdated: docsUpdated, durationMs: durationMs)
+            )
             return cloudStorageCount
 
         } catch {
             syncState = .failed(error.localizedDescription)
             errorMessage = error.localizedDescription
             print("Firestore ❌ Pull failed — \(error.localizedDescription)")
+            let durationMs = max(0, Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1_000))
+            trackSyncFailed(context: context, error: error, durationMs: durationMs)
             return 0
         }
     }
@@ -949,6 +1198,42 @@ class FirestoreManager: ObservableObject {
             }
         }
         return false
+    }
+
+    private func trackWriteSyncFailed(_ error: Error) {
+        trackSyncFailed(context: "write", error: error, durationMs: nil)
+    }
+
+    private func trackSyncFailed(context: String, error: Error, durationMs: Int?) {
+        AnalyticsManager.shared.track(
+            .syncFailed(
+                context: context,
+                errorClass: Self.syncErrorClass(for: error),
+                reason: error.localizedDescription,
+                durationMs: durationMs
+            )
+        )
+    }
+
+    static func syncErrorClass(for error: Error) -> String {
+        if error is URLError { return "network" }
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain { return "network" }
+        if ns.domain == FirestoreErrorDomain {
+            switch FirestoreErrorCode.Code(rawValue: ns.code) {
+            case .unavailable, .deadlineExceeded, .cancelled:
+                return "network"
+            case .resourceExhausted:
+                return "rate_limited"
+            case .unauthenticated, .permissionDenied:
+                return "auth"
+            case .internal, .dataLoss, .aborted:
+                return "server_error"
+            default:
+                return "unknown"
+            }
+        }
+        return "unknown"
     }
 
     private func pushStorageThrowing(_ storage: Storage) async throws {
@@ -1070,6 +1355,16 @@ class FirestoreManager: ObservableObject {
                 if let tidString = data["createdFromTemplateId"] as? String {
                     found.createdFromTemplateId = UUID(uuidString: tidString)
                 }
+                if let ts = data["lastCountedAt"] as? Timestamp {
+                    // Never move the date backwards: a local count that has not
+                    // been pushed yet is newer than whatever the cloud holds.
+                    let cloudCounted = ts.dateValue()
+                    if let current = found.lastCountedAt {
+                        found.lastCountedAt = max(current, cloudCounted)
+                    } else {
+                        found.lastCountedAt = cloudCounted
+                    }
+                }
                 // isOutOfStock from Firestore is ignored — derived from currentQuantity locally
                 found.updatedAt = cloudUpdated
             }
@@ -1088,6 +1383,9 @@ class FirestoreManager: ObservableObject {
                 storage: storage
             )
             newItem.id = id
+            if let ts = data["lastCountedAt"] as? Timestamp {
+                newItem.lastCountedAt = ts.dateValue()
+            }
             newItem.uom = resolveUOM(
                 symbol: (data["uomSymbol"] as? String) ?? (data["uom"] as? String),
                 name: data["uomName"] as? String,

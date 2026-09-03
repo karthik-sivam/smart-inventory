@@ -12,6 +12,8 @@ import FirebaseAnalytics
 struct ContentView: View {
     @AppStorage("stoqly_hasLoggedFirstOpen") private var hasLoggedFirstOpen = false
     @State private var currentAnnouncement: StoqlyAnnouncement?
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var updateManager = AppUpdateManager.shared
 
     var body: some View {
         SplashScreenView()
@@ -31,6 +33,19 @@ struct ContentView: View {
                     currentAnnouncement = nil
                 }
                 .sheetStyle()
+            }
+            .fullScreenCover(item: Binding(
+                get: { updateManager.requirement },
+                set: { _ in }   // read-only: the user cannot dismiss this
+            )) { requirement in
+                ForceUpdateView(requirement: requirement)
+            }
+            .task { await updateManager.check() }
+            .onChange(of: scenePhase) { _, phase in
+                // Re-check on foreground so a build can be retired mid-session
+                // rather than only at cold launch.
+                guard phase == .active else { return }
+                Task { await updateManager.check() }
             }
     }
 }

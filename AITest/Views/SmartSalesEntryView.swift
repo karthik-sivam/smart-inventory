@@ -1,6 +1,10 @@
 import SwiftUI
 
 struct SmartSalesEntryView: View {
+    /// Optional: parent (QuickSaleSheet) uses this to dismiss itself after a
+    /// successful Smart Sales save without a second manual cancellation.
+    var onCompleted: (() -> Void)? = nil
+
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var subscriptionManager: SubscriptionManager
     @EnvironmentObject var currencyManager: CurrencyManager
@@ -11,6 +15,9 @@ struct SmartSalesEntryView: View {
     @State private var showingCSV = false
     @State private var showingPDF = false
     @State private var showingPaywall = false
+    @State private var activeSaleMode: String?
+    @State private var saleEntryOpenedAt = Date()
+    @State private var didEmitSaleTerminal = false
 
     var body: some View {
         NavigationStack {
@@ -18,7 +25,7 @@ struct SmartSalesEntryView: View {
                 VStack(spacing: 16) {
                     headerSection
                     modeCards
-                    if !subscriptionManager.isPro { proUpsellBanner }
+                    if !canUseSmartSales { proUpsellBanner }
                     Spacer(minLength: 40)
                 }
                 .padding(.horizontal)
@@ -35,24 +42,34 @@ struct SmartSalesEntryView: View {
         .onAppear {
             AnalyticsManager.shared.track(.smartSalesOpened)
         }
-        .sheet(isPresented: $showingVoice) {
-            SmartSalesVoiceView(onCompleted: { dismiss() })
+        .sheet(isPresented: $showingVoice, onDismiss: {
+            emitSaleAbandonedIfNeeded(mode: "voice", stage: "cancelled")
+        }) {
+            SmartSalesVoiceView(onCompleted: { count in completeSaleEntry(mode: "voice", itemCount: count) })
                 .environmentObject(currencyManager).sheetStyle()
         }
-        .sheet(isPresented: $showingPhoto) {
-            SmartSalesPhotoView(onCompleted: { dismiss() })
+        .sheet(isPresented: $showingPhoto, onDismiss: {
+            emitSaleAbandonedIfNeeded(mode: "photo", stage: "cancelled")
+        }) {
+            SmartSalesPhotoView(onCompleted: { count in completeSaleEntry(mode: "photo", itemCount: count) })
                 .environmentObject(currencyManager).sheetStyle()
         }
-        .sheet(isPresented: $showingText) {
-            SmartSalesTextView(onCompleted: { dismiss() })
+        .sheet(isPresented: $showingText, onDismiss: {
+            emitSaleAbandonedIfNeeded(mode: "text", stage: "cancelled")
+        }) {
+            SmartSalesTextView(onCompleted: { count in completeSaleEntry(mode: "text", itemCount: count) })
                 .environmentObject(currencyManager).sheetStyle()
         }
-        .sheet(isPresented: $showingCSV) {
-            SmartSalesCSVView(onCompleted: { dismiss() })
+        .sheet(isPresented: $showingCSV, onDismiss: {
+            emitSaleAbandonedIfNeeded(mode: "csv", stage: "cancelled")
+        }) {
+            SmartSalesCSVView(onCompleted: { count in completeSaleEntry(mode: "csv", itemCount: count) })
                 .environmentObject(currencyManager).sheetStyle()
         }
-        .sheet(isPresented: $showingPDF) {
-            SmartSalesPDFView(onCompleted: { dismiss() })
+        .sheet(isPresented: $showingPDF, onDismiss: {
+            emitSaleAbandonedIfNeeded(mode: "pdf", stage: "cancelled")
+        }) {
+            SmartSalesPDFView(onCompleted: { count in completeSaleEntry(mode: "pdf", itemCount: count) })
                 .environmentObject(currencyManager).sheetStyle()
         }
         .sheet(isPresented: $showingPaywall) {
@@ -100,12 +117,36 @@ struct SmartSalesEntryView: View {
     }
 
     private func openSaleMode(_ mode: String, action: () -> Void) {
-        guard subscriptionManager.isPro else {
+        guard canUseSmartSales else {
             showingPaywall = true
             return
         }
+        activeSaleMode = mode
+        saleEntryOpenedAt = Date()
+        didEmitSaleTerminal = false
         AnalyticsManager.shared.track(.saleEntryStarted(mode: mode))
         action()
+    }
+
+    private func completeSaleEntry(mode: String, itemCount: Int) {
+        guard activeSaleMode == mode, !didEmitSaleTerminal else { return }
+        didEmitSaleTerminal = true
+        AnalyticsManager.shared.track(
+            .saleEntryCompleted(
+                mode: mode,
+                itemCount: itemCount,
+                durationMs: max(0, Int(Date().timeIntervalSince(saleEntryOpenedAt) * 1_000))
+            )
+        )
+        onCompleted?()
+        dismiss()
+    }
+
+    private func emitSaleAbandonedIfNeeded(mode: String, stage: String) {
+        guard activeSaleMode == mode, !didEmitSaleTerminal else { return }
+        didEmitSaleTerminal = true
+        AnalyticsManager.shared.track(.saleEntryAbandoned(mode: mode, stage: stage))
+        AnalyticsManager.shared.track(.saleEntryCancelled(mode: mode))
     }
 
     private func modeCard(
@@ -116,7 +157,7 @@ struct SmartSalesEntryView: View {
         accessibilityId: String,
         action: @escaping () -> Void
     ) -> some View {
-        let isPro = subscriptionManager.isPro
+        let isPro = canUseSmartSales
         return Button(action: isPro ? action : { showingPaywall = true }) {
             HStack(spacing: 16) {
                 ZStack {
@@ -147,6 +188,10 @@ struct SmartSalesEntryView: View {
         }
         .buttonStyle(PlainButtonStyle())
         .accessibilityIdentifier("smartSalesMode_\(accessibilityId)")
+    }
+
+    private var canUseSmartSales: Bool {
+        subscriptionManager.isPro || SmartReviewFixture.isSmartSalesEnabled
     }
 
     private var proUpsellBanner: some View {

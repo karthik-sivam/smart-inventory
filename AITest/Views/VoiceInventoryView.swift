@@ -856,6 +856,11 @@ struct VoiceInventoryView: View {
         }
 
         step = .parsing
+        let clock = AIRequestClock(
+            feature: "voice_count",
+            mode: "voice",
+            inputBytes: transcript.utf8.count
+        )
         do {
             let hints = allItems.prefix(50).map(\.name)
             let items = try await AIInventoryService.shared.parseVoiceTranscript(
@@ -863,6 +868,7 @@ struct VoiceInventoryView: View {
                 inventoryHints: Array(hints),
                 appLanguageCode: localizationManager.currentCode
             )
+            clock.finish(itemCount: items.count)
             usageManager.recordUse(.voice)
             editableItems = items.map { EditableItem(from: $0) }
             editableItems.applyNameMatching(in: selectedStorage)
@@ -873,6 +879,7 @@ struct VoiceInventoryView: View {
             step = .review
         } catch {
             errorMessage = error.localizedDescription
+            clock.finish(error: error, stage: "parse")
             AnalyticsManager.shared.track(.smartCountFailed(mode: "voice", reason: error.localizedDescription))
             step = .record
         }
@@ -897,6 +904,7 @@ struct VoiceInventoryView: View {
                 let qty = editable.quantity ?? existing.currentQuantity
                 let count = InventoryCount(previousQuantity: existing.currentQuantity, countedQuantity: qty, notes: "Voice inventory")
                 existing.countHistory.append(count)
+existing.lastCountedAt = count.countDate
                 existing.currentQuantity = qty
                 existing.applyCapturedFields(from: editable)
                 let event = ActivityEvent(
@@ -1137,7 +1145,7 @@ extension Array where Element == EditableItem {
 struct EditableItemRow: View {
     @Binding var item: EditableItem
     var selectedStorage: Storage?
-    var isPro: Bool = true
+    var isPro: Bool = false
     var remainingSlots: Int = Int.max
 
     var body: some View {
@@ -1147,10 +1155,7 @@ struct EditableItemRow: View {
                     capSelectionToggle
                 }
 
-                // Confidence dot
-                Circle()
-                    .fill(item.confidence >= 0.8 ? Color.stoqlySuccess : Color.stoqlyWarning)
-                    .frame(width: 8, height: 8)
+                SmartConfidenceChip(confidence: item.confidence)
 
                 TextField("Item name", text: $item.name)
                     .font(.subheadline).fontWeight(.medium)
@@ -1167,7 +1172,10 @@ struct EditableItemRow: View {
                 HStack {
                     Text("Qty")
                         .font(.caption).foregroundColor(.secondary)
-                    TextField("0", value: $item.quantity, format: .number)
+                    TextField("0", text: Binding(
+                        get: { item.quantity?.smartFormatted ?? "" },
+                        set: { item.quantity = Double($0.replacingOccurrences(of: ",", with: ".")) }
+                    ))
                         .font(.caption)
                         .keyboardType(.decimalPad)
                         .frame(width: 60)
@@ -1185,15 +1193,6 @@ struct EditableItemRow: View {
                 }
 
                 Spacer()
-
-                if item.confidence < 0.75 {
-                    Text("Low confidence")
-                        .font(.caption2)
-                        .foregroundColor(.stoqlyWarning)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.stoqlyWarningTint)
-                        .cornerRadius(4)
-                }
             }
 
             if let fill = item.fillPercent {

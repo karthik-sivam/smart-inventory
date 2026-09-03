@@ -3,7 +3,7 @@ import SwiftData
 import PhotosUI
 
 struct SmartSalesPhotoView: View {
-    var onCompleted: (() -> Void)? = nil
+    var onCompleted: ((Int) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
@@ -27,7 +27,7 @@ struct SmartSalesPhotoView: View {
                 case .review:
                     SaleEntryReviewView(
                         rows: $parsedRows,
-                        onConfirm: { onCompleted?() ?? dismiss() },
+                        onConfirm: { count in onCompleted?(count) ?? dismiss() },
                         onCancel: { step = .capture }
                     )
                     .environmentObject(currencyManager)
@@ -113,17 +113,26 @@ struct SmartSalesPhotoView: View {
         capturedImage = image
         guard let data = image.jpegData(compressionQuality: 0.85) else {
             errorMessage = L("ai.image.processFailed", "Could not process image.")
+            AnalyticsManager.shared.track(.smartSalesFailed(mode: "photo", reason: "jpeg_encode_failed"))
             step = .capture
             return
         }
+        let clock = AIRequestClock(
+            feature: "photo_sales",
+            mode: "photo",
+            inputBytes: data.count
+        )
         do {
             parsedRows = try await AIInventoryService.shared.parseSalesImage(
                 imageData: data,
                 knownItemNames: allItems.map(\.name)
             )
+            clock.finish(itemCount: parsedRows.count)
             AnalyticsManager.shared.track(.smartSalesModeSelected(mode: "photo"))
             step = .review
         } catch {
+            clock.finish(error: error, stage: "identify")
+            AnalyticsManager.shared.track(.smartSalesFailed(mode: "photo", reason: error.localizedDescription))
             errorMessage = error.localizedDescription
             step = .capture
         }

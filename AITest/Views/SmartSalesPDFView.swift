@@ -4,7 +4,7 @@ import PDFKit
 import UniformTypeIdentifiers
 
 struct SmartSalesPDFView: View {
-    var onCompleted: (() -> Void)? = nil
+    var onCompleted: ((Int) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
@@ -28,7 +28,7 @@ struct SmartSalesPDFView: View {
                 case .review:
                     SaleEntryReviewView(
                         rows: $parsedRows,
-                        onConfirm: { onCompleted?() ?? dismiss() },
+                        onConfirm: { count in onCompleted?(count) ?? dismiss() },
                         onCancel: { step = .pick }
                     )
                     .environmentObject(currencyManager)
@@ -90,6 +90,7 @@ struct SmartSalesPDFView: View {
         guard let url = pdfURL else { return }
         step = .analyzing
         Task {
+            let clock = AIRequestClock(feature: "sheet_sales", mode: "pdf")
             do {
                 guard url.startAccessingSecurityScopedResource() else { throw URLError(.fileDoesNotExist) }
                 defer { url.stopAccessingSecurityScopedResource() }
@@ -109,9 +110,12 @@ struct SmartSalesPDFView: View {
                     pages: images,
                     knownItemNames: allItems.map(\.name)
                 )
+                clock.finish(itemCount: parsedRows.count)
                 AnalyticsManager.shared.track(.smartSalesModeSelected(mode: "pdf"))
                 step = .review
             } catch {
+                clock.finish(error: error, stage: "parse")
+                AnalyticsManager.shared.track(.smartSalesFailed(mode: "pdf", reason: error.localizedDescription))
                 errorMessage = error.localizedDescription
                 step = .pick
             }

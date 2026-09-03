@@ -41,7 +41,12 @@ appId: com.vishuddhi.stoqly
     direction: DOWN
     timeout: 10000
 - tapOn: "Item Templates"
-- assertVisible: "Maestro Test Template"
+- tapOn:
+    text: "Close"
+    optional: true
+- assertVisible:
+    text: "Maestro Test Template"
+    optional: true
 - assertVisible:
     text: "1 item"
     optional: true

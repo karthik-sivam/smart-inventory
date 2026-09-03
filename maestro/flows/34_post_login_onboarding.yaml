@@ -16,7 +16,19 @@ env:
     text: "Don't Allow"
     optional: true
 - tapOn:
+    text: "Don’t Allow"
+    optional: true
+- tapOn:
     text: "Ask App Not to Track"
+    optional: true
+- tapOn:
+    id: "onboardingLanguageContinue"
+    optional: true
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Dismiss"
     optional: true
 - extendedWaitUntil:
     visible:

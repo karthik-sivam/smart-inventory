@@ -427,6 +427,11 @@ struct PaperInventoryView: View {
         }
 
         let compressed = image.jpegData(compressionQuality: 0.75) ?? Data()
+        let clock = AIRequestClock(
+            feature: "sheet_count",
+            mode: "sheet",
+            inputBytes: compressed.count
+        )
 
         do {
             let items = try await AIInventoryService.shared.parseInventorySheet(
@@ -434,6 +439,7 @@ struct PaperInventoryView: View {
                 inventoryHints: Array(allItems.prefix(50).map(\.name)),
                 appLanguageCode: localizationManager.currentCode
             )
+            clock.finish(itemCount: items.count)
             usageManager.recordUse(.paper)
 
             await MainActor.run {
@@ -452,6 +458,7 @@ struct PaperInventoryView: View {
         } catch {
             await MainActor.run {
                 errorMessage = error.localizedDescription
+                clock.finish(error: error, stage: "parse")
                 AnalyticsManager.shared.track(.smartCountFailed(mode: "sheet", reason: error.localizedDescription))
                 step = .capture
             }
@@ -479,6 +486,7 @@ struct PaperInventoryView: View {
             case .existing(let existing):
                 let count = InventoryCount(previousQuantity: existing.currentQuantity, countedQuantity: qty, notes: "Sheet inventory")
                 existing.countHistory.append(count)
+existing.lastCountedAt = count.countDate
                 existing.currentQuantity = qty
                 existing.applyCapturedFields(from: editable)
                 appliedCount += 1
@@ -553,7 +561,7 @@ struct PaperInventoryView: View {
 private struct SheetItemRow: View {
     @Binding var item: EditableItem
     var selectedStorage: Storage?
-    var isPro: Bool = true
+    var isPro: Bool = false
     var remainingSlots: Int = Int.max
 
     var body: some View {

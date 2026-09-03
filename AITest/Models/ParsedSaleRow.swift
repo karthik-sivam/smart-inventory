@@ -7,6 +7,7 @@ struct ParsedSaleRow: Identifiable {
     var itemName: String
     var quantitySold: Double
     var pricePerUnit: Double
+    var confidence: Double
     var notes: String = ""
     var resolvedItem: InventoryItem? = nil
     var isSkipped: Bool = false
@@ -19,12 +20,14 @@ struct ParsedSaleRowDTO: Decodable {
     let quantitySold: Double
     let pricePerUnit: Double
     let notes: String?
+    let confidence: Double
 
     func toParsedSaleRow() -> ParsedSaleRow {
         ParsedSaleRow(
             itemName: itemName,
             quantitySold: quantitySold,
             pricePerUnit: pricePerUnit,
+            confidence: confidence,
             notes: notes ?? ""
         )
     }

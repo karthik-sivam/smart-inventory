@@ -44,6 +44,7 @@ final class SmartSalesCSVViewModel: ObservableObject {
             }
             guard grid.count >= 2 else {
                 parseError = "The file appears empty. Make sure it has a header row and at least one data row."
+                AnalyticsManager.shared.track(.smartSalesFailed(mode: "csv", reason: "empty_file"))
                 return
             }
             let headerIdx = XLSXParser.findHeaderRow(in: grid)
@@ -54,6 +55,7 @@ final class SmartSalesCSVViewModel: ObservableObject {
             Task { await aiEnhanceMapping() }
         } catch {
             parseError = "Could not read file: \(error.localizedDescription)"
+            AnalyticsManager.shared.track(.smartSalesFailed(mode: "csv", reason: error.localizedDescription))
         }
     }
 
@@ -62,9 +64,15 @@ final class SmartSalesCSVViewModel: ObservableObject {
         guard !headers.isEmpty, !rows.isEmpty else { return }
         isSuggestingMappings = true
         defer { isSuggestingMappings = false }
+        let sample = rows.first ?? []
+        let clock = AIRequestClock(
+            feature: "sheet_sales",
+            mode: "csv",
+            inputBytes: headers.joined().utf8.count
+        )
         do {
-            let sample = rows.first ?? []
             let suggestions = try await AIInventoryService.shared.suggestSalesColumnMapping(headers: headers, sampleRow: sample)
+            clock.finish(itemCount: suggestions.count, emptyReason: "no_mapping_suggestions")
             for (indexStr, fieldName) in suggestions {
                 guard let index = Int(indexStr) else { continue }
                 let matched = SalesImportField.allCases.first { $0.rawValue == fieldName } ?? .skip
@@ -73,6 +81,8 @@ final class SmartSalesCSVViewModel: ObservableObject {
                 }
             }
         } catch {
+            clock.finish(error: error, stage: "parse")
+            AnalyticsManager.shared.track(.smartSalesFailed(mode: "csv", reason: error.localizedDescription))
             // Fall back to keyword autoDetect() already applied
         }
     }
@@ -83,6 +93,7 @@ final class SmartSalesCSVViewModel: ObservableObject {
                 itemName: value(row, .itemName),
                 quantitySold: Double(value(row, .quantity)) ?? 0,
                 pricePerUnit: Double(value(row, .pricePerUnit)) ?? 0,
+                confidence: 0.95,
                 notes: value(row, .notes)
             )
         }.filter { !$0.itemName.isEmpty }
@@ -152,7 +163,7 @@ final class SmartSalesCSVViewModel: ObservableObject {
 }
 
 struct SmartSalesCSVView: View {
-    var onCompleted: (() -> Void)? = nil
+    var onCompleted: ((Int) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
@@ -216,7 +227,7 @@ struct SmartSalesCSVView: View {
             NavigationStack {
                 SaleEntryReviewView(
                     rows: $parsedRows,
-                    onConfirm: { onCompleted?() ?? dismiss() },
+                    onConfirm: { count in onCompleted?(count) ?? dismiss() },
                     onCancel: { showingReview = false }
                 )
                 .environmentObject(currencyManager)

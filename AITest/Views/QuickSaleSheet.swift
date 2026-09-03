@@ -6,8 +6,10 @@ struct QuickSaleSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var currencyManager: CurrencyManager
+    @EnvironmentObject private var subscriptionManager: SubscriptionManager
 
     @State private var quantityText: String = "1"
+    @State private var showingSmartSales = false
     @State private var sellingPriceText: String = ""
     @State private var priceWasEdited = false
     @State private var saleDate: Date = Date()
@@ -17,6 +19,10 @@ struct QuickSaleSheet: View {
     @State private var isSaving: Bool = false
     @State private var showNegativeStockAlert = false
     @State private var negativeStockAlertMessage = ""
+    @State private var didTrackSaleEntryStarted = false
+    @State private var saleEntryOpenedAt = Date()
+    @State private var didEmitSaleTerminal = false
+    @State private var didCompleteSmartSales = false
 
     private var qty: Double { Double(quantityText) ?? 0 }
     private var price: Double { Double(sellingPriceText) ?? 0 }
@@ -29,6 +35,14 @@ struct QuickSaleSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    // TODO(iOS-C1): when Manual Purchase Entry ships, add a matching
+                    // Smart Purchase chip ("Or scan an invoice with Smart Purchase →")
+                    // on that screen using AIEntryChip(feature: .smartPurchase).
+                    AIEntryChip(feature: .smartSales, screen: "sales_manual") {
+                        emitSaleAbandonedIfNeeded(stage: "switched_to_smart_sales")
+                        didCompleteSmartSales = false
+                        showingSmartSales = true
+                    }
                     itemInfoSection
                     quantitySection
                     sellingPriceSection
@@ -59,7 +73,10 @@ struct QuickSaleSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        emitSaleAbandonedIfNeeded()
+                        dismiss()
+                    }
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -77,13 +94,33 @@ struct QuickSaleSheet: View {
                 }
             }
         }
+        .sheet(isPresented: $showingSmartSales, onDismiss: {
+            if didCompleteSmartSales {
+                dismiss()
+            } else if didEmitSaleTerminal {
+                beginManualSaleSession()
+            }
+        }) {
+            SmartSalesEntryView(onCompleted: {
+                didCompleteSmartSales = true
+            })
+                .environmentObject(currencyManager)
+                .environmentObject(subscriptionManager)
+                .sheetStyle()
+        }
         .onAppear {
-            AnalyticsManager.shared.track(.saleEntryStarted(mode: "manual"))
+            if !didTrackSaleEntryStarted {
+                beginManualSaleSession()
+            }
             if item.sellingPrice > 0 {
                 sellingPriceText = String(format: "%.2f", item.sellingPrice)
             } else if item.fallbackSalePrice > 0 {
                 sellingPriceText = String(format: "%.2f", item.fallbackSalePrice)
             }
+        }
+        .onDisappear {
+            guard !showingSmartSales else { return }
+            emitSaleAbandonedIfNeeded()
         }
         .alert(
             L("sale.negativeStock.title", "Negative Stock"),
@@ -323,7 +360,20 @@ struct QuickSaleSheet: View {
         item.currentQuantity -= soldQty
         item.updatedAt = Date()
 
-        modelContext.safeSave(context: "QuickSaleSheet")
+        guard modelContext.safeSave(context: "QuickSaleSheet") else {
+            modelContext.rollback()
+            isSaving = false
+            return
+        }
+
+        didEmitSaleTerminal = true
+        AnalyticsManager.shared.track(
+            .saleEntryCompleted(
+                mode: "manual",
+                itemCount: 1,
+                durationMs: max(0, Int(Date().timeIntervalSince(saleEntryOpenedAt) * 1_000))
+            )
+        )
 
         Task {
             await FirestoreManager.shared.pushSaleEvent(sale)
@@ -350,5 +400,19 @@ struct QuickSaleSheet: View {
             negativeStockAlertMessage = negativeLines.joined(separator: "\n")
             showNegativeStockAlert = true
         }
+    }
+
+    private func beginManualSaleSession() {
+        didTrackSaleEntryStarted = true
+        didEmitSaleTerminal = false
+        saleEntryOpenedAt = Date()
+        AnalyticsManager.shared.track(.saleEntryStarted(mode: "manual"))
+    }
+
+    private func emitSaleAbandonedIfNeeded(stage: String = "cancelled") {
+        guard didTrackSaleEntryStarted, !didEmitSaleTerminal else { return }
+        didEmitSaleTerminal = true
+        AnalyticsManager.shared.track(.saleEntryAbandoned(mode: "manual", stage: stage))
+        AnalyticsManager.shared.track(.saleEntryCancelled(mode: "manual"))
     }
 }

@@ -72,11 +72,18 @@ struct ReorderListView: View {
                                     Button {
                                         let supplierCount = storageGroups.count
                                         let itemCount = storageGroups.reduce(0) { $0 + $1.items.count }
-                                        AnalyticsManager.shared.track(.reorderEmailSent(
-                                            supplierCount: supplierCount,
-                                            itemCount: itemCount
-                                        ))
-                                        UIApplication.shared.open(url)
+                                        UIApplication.shared.open(url) { success in
+                                            if success {
+                                                AnalyticsManager.shared.track(.reorderEmailSent(
+                                                    supplierCount: supplierCount,
+                                                    itemCount: itemCount
+                                                ))
+                                            } else {
+                                                AnalyticsManager.shared.track(
+                                                    .reorderEmailFailed(reason: "cannot_open_mailto")
+                                                )
+                                            }
+                                        }
                                     } label: {
                                         Label("Email \(group.storage.name) Supplier", systemImage: "envelope")
                                             .frame(maxWidth: .infinity)

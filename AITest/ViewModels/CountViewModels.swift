@@ -27,7 +27,7 @@ final class CountViewModel: ObservableObject {
     private var items: [InventoryItem] = []
 
     private func isDueForAudit(_ item: InventoryItem) -> Bool {
-        guard let lastCount = item.countHistory.map(\.countDate).max() else {
+        guard let lastCount = item.effectiveLastCountedAt else {
             return true  // never counted → always due
         }
         return Date().timeIntervalSince(lastCount) > auditDueInterval
@@ -84,7 +84,7 @@ final class CountViewModel: ObservableObject {
         case .due:
             result = result.filter { isDueForAudit($0) }
         case .uncounted:
-            result = result.filter { $0.countHistory.isEmpty }
+            result = result.filter { $0.hasNeverBeenCounted }
         case .lowStock:
             result = result.filter { $0.isLowStock || $0.isOutOfStock }
         case .all:
@@ -97,8 +97,8 @@ final class CountViewModel: ObservableObject {
         // 3. Recently counted — last
         // 4. Within each group, alphabetically by name
         result.sort { a, b in
-            let aDate = a.countHistory.map(\.countDate).max()
-            let bDate = b.countHistory.map(\.countDate).max()
+            let aDate = a.effectiveLastCountedAt
+            let bDate = b.effectiveLastCountedAt
 
             switch (aDate, bDate) {
             case (nil, nil):

@@ -16,28 +16,38 @@ import SwiftData
 // │  • PDF export                                                   │
 // │  • Push notifications (low stock alerts)                        │
 // ├─────────────────────────────────────────────────────────────────┤
-// │  PRO  $2.99/month · $22.99/year (no free trial)                 │
+// │  PRO  — the localized StoreKit price. No free trial.            │
 // │  Everything in Free, plus:                                      │
 // │  • Unlimited storage areas                                      │
 // │  • Unlimited items per storage                                  │
 // │  • Advanced analytics (full history, trends, custom dates)      │
-// │  • Barcode scanner pro (bulk, history)       [Phase 1]          │
+// │  • Bulk barcode scan (camera stays open)     [iOS-F2]           │
 // │  • Multi-user collaboration                  [Phase 2]          │
 // │  • AI reorder suggestions                    [Phase 3]          │
 // │  • No ads                                                       │
 // ├─────────────────────────────────────────────────────────────────┤
-// │  REMOVE ADS  $3.99 one-time purchase                            │
+// │  REMOVE ADS  one-time purchase                                  │
 // │  • Removes all ads only — no other Pro features                 │
 // └─────────────────────────────────────────────────────────────────┘
+//
+// PRICING IS NEVER HARDCODED.
+// Every user-facing price comes from StoreKit (`Product.displayPrice`), so the
+// storefront's own currency and amount are shown. Do not write a price literal
+// into code, copy, or a localized string — it will be wrong in most storefronts
+// and drifts the moment App Store Connect changes. Tier comments above describe
+// *what* is included, never *what it costs*.
 //
 // SETUP REQUIRED in App Store Connect:
 //   Subscription Group: "Stoqly Pro"
 //     Products:
-//       com.vishuddhi.stoqly.pro.monthly   $2.99/mo
-//       com.vishuddhi.stoqly.pro.annual    $22.99/yr
+//       com.vishuddhi.stoqly.pro.monthly
+//       com.vishuddhi.stoqly.pro.annual
 //
 //   Non-Consumable IAP:
-//       com.vishuddhi.stoqly.removeads     $3.99 (one-time)
+//       com.vishuddhi.stoqly.removeads     (one-time)
+//
+//   Stoqly deliberately offers NO free trial. Do not configure an introductory
+//   offer in App Store Connect, and do not reintroduce trial copy anywhere.
 //
 //   In Xcode: Target → Signing & Capabilities → + → In-App Purchase
 //   For local testing: assign SmartInventory.storekit to your Run scheme.
@@ -65,10 +75,16 @@ class SubscriptionManager: ObservableObject {
     @Published var products: [Product] = []
     @Published var purchaseState: PurchaseState = .idle
     @Published var isLoading = false
-    /// Expiration of the active Pro entitlement (subscription renewal date or trial end).
+    /// Expiration of the active Pro entitlement (subscription renewal date).
     @Published private(set) var proSubscriptionExpirationDate: Date?
-    /// True when the active Pro entitlement is an introductory / free-trial offer.
-    @Published private(set) var isOnProTrial: Bool = false
+    /// Plan label ("monthly" / "annual") of the currently-entitled subscription.
+    /// Used to stamp subscription analytics events.
+    private(set) var currentPlanLabel: String?
+
+    /// The standalone Remove Ads purchase, held separately from `hasRemovedAds`
+    /// (which also folds in Pro) so ad state can be re-resolved after Pro lapses
+    /// without rescanning every entitlement.
+    private var hasStandaloneRemoveAds = false
 
     // MARK: - Product IDs
 
@@ -195,21 +211,57 @@ class SubscriptionManager: ObservableObject {
 
     func restorePurchases() async {
         isLoading = true
+        defer { isLoading = false }
         do {
             try await AppStore.sync()
             await refreshPurchaseStatus()
+            let restoredCount = await activeStoreKitEntitlementCount()
+            AnalyticsManager.shared.track(
+                .restorePurchaseResult(
+                    outcome: restoredCount > 0 ? "restored" : "no_purchases",
+                    restoredCount: restoredCount,
+                    reason: nil
+                )
+            )
             print("StoreKit ✅ Purchases restored.")
+        } catch StoreKitError.userCancelled {
+            AnalyticsManager.shared.track(
+                .restorePurchaseResult(
+                    outcome: "cancelled",
+                    restoredCount: 0,
+                    reason: "user_cancelled"
+                )
+            )
         } catch {
+            AnalyticsManager.shared.track(
+                .restorePurchaseResult(
+                    outcome: "storekit_error",
+                    restoredCount: 0,
+                    reason: error.localizedDescription
+                )
+            )
             print("StoreKit ❌ Restore failed: \(error.localizedDescription)")
         }
-        isLoading = false
+    }
+
+    private func activeStoreKitEntitlementCount() async -> Int {
+        var count = 0
+        for await result in StoreKit.Transaction.currentEntitlements {
+            guard case .verified(let transaction) = result,
+                  transaction.revocationDate == nil else { continue }
+            if let expirationDate = transaction.expirationDate, expirationDate <= Date() {
+                continue
+            }
+            count += 1
+        }
+        return count
     }
 
     // MARK: - Status Refresh
 
-    /// Days until the Pro trial ends; `nil` when not on a trial or expiry is unknown.
-    var trialDaysRemaining: Int? {
-        guard isOnProTrial, let expiry = proSubscriptionExpirationDate else { return nil }
+    /// Days until the Pro entitlement lapses; `nil` when not Pro or expiry unknown.
+    var proDaysRemaining: Int? {
+        guard isPro, let expiry = proSubscriptionExpirationDate else { return nil }
         let days = Calendar.current.dateComponents([.day], from: Date(), to: expiry).day ?? 0
         return max(0, days)
     }
@@ -221,8 +273,8 @@ class SubscriptionManager: ObservableObject {
 
         var hasPro = false
         var hasNoAds = false
-        var trialExpiry: Date?
-        var onTrial = false
+        var proExpiry: Date?
+        var planLabel: String?
 
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let transaction) = result else { continue }
@@ -235,13 +287,11 @@ class SubscriptionManager: ObservableObject {
             case ProductID.proMonthly.rawValue, ProductID.proAnnual.rawValue:
                 hasPro = true
                 if let expiry = transaction.expirationDate {
-                    if trialExpiry == nil || expiry < trialExpiry! {
-                        trialExpiry = expiry
+                    if proExpiry == nil || expiry < proExpiry! {
+                        proExpiry = expiry
                     }
                 }
-                if transaction.offer?.type == .introductory {
-                    onTrial = true
-                }
+                planLabel = Self.planLabel(forProductID: transaction.productID)
             case ProductID.removeAds.rawValue:
                 hasNoAds = true
             default:
@@ -250,9 +300,10 @@ class SubscriptionManager: ObservableObject {
         }
 
         isPro = hasPro || manualProGrantActive
-        proSubscriptionExpirationDate = trialExpiry
-        isOnProTrial = onTrial
+        proSubscriptionExpirationDate = proExpiry
+        currentPlanLabel = planLabel
         // Pro includes ad removal
+        hasStandaloneRemoveAds = hasNoAds
         hasRemovedAds = hasNoAds || hasPro || manualProGrantActive
 
         // Mirror the resolved entitlement (StoreKit and/or manual grant), not StoreKit alone.
@@ -262,8 +313,23 @@ class SubscriptionManager: ObservableObject {
         if hasRemovedAds {
             AdManager.shared.disableAds()
         }
+
+        // Runs last: it reads the entitlement state resolved above to decide which
     }
 
+    /// Maps a subscription product ID to the analytics plan label.
+    /// The subscription taxonomy uses "monthly" / "yearly" (agreed with data-analyst);
+    /// note `subscription_started` predates this and uses "annual" — left untouched.
+    private static func planLabel(forProductID id: String) -> String? {
+        switch id {
+        case ProductID.proMonthly.rawValue: return "monthly"
+        case ProductID.proAnnual.rawValue:  return "yearly"
+        default:                            return nil
+        }
+    }
+
+    /// Asks StoreKit whether this customer can still redeem the introductory offer.
+    /// Eligibility is per subscription *group*, so either product answers for both.
     /// Applies a manual Pro grant from Firestore (manualProUntil field in Firebase console).
     /// Recomputes StoreKit + grant entitlements so revoked/expired grants clear Pro access.
     func applyManualProGrantIfNeeded() async {
@@ -322,13 +388,14 @@ class SubscriptionManager: ObservableObject {
             if let expiry = transaction.expirationDate {
                 proSubscriptionExpirationDate = expiry
             }
-            if transaction.offer?.type == .introductory {
-                isOnProTrial = true
-            }
+            currentPlanLabel = Self.planLabel(forProductID: transaction.productID)
             AdManager.shared.disableAds()
             // Mirror immediately — do not wait for a later refreshPurchaseStatus().
             FirestoreManager.shared.writeProStatus(isPro)
             FCMTopicManager.syncProTopics(isPro: isPro)
+            // The optimistic writes above unblock the UI; this resolves the full
+            // entitlement picture.
+            await refreshPurchaseStatus()
         case ProductID.removeAds.rawValue:
             hasRemovedAds = true
             AdManager.shared.disableAds()
@@ -404,7 +471,7 @@ class SubscriptionManager: ObservableObject {
     /// Free: included. Pro: included.
     var canUsePushNotifications: Bool { true }
 
-    /// Free: basic scanner. Pro: bulk scan, history, custom formats.
+    /// Free: unlimited single scans. Pro: bulk session (camera stays open, then save all).
     var canUseBarcodeScannerPro: Bool { isPro }
 
     /// Phase 2 — Pro only.
@@ -580,6 +647,13 @@ struct PaywallView: View {
                                 if let monthly = sub.proMonthlyProduct {
                                     ProductCard(product: monthly, badge: nil)
                                 }
+                                Text(L("paywall.renewalLegal",
+                                       "Renews automatically. Cancel any time in App Store settings."))
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.top, 2)
                             } else {
                                 if let removeAds = sub.removeAdsProduct {
                                     ProductCard(
@@ -664,14 +738,14 @@ private struct ProFeatureList: View {
                 PaywallFeatureRow(icon: "archivebox.fill",          color: .purple, text: "Unlimited storage areas",             note: "Free: 5 max")
                 PaywallFeatureRow(icon: "cube.box.fill",            color: .blue,   text: "Unlimited items per storage",         note: "Free: 50 max")
                 PaywallFeatureRow(icon: "chart.line.uptrend.xyaxis",color: .green,  text: "Advanced analytics & full history",   note: "Free: 30 days")
-                PaywallFeatureRow(icon: "barcode.viewfinder",       color: .orange, text: "Barcode scanner pro (bulk, history)")
+                PaywallFeatureRow(icon: "barcode.viewfinder",       color: .orange, text: "Bulk barcode scan — keep the camera open, then save all", note: "Free: single scan + product lookup")
                 PaywallFeatureRow(icon: "sparkles",                          color: .stoqlyAccent, text: "Smart Sales Entry — Voice, Photo, Text, CSV & PDF")
                 PaywallFeatureRow(icon: "arrow.down.doc.fill",               color: .orange,       text: "AI Purchase Invoice Import")
                 PaywallFeatureRow(icon: "mic.fill",                          color: .teal,         text: "AI Voice Inventory Count",   note: "Free: 3/month")
                 PaywallFeatureRow(icon: "camera.fill",                       color: .teal,         text: "AI Photo Inventory Scan",    note: "Free: 3/month")
                 PaywallFeatureRow(icon: "doc.text.viewfinder",               color: .teal,         text: "AI Sheet Inventory Import",  note: "Free: 3/month")
                 PaywallFeatureRow(icon: "square.and.arrow.down.on.square", color: .indigo, text: "Bulk CSV / Excel import")
-                PaywallFeatureRow(icon: "person.2.fill",            color: .cyan,   text: "Multi-user collaboration",            note: "Coming soon")
+                PaywallFeatureRow(icon: "person.2.fill",            color: .cyan,   text: "Multi-user collaboration")
                 PaywallFeatureRow(icon: "xmark.circle.fill",        color: .gray,   text: "No ads")
             }
 
@@ -810,6 +884,7 @@ struct ProductCard: View {
         if product.subscription?.subscriptionPeriod.unit == .year { return "annual" }
         return "remove_ads"
     }
+
 
     var body: some View {
         Button {

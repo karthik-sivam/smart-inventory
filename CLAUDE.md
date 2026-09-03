@@ -82,8 +82,7 @@ let isPro = true  // testing shortcut — must be reverted before App Store
 ```
 
 ### ⚠️ Pre-Ship Blockers (reminder — not yet done)
-- Revert `SubscriptionManager.isPro` to `false` (currently `true` for testing)
-- Remove `print("[Enrichment]...")` debug logs from `BarcodeEnrichmentService.swift`
+- ~~Remove `print("[Enrichment]...")` debug logs from `BarcodeEnrichmentService.swift`~~ — resolved iOS-A2 (none remain)
 
 ---
 
@@ -135,7 +134,7 @@ All ViewModels are `@MainActor final class` conforming to `ObservableObject`.
 | `AdManager.shared` | AdMob; call `recordCompletion(event:)` after every significant user action |
 | `SubscriptionManager.shared` | StoreKit 2; exposes `isPro`, `hasRemovedAds`, `trialDaysRemaining` |
 | `SpotlightManager.shared` | Core Spotlight index; `index`, `deindex`, `reindexAll` |
-| `BarcodeEnrichmentService.shared` | Pro-only barcode lookup (Open Food Facts → UPCItemDB) |
+| `BarcodeEnrichmentService.shared` | Barcode lookup (Open Food Facts → UPCItemDB); free on single scan |
 | `NotificationManager.shared` | Local push notifications for low-stock and expiry alerts |
 
 ### Data Flow
@@ -162,14 +161,16 @@ users/{uid}/
 
 | Tier | Limits |
 |---|---|
-| Free | 5 storages, 30-day analytics, ad-supported |
-| Pro | Unlimited storages/items, full analytics, no ads, barcode enrichment, batch expiry |
+| Free | 5 storages, 30-day analytics, ad-supported, single barcode scan + product lookup |
+| Pro | Unlimited storages/items, full analytics, no ads, bulk barcode scan, batch expiry |
 | Remove Ads | Free limits retained, ads removed |
 
 **StoreKit product IDs:**
-- `com.vishuddhi.stoqly.pro.monthly` — $2.99/month
-- `com.vishuddhi.stoqly.pro.annual` — $22.99/year
-- `com.vishuddhi.stoqly.removeads` — $3.99 one-time
+- `com.vishuddhi.stoqly.pro.monthly` — ₹499/month (StoreKit-localized per storefront)
+- `com.vishuddhi.stoqly.pro.annual` — ₹3,999/year (StoreKit-localized per storefront)
+- `com.vishuddhi.stoqly.removeads` — one-time; never hardcode — use `Product.displayPrice`
+
+User-facing paywall prices already come from StoreKit `Product.displayPrice` via `SubscriptionManager.formattedPrice(for:)`. Do not quote $2.99 / $22.99 / $3.99.
 
 All Pro gates: `SubscriptionManager.shared.isPro`
 All ad suppression: `SubscriptionManager.shared.hasRemovedAds || isPro`

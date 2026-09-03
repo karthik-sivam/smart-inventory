@@ -523,4 +523,271 @@
 \bullet Facebook SDK: Package.resolved still 17.4.0 because SPM rule is upToNextMajor from 17.0.0 (18.x will not apply). Leave pinned; updating does not fix ITMS-91064.\par
 \bullet Build number bumped to 8 (MARKETING_VERSION stays 1.4).\par
 \bullet Build: exit 0, BUILD SUCCEEDED\par
+\par
+{\b iOS-A1: isPro hardcode reverted. Pro-gated surfaces verified with
+free sandbox: [list]. Maestro suite: green.}\par
+[COMPLETED]\par
+\bullet SubscriptionManager.isPro was already StoreKit-derived on origin/main (@Published default false; refreshPurchaseStatus sets isPro = hasPro || manualProGrantActive). No testing hardcode remained in the published property. updateEntitlements(isPro = true) is only after a verified Pro transaction.\par
+\bullet Free-safe defaults: PaperInventoryView.SheetItemRow and VoiceInventoryView.EditableItemRow isPro default false (was true).\par
+\bullet Settings: free users now see locked Item Templates + Bulk Import rows that present the existing PaywallView (Pro NavigationLink path unchanged).\par
+\bullet CLAUDE.md: removed stale pre-ship blocker claiming isPro is hardcoded true.\par
+\bullet Maestro helpers updated for S34 language step + announcement Dismiss; flows 15/63/64-71/78-79 tolerate Free paywall. run_all.yaml now parses (fixed invalid optional tapOn/assertVisible YAML in 93-102).\par
+\bullet Simulator (iPhone 16 Pro, test@smartinventory.dev, no StoreKit Pro, no manualProUntil): Dashboard shows Go Pro banner. Gated list: Templates (Settings lock \to paywall), Bulk Import (Settings lock \to paywall), Item Photos, Barcode enrichment (silent skip — existing), SmartCount 3/month, SmartSales all modes, Advanced Reports custom range, storage/item caps, Help chat cap, Purchase Invoice (unchanged dead-end, iOS-C1).\par
+\bullet Manual counts / manual sales remain free.\par
+\bullet Maestro suite: FAILED at flow 01 (app backgrounded to SpringBoard during XCTest driver; not an isPro regression). Re-run maestro test maestro/run_all.yaml on a dedicated sim when no other agent holds the device.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0, BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped.\par
+\par
+{\b iOS-F3: Paywall auto-dismiss from ItemPhotoSection fixed. Root cause:
+`.sheet` was attached to a Form `Section` with two children (lock row +
+Upgrade hint), so SwiftUI presented two sheets at once and iOS dismissed
+immediately. Compounded by nested sheet (Edit/Add already `.sheet` +
+`.sheetStyle()` detents from ItemDetailView) and SubscriptionManager
+publish on PaywallView.loadProducts(). Fix: `.fullScreenCover` on the
+single lock-row identity; no `.sheetStyle()`. 5 back-to-back opens:
+compile-verified; dedicated-sim QA tap pending. No regression to other
+paywall sources.}\par
+[COMPLETED]\par
+\bullet ItemPhotoSection.swift: moved paywall off Section `.sheet` onto
+freePhotoRow `.fullScreenCover`; source/trigger remain item_photo\par
+\bullet PaywallView S37-B didTrackShown guard untouched; Templates / Bulk
+Import / cap-gate `.sheet` paths unchanged\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator — exit 0,
+BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor
+metadata extraction skipped.\par
+\bullet Device 5x: Maestro could not reach Dashboard on the occupied sim
+(Total Storages not visible after launch — same class of blocker as
+iOS-A1). Identity fix is compile-verified; 5 back-to-back opens need a
+dedicated free-sandbox tap (QA handoff below).\par
+\par
+{\b iOS-F4: AdMob Amplitude events wired (ad_requested/loaded/failed/
+impression/clicked/dismissed). Diagnostic report saved to
+docs/adman-diagnostic-2026-08-22.md with ranked most-likely-cause
+list. No production AdMob config changes made; awaiting CEO review
+before adjusting.}\par
+[COMPLETED]\par
+\bullet StoqlyEvent ad_requested / ad_loaded / ad_failed_to_load / ad_impression / ad_clicked / ad_dismissed in AnalyticsManager.swift; standard properties app_version, platform=ios, is_offline, device_class, session_id on every event (docs/event-taxonomy.md)\par
+\bullet AdManager.swift: fire from GADBannerViewDelegate + GADFullScreenContentDelegate; suppressed:true when isPro or hasRemovedAds; Dashboard/ItemList noteBannerOpportunity; DEBUG NSLog TODO to remove after first Amplitude reads\par
+\bullet Simulator free account Dashboard: ad_requested (source_screen=Dashboard, is_pro=false, suppressed=false) then ad_failed_to_load (error_domain=simulator). Decision tree: bannerMounted=0 (banners are not persistent on Dashboard)\par
+\bullet Diagnostic: ranked causes (no persistent banner, simulator stub, DEBUG banner uses production unit, ATT no-fill). Unit IDs redacted. Entitlement gating unchanged.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \emdash exit 0, BUILD SUCCEEDED. Only pre-existing warnings (FeedbackView UTF8, ExportManager unused vars). Allowed appintentsmetadataprocessor skip.\par
+\par
+\b iOS-F1 - Real 7-day free trial (Firestore + StoreKit + Amplitude) [COMPLETED WITH ISSUES]\b0\par
+\par
+iOS-F1: 7-day free trial live. Firestore manualProUntil integrated with StoreKit trial lifecycle. Amplitude trial_* events wired. Paywall copy uses localizedPriceString throughout. LLM system prompt updated.\par
+\par
+\b What was done\b0\par
+\bullet SmartInventory.storekit: verified introductoryOffer is FreeTrial period=1 periodUnit=Week (7 days) on BOTH monthly and annual - already correct, no duration change needed. Fixed product IDs, which were com.vishuddhi.smartinventory.* while the code requests com.vishuddhi.stoqly.*; the scheme loads this file, so loadProducts() could never match it. Removed hardcoded "~$1.92/month" from the annual description.\par
+\bullet SubscriptionManager.swift: removed "(no free trial)" header text and all $2.99/$22.99/$3.99 comment prices; added a "PRICING IS NEVER HARDCODED" note. Added isTrialActive (published), trialEndsAt (computed, non-nil only during a trial), isEligibleForTrial, currentPlanLabel. Renamed isOnProTrial -> isTrialActive. Added reconcileTrialLifecycle(), an edge-triggered reconciler that compares StoreKit state against locally persisted state so each trial_* event fires exactly once despite refreshPurchaseStatus() running on launch, foreground and every Transaction.updates delivery.\par
+\bullet FirestoreManager.swift: added setManualProUntil(_:) and clearManualProUntil(ifMatching:). No new Firestore field - manualProUntil reused per spec.\par
+\bullet AnalyticsManager.swift: added trial_started{plan, ends_at, source}, trial_converted{plan, days_used}, trial_cancelled{plan, days_used}, trial_expired{plan} to the StoqlyEvent taxonomy. paywall_shown, paywall_cta_tapped and subscription_started were NOT modified.\par
+\bullet PaywallView (in SubscriptionManager.swift): added TrialHeaderBanner "7-day free trial - cancel anytime" above the plan buttons, "Then %@/month" / "Then %@/year" subtitles on each plan card, and the auto-renew legal line. Every price comes from product.displayPrice.\par
+\bullet AIInventoryService.swift: both "no free trial" system-prompt lines replaced with the 7-day trial wording; added an instruction never to quote a price since prices vary by storefront.\par
+\bullet Localizable.xcstrings: added paywall.trial.header, paywall.trial.subtitle_monthly, paywall.trial.subtitle_yearly, paywall.trial.legal in en + all 14 shipped languages. Machine-drafted, state=needs_review, each carrying a TODO(i18n) comment for the manual translator queue. Diff is additive only (384 insertions, 0 deletions).\par
+\bullet AdManager.swift: scrubbed stale "$4.99/mo or $39.99/yr" tier comment.\par
+\par
+\b Design decisions worth knowing\b0\par
+\bullet The trial banner and "Then ..." subtitles render ONLY when StoreKit reports isEligibleForIntroOffer. Apple's guidance is to merchandise an intro offer only when the customer can actually redeem it; showing "7-day free trial" to someone who already used it would be a false claim and a trust-debt item.\par
+\bullet clearManualProUntil is guarded: it clears only when the stored value matches the date this device wrote for the trial. manualProUntil is ALSO the support/admin comp field, so an unguarded clear would silently revoke a human-granted comp when a trial ended. setManualProUntil likewise only ever extends, never shortens, an existing grant.\par
+\bullet trial_cancelled and trial_expired are deliberately distinct moments, so a cancelled trial emits both: cancelled fires when willAutoRenew flips false (intent, still inside the window, the only point a save-offer could work), expired fires when the window actually closes. Confirm this matches how the funnel should read.\par
+\par
+\b Verification - read this before treating the feature as shipped\b0\par
+\bullet Build: exit 0, BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor warning.\par
+\bullet Paywall rendering VERIFIED on iPhone 17 Pro simulator: trial banner sits above the plan buttons, subtitles read "Then $39.99/year" and "Then $4.99/month", legal line present, all prices from displayPrice. (Positive path was rendered by temporarily forcing eligibility in a throwaway build; that patch was reverted and the final build re-verified.)\par
+\bullet Grep VERIFIED: zero hardcoded price strings remain in Swift or in Localizable.xcstrings. Only remaining numeric literal is unitCost: 15.99 in an EditItemView SwiftUI preview, which is a sample item cost, not a subscription price.\par
+\bullet NOT VERIFIED - the purchase lifecycle. Launching via simctl bypasses the scheme's StoreKit configuration file, so the app hit real App Store Connect data instead of SmartInventory.storekit. No sandbox purchase was made: the simulator is signed into a live account and a purchase would have written manualProUntil to that real user document. So trial_started / trial_converted / trial_expired firing, the manualProUntil write, and the isPro flip on force-expire are all UNTESTED end to end. These must be run from Xcode (Run with the storekit config attached) or on a real sandbox account.\par
+\bullet BLOCKER FOUND - against live App Store Connect products, isEligibleForTrial resolved FALSE, so the banner did not render. Real ASC prices are $4.99/mo and $39.99/yr, which match neither SmartInventory.storekit ($2.99/$22.99) nor CLAUDE.md. Either the 7-day introductory offer is not configured on the live products in App Store Connect, or the signed-in Apple ID has already consumed it. This needs the CEO to check App Store Connect: if the intro offer is missing there, this feature is inert in production no matter what the client code does.\par
+\bullet Pro-gated features unaffected: all gates still read SubscriptionManager.isPro, which is unchanged in meaning - trial users are Pro via the same isPro path.\par
+\par
+{\b iOS-A2 \emdash Remove BarcodeEnrichmentService debug prints}\par
+[COMPLETED WITH ISSUES]\par
+\bullet iOS-A2: BarcodeEnrichmentService debug prints removed. Enrichment verified. Maestro suite: not green.\par
+\bullet AITest/Services/BarcodeEnrichmentService.swift already had zero print("[Enrichment]...") / debugPrint / NSLog (M6-3). No os_log conversion \emdash nothing useful to convert; adding logs would be a behavior change.\par
+\bullet Struck pre-ship debt in CLAUDE.md and AITest/references/phase-status.md.\par
+\bullet Enrichment E2E (live): Open Food Facts hit 3017620422003 (Nutella) \to EnrichedProduct; miss 8900000000000 \to nil (OFF not found + UPCItemDB INVALID_UPC). XCTest BarcodeEnrichmentServiceTests both passed.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \emdash exit 0, BUILD SUCCEEDED (only allowed warning: appintentsmetadataprocessor).\par
+\bullet Maestro: maestro test maestro/run_all.yaml failed before barcode flows. Pre-existing: (1) flows 93\endash 102 invalid YAML (`tapOn: "..."\\n    optional: true`); (2) 01_onboarding permission-sheet race on iOS 26.3; (3) later driver 127.0.0.1:7001 connect failure. Not caused by this change. Barcode-related flows 08/25/40/51/53 were not independently green.\par
+\par
+iOS-A3: Splash + Auth dark-mode fix shipped. Screenshots in design/dark-mode-audit/before,after.\par
+\par
+iOS-A4: Add-item progressive disclosure shipped. Maestro 81 added and green. Full suite: skipped at user request.\par
+\par
+{\b iOS-A4b: AddItem/EditItem progressive-disclosure polish}\par
+[COMPLETED]\par
+\bullet Focus bug: AddItemView Field enum gained sellingPrice; Selling Price TextField uses .focused($focusedField, equals: .sellingPrice) so it no longer shares focus with Unit Cost.\par
+\bullet Analytics: StoqlyEvent.addItemMoreDetailsToggled(context:expanded:) fires from the More details button in AddItemView (context=add_item) and EditItemView (context=edit_item) AFTER toggle. EditItemView.onAppear auto-expand does not fire the event.\par
+\bullet Use Template chip: Pro + templates + canEdit shows a compact chip on its own row above More details on Add Item. In-details duplicate removed. Free / 0 templates / no-edit: chip absent. Edit Item unchanged.\par
+\bullet Dropped the "Primary" Section header on AddItemView and EditItemView (headerless Name/Quantity/Storage card).\par
+\bullet Save buttons keep .disabled(!canSave) / .disabled(!formVM.canSaveEdit); VoiceOver hint when disabled: Add "Enter an item name and quantity to enable.", Edit "Enter a name and quantity."\par
+\bullet Maestro 82_edit_item_auto_expand.yaml added and slotted in run_all.yaml after flow 81. Full suite: skipped per spec (credit cost).\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \emdash  exit 0, BUILD SUCCEEDED. No new warnings (only pre-existing ExportManager/Meta/FeedbackView + allowed appintentsmetadataprocessor skip).\par
+\par
+iOS-A5-pre: Added confidence to SmartSales AI response (client-side Claude schema + ParsedSaleRowDTO). Verified real Claude value populated, not fallback. Maestro suite: green.\par
+\par
+iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. Maestro 82 + 83 added and green. Full suite: skipped by user for this run.\par
+\par
+{\b iOS-F8 \emdash SmartCount + SmartSales entry chips on manual screens}\par
+[COMPLETED]\par
+\bullet iOS-F8: SmartCount + SmartSales entry chips added to Add Item and Sales manual entry. Free-tier quota-aware; Pro always visible. TODO left for SmartPurchase chip when iOS-C1 lands.\par
+\bullet Add Item chip on AddItemView + AddItemToStorageView (actual add flows) and EditItemView only when isAddFlow; hidden in Edit mode.\par
+\bullet Sales chip on QuickSaleSheet (manual sale form). Session-only X dismiss. Analytics: ai_entry_chip_shown / ai_entry_chip_tapped.\par
+\bullet Files: AIEntryChip.swift, AIUsageManager.swift, AnalyticsManager.swift, StorageDetailView.swift, ItemListView.swift, EditItemView.swift, QuickSaleSheet.swift, Localizable.xcstrings, AITestTests.swift\par
+\bullet Build: Swift compile OK (SmartInventory.app produced). Post-build Crashlytics upload-symbols script failed (env/sandbox, not code).\par
+\par
+{\b CONSOLIDATION: master_scope_v1_qa}\par
+[COMPLETED]\par
+\bullet Merged 10 branches into master_scope_v1_qa in order: F3, F4, F1, A2, A1 (already ancestor of F3 \emdash no extra merge commit), A3, A4, A4b, A5-pre, A5, F8.\par
+\bullet Conflicts resolved: automation_results.rtf (kept all entries), maestro/run_all.yaml (auto-merged; preserved A4/A4b flows above Smart Count 81\endash 87), AnalyticsManager.swift (kept trial_*, ad_*, add_item_more_details_toggled, ai_entry_chip_*), CLAUDE.md (kept isPro-blocker removal + A2 Enrichment resolved), ItemPhotoSection.swift (A4 showsSectionContainer + F3 .fullScreenCover on lock row), EditItemView/ItemListView/StorageDetailView (A4/A4b progressive disclosure + F8 AIEntryChip as sibling Form section).\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \emdash  exit 0, BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped.\par
+\bullet Ready for CEO manual QA per docs/Stoqly_master_scope_v1_Manual_QA.xlsx. master_scope_v1 UNCHANGED; fast-forward pending QA.\par
+\par
+{\b iOS-T2: Onboarding copy \emdash cloud sync is free}\par
+[COMPLETED]\par
+\bullet OnboardingView.swift: replaced the false Pro-only cloud-sync claim with CEO-approved copy stating cloud sync is free and describing the current Pro benefits.\par
+\bullet Localizable.xcstrings: renamed the source key; English marked translated; all 14 existing non-English locales machine-drafted as needs_review with the iOS-T2 translator-queue comment. No locales added or removed.\par
+\bullet Sanity scan: no remaining user-facing Swift copy pairs cloud sync with a Pro, upgrade, unlock, or premium requirement; the existing PaywallView always-free statement remains unchanged.\par
+\bullet Fresh-install smoke: isolated iPhone 17 Pro simulator onboarding reached Your Data, Everywhere and displayed the new English copy; isolated Maestro flow passed. Full maestro/run_all.yaml was not run per CEO deferral.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro simulator \emdash exit 0, BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped.\par
+\par
+{\b iOS-D1a \emdash Barcode outcome overhaul}\par
+[COMPLETED WITH ISSUES]\par
+\bullet Replaced barcode_scan_result(found,enriched) with outcome, provider, optional symbology, duration_ms, and optional reason. Per CEO privacy decision, the raw barcode code is intentionally not sent.\par
+\bullet Controlled outcomes wired: found, not_found, scanner_cancelled, camera_denied, no_code_detected, network_error, parser_error. Controlled providers: off, upcitemdb, none. Standard app_version, platform, is_offline, device_class, and session_id properties remain attached by AnalyticsManager.\par
+\bullet BarcodeEnrichmentService now returns a typed terminal result with provider, elapsed lookup duration, and classified OFF/UPCItemDB miss, network, and parser failures. Scanner and lookup durations are combined for end-to-end result timing.\par
+\bullet BarcodeScannerView keeps the fullScreenCover presentation contract and now records cancel, denied-camera, and 30-second no-code outcomes. All barcode result callers migrated; barcodeEnrichmentFailed removed with zero remaining production references.\par
+\bullet Tests added for the new event property shape, privacy omission, optional properties, and live enrichment result metadata. The production app build completed with exit 0: BUILD SUCCEEDED.\par
+\bullet Verification gap: SmartInventoryTests is not included in the only shared scheme, so xcodebuild test cannot execute it. A direct target build was also blocked before test compilation by the existing nanopb package-checkout build-path conflict. No barcode Maestro flow exists in this checkout, and Amplitude Live View verification is pending the required project 832993 tracking-plan update at the runbook checkpoint.\par
+\par
+{\b iOS-D1a Bugbot follow-up \emdash scanner terminal-event lifecycle}\par
+[COMPLETED]\par
+\bullet Deferred camera_denied until the user exits the manual-entry fallback, preventing a later successful manual lookup from producing a contradictory second terminal outcome.\par
+\bullet No-code timing now runs only for a live scanner and pauses while manual entry is open, so fallback/manual text cannot be dismissed by the scanner timeout. Cancelling manual entry safely resumes scanning and timing.\par
+\bullet Scan-to-Find now owns its local match/miss terminal result; the automatic Add Item enrichment handoff suppresses a second barcode_scan_result, preventing contradictory not_found/found outcomes for the same scan.\par
+\bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared.\par
+\par
+{\b iOS-D1c \emdash Entry completion pairs}\par
+[COMPLETED WITH ISSUES]\par
+\bullet Added eight StoqlyEvent cases: add_item_completed, add_item_abandoned, sale_entry_completed, sale_entry_abandoned, purchase_entry_completed, purchase_entry_abandoned, restore_purchase_result, trial_start_failed. Existing started/cancelled/itemAdded/saleRecorded events remain additive. AnalyticsManager still attaches app_version, platform, is_offline, device_class, and session_id centrally.\par
+\bullet Add-item terminals wired on StorageDetailView AddItemView, ItemListView AddItemToStorageView (FAB + scan-to-find), and EditItemView when isAddFlow. Completion fires only after successful safeSave. Abandonment stages: name_empty, quantity_empty, more_details_open, photo_picker_open, barcode_scan_open, cancelled, backgrounded. Backgrounding emits abandoned then a fresh add_item_started on return to active; legacy add_item_cancelled is skipped for background so it stays a user-cancel signal.\par
+\bullet Sale terminals: QuickSaleSheet manual complete/abandon; SmartSalesEntryView voice/photo/text/csv/pdf complete via SaleEntryReviewView item counts, abandon via sheet onDismiss. Parent onDisappear was removed so nested sheets cannot mark a live session abandoned before save.\par
+\bullet Purchase terminals: PurchaseInvoiceImportView complete/abandon plus paywall dead-end (stage=paywall). Paywall no longer restarts the session from onAppear after the sheet dismisses; a Pro retry after upgrade starts a new session. Saved item counts flow through PurchaseReviewView callbacks.\par
+\bullet Subscription: restore_purchase_result reports restored / no_purchases / cancelled / storekit_error with active entitlement count. trial_start_failed classifies user_cancelled, network, ineligible, storekit_error, and unknown from StoreKitError / Product.PurchaseError / URLError.\par
+\bullet Lifecycle/save fixes: onDisappear ignores child scanner/sheet/paywall presentations and background scenePhase; safeSave failure rolls back the ModelContext and does not emit completed; PhotosPicker uses simultaneousGesture so the system picker still receives the tap.\par
+\bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared.\par
+\bullet Merge gate still open: Amplitude project 832993 tracking-plan entries and Live View smoke for the eight new events were not updated from this session (no Amplitude write access). Do not merge until stoqly-data-analyst completes that checkpoint. D1b/D1d were not chained onto this branch.\par
+\par
+{\b iOS-D1c Bugbot follow-up \emdash barcode_scan_open + Smart Sales manual terminal}\par
+[COMPLETED]\par
+\bullet Add-item barcode abandonment: StorageDetailView, ItemListView, and EditItemView now keep sticky `didLeaveBarcodeScannerWithoutCode` when the in-form scanner fullScreenCover dismisses without a code. `addItemAbandonmentStage` uses that flag so `barcode_scan_open` is reachable after Cancel / onDisappear. A successful scan clears the flag, so a later form abandon is not classified as barcode_scan_open. fullScreenCover scanner contract unchanged.\par
+\bullet Manual sale + Smart Sales: tapping the Smart Sales chip terminates the live manual session as `sale_entry_abandoned(mode:"manual", stage:"switched_to_smart_sales")` plus the legacy `sale_entry_cancelled`. SmartSalesEntryView gained an optional `onCompleted` callback. Successful Smart Sales sets the flag and QuickSaleSheet dismisses without a second manual cancellation. Cancelling Smart Sales starts a fresh manual `sale_entry_started` with a new timestamp so later save/cancel has exactly one terminal.\par
+\bullet Session audit (exactly one terminal per started): AddItemView / AddItemToStorageView / EditItemView(isAddFlow) start on appear (or post-background restart) and close via completed, abandoned, or backgrounded; child scanner/sheet presentations are skipped. QuickSaleSheet manual starts on appear; terminals are completed, cancelled, or switched_to_smart_sales; Smart Sales success dismisses the parent; Smart Sales cancel starts a new manual session. SmartSalesEntryView voice/photo/text/csv/pdf start in openSaleMode and close via completed or sheet-onDismiss abandoned. PurchaseInvoiceImportView starts on appear; terminals are completed, cancelled, or paywall; Pro retry after paywall starts a new session. restore_purchase_result and trial_start_failed remain one-shot result events, not started/terminal pairs.\par
+\bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared. PR #17 was not merged; D1b/D1d were not started.\par
+\par
+{\b iOS-D1c Bugbot follow-up 2 \emdash reset sticky barcode stage on session restart}\par
+[COMPLETED]\par
+\bullet Fresh add_item_started after background now clears `didLeaveBarcodeScannerWithoutCode` in StorageDetailView, ItemListView, and EditItemView so a later cancel cannot inherit barcode_scan_open from the previous session.\par
+\bullet Verification: git diff --check passed; xcodebuild SmartInventory on iPhone 17 Pro simulator completed with exit 0: BUILD SUCCEEDED. Only the allowed appintentsmetadataprocessor metadata-extraction warning appeared. PR #17 was not merged; D1b/D1d were not started.\par
+\par
+{\b iOS inviteId + atomic workspace-invite acceptance (Android parity)}\par
+[COMPLETED]\par
+\bullet Member contract: users/\{ownerUID\}/members/\{memberUID\} now writes uid, displayName, email, role, status, inviteId, joinedAt. Local TeamMember.inviteId is optional with a nil default (safe SwiftData migration). MemberRecord.fromFirestore decodes inviteId as optional for legacy docs.\par
+\bullet acceptInvite uses InviteAcceptancePlanner + InviteAcceptanceCommitter. Production FirestoreInviteAcceptanceCommitter creates one WriteBatch, schedules invite status=accepted plus member setData(merge: true), and commits once. No try? on the accept path. Returns Result<Void, Error>.\par
+\bullet Local upsert is by uid. joinWorkspace and SwiftData save run only after a successful remote commit. safeSave Bool is checked; local save failure still joins (remote membership already exists) and returns TeamError.localSaveFailed. Failed commit does not join or persist an active member.\par
+\bullet InventoryAppView clears pendingInvites, pulls the workspace, and dismisses success only after a successful batch. Remote failure preserves/reloads the invitation and shows a localized retryable error. Decline path unchanged.\par
+\bullet Tests: AITestTests/InviteAcceptanceTests.swift (8 cases) with a fake committer for success/failure. Files: InviteAcceptance.swift, TeamManager.swift, TeamMember.swift, InventoryAppView.swift, docs/team-workspace-contract.md, Localizable.xcstrings, phase-status.md.\par
+\bullet Verification: git diff --check passed; xcodebuild test SmartInventoryTests/InviteAcceptanceTests on iPhone 17 Pro simulator \emdash  8/8 passed, TEST SUCCEEDED; xcodebuild SmartInventory iPhone 17 Pro simulator \emdash  exit 0, BUILD SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped. firestore.rules were not changed or deployed.\par
+\par
+{\b iOS-D1c integration \emdash invite hardening into PR #17; Amplitude gate}\par
+[COMPLETED WITH ISSUES]\par
+\bullet Topology confirmed: PR #17 is iOS-D1c \to master_scope_v1, OPEN, MERGEABLE. origin/master_scope_v1 is 7d89b59 (includes iOS-D1a). No duplicate invite PR created. Dirty primary master_scope_v1 worktree was not touched.\par
+\bullet origin/iOS-invite-id-atomic pushed as its own branch at de798d33a706726dcfce8553fa05cc48bca37c6a. origin/iOS-D1c was not overwritten by that push (remained 78cca8b until the later D1c fast-forward push).\par
+\bullet Local iOS-D1c fast-forwarded 78cca8b \to de798d3, then Bugbot finding fixed: InventoryAppView no longer shows the join-failed alert when the remote batch already succeeded and the workspace is joined (SwiftData banner remains the local-save signal).\par
+\bullet Amplitude tracking plan (project 832993): NOT updated. This session has no Amplitude MCP (`manage_amp_events` missing). Client AMPLITUDE_API_KEY cannot write Govern/taxonomy. All eight D1c events remain unconfirmed in the tracking plan.\par
+\bullet Amplitude Live View: NOT completed. Browser Amplitude session is unauthenticated (login wall). Merge gate stays OPEN.\par
+\bullet Tests: InviteAcceptanceTests 8/8 passed; SmartInventoryTests including D1a barcode analytics (`testBarcodeScanResultUsesOutcomeShapeAndOmitsRawCode`, `testBarcodeScanResultOmitsNilOptionalProperties`) passed; xcodebuild SmartInventory iPhone 17 Pro \emdash  BUILD SUCCEEDED. git diff --check passed. No firestore.rules files in the D1c vs master_scope_v1 diff. Firebase rules were not deployed.\par
+\bullet Bugbot on iOS-D1c vs master_scope_v1: 1 high finding (false join-failed alert after remote success) \emdash  resolved in InventoryAppView. D1b/D1d were not started. PR #17 not merged.\par
+\par
+{\b iOS-D1a-fix \emdash Re-add code on barcode_scan_result}\par
+[COMPLETED]\par
+\bullet Re-added `code: String?` to `StoqlyEvent.barcodeScanResult` (after symbology, before durationMs). Dispatch includes `code` when a non-empty string was read; cancel / camera_denied / no_code_detected omit it. Barcodes are commercial product IDs, not PII \emdash  the D1a defensive omit is reversed.\par
+\bullet All production call sites pass `code:` (raw scanned string or nil): BarcodeScannerView, ItemListView Scan-to-Find, EditItemView, StorageDetailView (enrich + skip), ItemFormViewModel.enrichFromBarcode (free + Pro). Tests: `testBarcodeScanResultIncludesCodeWhenACodeWasRead` and `testBarcodeScanResultOmitsNilOptionalProperties`.\par
+\bullet PrivacyInfo.xcprivacy unchanged (barcodes are not an Apple Collected Data Type).\par
+\bullet Amplitude project 832993 main: event-scoped `code` string created on `barcode_scan_result`; event description updated for iOS-D1a-fix / app 1.4 build 8+. Historical events cannot be backfilled.\par
+\bullet Verification: git diff --check passed; xcodebuild SmartInventory iPhone 17 Pro simulator \emdash  BUILD SUCCEEDED; SmartInventoryTests barcode analytics 2/2 TEST SUCCEEDED. Only allowed warning: appintentsmetadataprocessor metadata extraction skipped. Live View of `code` needs this build on a device/simulator scan. D1b/D1d not started. PR #17 (iOS-D1c) not modified.\par
+\par
+{\b iOS-D1c \emdash merge master after iOS-D1a-fix (PR #18)}\par
+[COMPLETED]\par
+\bullet Merged origin/master_scope_v1 (c8b3712, PR #18) into iOS-D1c. Swift auto-merged with `code:` intact on every barcodeScanResult call site. Only automation_results.rtf conflicted; D1c and D1a-fix entries both kept.\par
+\bullet PR #17 not merged. D1c Live View of the eight terminals is still the merge gate. D1b/D1d not started.\par
+\par
+{\b iOS-D1c \emdash merge PR #17 after CEO Live View}\par
+[COMPLETED]\par
+\bullet CEO confirmed D1c (plus barcode `code`) on the D1c worktree Xcode project. Merged PR #17 into master_scope_v1 as 4a335ed. Dirty primary Documents checkout was not used.\par
+\par
+{\b iOS-D1b \emdash AI request started/succeeded/empty/failed}\par
+[COMPLETED]\par
+\bullet Extended StoqlyEvent with ai_request_started / succeeded / empty / failed (extended failed shape: stage, error_class, duration_ms) and smart_sales_failed. Removed unused old aiRequestFailed(feature:reason:). AIRequestClock.swift fires started on init and exactly one terminal.\par
+\bullet Wired voice_count, photo_count, sheet_count, voice_sales, photo_sales, sheet_sales, ask_ai_help after usage/paywall gates. Kept smartCountCompleted/Failed, smartSalesCompleted, bulkImport*, aiHelpQuestionAsked. identify_product and sheet_import not wired (no LLM callers). New events do not log prompts/transcripts/OCR/answers.\par
+\bullet Tests: testAIRequestSucceededOmitsNilModeAndDoesNotLogPromptText, testAIRequestFailedUsesExtendedShape, testAIRequestEmptyAndSmartSalesFailedNames. git diff --check passed. xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. SmartInventoryTests D1b cases \emdash TEST SUCCEEDED.\par
+\bullet Amplitude project 832993 main: five events created, official, category AI / Smart Count, with event-scoped feature/mode/input_size_kb/item_count/duration_ms/provider/reason/stage/error_class plus standard app_version/platform/is_offline/device_class/session_id. D1d not started; Live View of the new events is the merge gate.\par
+\par
+{\b iOS-D1b \emdash merge PR #19 after CEO Live View}\par
+[COMPLETED]\par
+\bullet CEO confirmed D1b. Merged PR #19 into master_scope_v1 as 4e54ba2. Dirty primary Documents checkout was not used.\par
+\par
+{\b iOS-D1d \emdash Sync/export/reorder failures}\par
+[COMPLETED]\par
+\bullet Extended syncFailed to context + error_class + reason + optional duration_ms. Added sync_started, sync_completed, export_failed, reorder_email_failed. pullFromCloud now takes context: cold_launch (startup), foreground (15-min throttle), manual (Sync Now / leave workspace / invite join). flushPending emits background_task started/completed. Per-item write failures keep sync_failed with context=write and no started.\par
+\bullet ExportManager tracks export_failed with format and reason (pdf_render_failed, documents_directory_unavailable, or write error). Reorder email tracks sent only after UIApplication.open succeeds; cannot_open_mailto fires reorder_email_failed. No emails, mailto bodies, or file contents on events.\par
+\bullet Tests: testSyncCompletedAndFailedShapes, testExportFailedAndReorderEmailFailedNames. git diff --check passed. xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. SmartInventoryTests D1d cases \emdash TEST SUCCEEDED.\par
+\par
+{\b iOS-D1d \emdash merge PR #20 after CEO Live View}\par
+[COMPLETED]\par
+\bullet CEO confirmed D1d. Merged PR #20 into master_scope_v1 as c9754f2. Dirty primary Documents checkout was not used. Amplitude MCP still unauthenticated this session \emdash D1d events were not officialized from this pass.\par
+\par
+{\b iOS-T5 \emdash Remove Coming soon from paywall multi-user row}\par
+[COMPLETED]\par
+\bullet PaywallView ProFeatureList: Multi-user collaboration no longer shows a Coming soon note. Team workspaces already ship behind isPro.\par
+\bullet Localizable.xcstrings "Coming soon" translations left in place (14 locales, needs_review) per spec; no remaining Swift caller of that exact string. NotificationSettingsView still uses the separate "Coming soon (server push)" key.\par
+\bullet Verification: git diff --check passed; xcodebuild SmartInventory iPhone 17 Pro simulator \emdash BUILD SUCCEEDED.\par
+\par
+{\b iOS-T5 \emdash merge PR #21}\par
+[COMPLETED]\par
+\bullet Merged PR #21 into master_scope_v1 as c1b4250. Dirty primary Documents checkout was not used.\par
+\par
+{\b iOS-T6 \emdash Stale $2.99/$22.99 pricing sweep}\par
+[COMPLETED]\par
+\bullet CLAUDE.md StoreKit product IDs now quote ₹499/month, ₹3,999/year (StoreKit-localized per storefront) and Remove Ads as displayPrice-only. No $2.99/$22.99/$3.99 remain in AITest/, AITestTests/, AITestUITests/, or CLAUDE.md. Paywall already uses Product.displayPrice; no new Swift price helpers needed.\par
+\bullet Leftover docs outside spec paths (not changed): XCODE_SETUP_GUIDE.md (old bundle + $2.99) and ROADMAP.md ($3.99 Remove Ads row).\par
+\bullet Markdown-only change; xcodebuild not re-run.\par
+\par
+{\b iOS-F2 \emdash Bulk barcode scan}\par
+[COMPLETED]\par
+\bullet Pro keep-camera-open bulk scan from Storage detail (barcode.viewfinder). Queue + 1.2s per-code cooldown; Done opens an in-cover review list; Save increments existing barcodes in that storage or adds new items. Free: unlimited single scan; bulk tap shows Paywall source=barcode_bulk. Paywall row no longer says history.\par
+\bullet Events: barcode_bulk_scan_started / completed / abandoned. No per-beep barcode_scan_result. Tests: session event shapes, increment vs new, cooldown. xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. SmartInventoryTests F2 cases \emdash TEST SUCCEEDED. CEO console work listed in docs/ceo-manual-work.md.\par
+\par
+{\b iOS-F2 follow-up \emdash Add Item scan vs bulk identity}\par
+[COMPLETED WITH ISSUES]\par
+\bullet CEO Pro device test hit Add Item single-scan (camera dismisses on first code; barcode lives under collapsed More details), not Storage-toolbar bulk. Add Item/Edit Item now expand More details after a successful scan and show a Barcode set chip on the collapsed row.\par
+\bullet Storage bulk icon now has a plus badge; bulk camera title is Bulk barcode scan; VisionKit host uses a stable BulkScanCodeHandler so overlay counter updates do not recreate the camera VC.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. Device keep-open smoke still owed on the storage toolbar path. Free paywall test still owed.\par
+\par
+{\b iOS-F2 follow-up \emdash Items tab bulk entry}\par
+[COMPLETED]\par
+\bullet Pro Items toolbar barcode (same plus-badge icon) opens keep-open bulk. Uses the storage chip when one is selected; otherwise a Save scans to picker. Analytics source=item_list. Free/view-only still get one-shot Scan to Find. Add Item sheet remains one-shot for everyone. Storage-detail Free tap still paywall.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED. SmartInventoryTests F2 cases \emdash TEST SUCCEEDED.\par
+\par
+{\b iOS-F2 follow-up \emdash Pro scan interstitial}\par
+[COMPLETED]\par
+\bullet recordCompletion ignored isPro/shouldShowAds, so a Pro barcode beep opened RealAdIntegrationView's interstitial fullScreenCover. Continue dismissed the scanner and the Add Item / bulk session under it. Gate every show/load/preload path on shouldShowAds; drop per-beep barcodeScanned from the camera (Free ads still fire on itemAdded after Save).\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED.\par
+\par
+{\b iOS-F2 follow-up \emdash Free single-scan product lookup}\par
+[COMPLETED]\par
+\bullet Single-scan enrichment was still Pro-gated (Phase 3). Free scans now call Open Food Facts then UPCItemDB and fill empty name/description/category/UOM. Bulk remains Pro. Paywall note: Free: single scan + product lookup.\par
+\bullet Build: xcodebuild SmartInventory iPhone 17 Pro \emdash BUILD SUCCEEDED.\par
+\par
+{\b iOS-F2 merge}\par
+[COMPLETED]\par
+\bullet CEO approved merge of PR #23 into master_scope_v1 as 8507b77. Handoff for the next session: docs/handoff-2026-09-01.md. CEO console work remains docs/ceo-manual-work.md (T1/T2 listing/T3/T4, Amplitude barcode_bulk_scan_* officialize).\par
+\par
 }

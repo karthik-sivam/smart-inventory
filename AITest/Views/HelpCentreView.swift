@@ -43,6 +43,9 @@ struct HelpCentreView: View {
                 question: "How do I add my first product?",
                 answer: "Go to any Storage, tap the + button, and fill in the item details. You can scan a barcode to auto-fill the name and details."),
         FAQItem(section: "Getting Started",
+                question: "How does bulk barcode scan work?",
+                answer: "Open a storage and tap the barcode icon. Pro keeps the camera open so you can scan many codes, then review and save all. Existing barcodes add quantity; new codes create items. Free users can still scan one barcode at a time."),
+        FAQItem(section: "Getting Started",
                 question: "What is a Storage?",
                 answer: "A Storage is a location in your business — a shelf, room, freezer, or section. Add storages to organise your inventory by location."),
         FAQItem(section: "Getting Started",
@@ -71,7 +74,7 @@ struct HelpCentreView: View {
                 answer: "Go to Settings — Export. You can export as CSV or PDF."),
         FAQItem(section: "Pro",
                 question: "What does Pro include?",
-                answer: "Unlimited storages and items, full analytics history, barcode scanner pro, bulk CSV import, and no ads."),
+                answer: "Unlimited storages and items, full analytics history, bulk barcode scan from a storage or from Items (keep the camera open, then save all), bulk CSV import, and no ads. Free includes unlimited single barcode scans that look up name and details (Scan to Find on Items, and scan inside Add Item)."),
         FAQItem(section: "Pro",
                 question: "How do I upgrade to Pro?",
                 answer: "Go to Settings — Upgrade to Pro to unlock all features instantly."),
@@ -255,12 +258,24 @@ struct HelpCentreView: View {
         aiAnswer = nil
         aiError = nil
 
+        let clock = AIRequestClock(
+            feature: "ask_ai_help",
+            mode: "help",
+            inputBytes: trimmed.utf8.count
+        )
         do {
             let answer = try await AIInventoryService.shared.askHelpQuestion(trimmed)
             AIUsageManager.shared.recordUse(.helpChat)
             aiAnswer = answer
+            let trimmedAnswer = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedAnswer.isEmpty {
+                clock.empty(reason: "empty_answer")
+            } else {
+                clock.succeeded(itemCount: 1)
+            }
         } catch {
             aiError = error.localizedDescription
+            clock.finish(error: error, stage: "receive")
         }
 
         isAsking = false

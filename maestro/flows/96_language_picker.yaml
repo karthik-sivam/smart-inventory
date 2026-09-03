@@ -25,7 +25,9 @@ appId: com.vishuddhi.stoqly
 - tapOn:
     id: "languageOption_en"
     optional: true
-- tapOn: "Done"
+- tapOn:
+    text: "Done"
     optional: true
-- tapOn: "Cancel"
+- tapOn:
+    text: "Cancel"
     optional: true

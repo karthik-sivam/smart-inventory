@@ -342,7 +342,7 @@ final class SmartInventoryTests: XCTestCase {
     }
 
     func testApplyFallbackPriceIfNeededSkipsWhenEdited() {
-        var row = ParsedSaleRow(itemName: "X", quantitySold: 1, pricePerUnit: 0, priceWasEdited: true)
+        var row = ParsedSaleRow(itemName: "X", quantitySold: 1, pricePerUnit: 0, confidence: 0.95, priceWasEdited: true)
         let item = InventoryItem(name: "X", sku: "5", currentQuantity: 1, unitCost: 9)
         item.sellingPrice = 15
         SaleHelpers.applyFallbackPriceIfNeeded(&row, from: item)
@@ -350,11 +350,26 @@ final class SmartInventoryTests: XCTestCase {
     }
 
     func testApplyFallbackPriceIfNeededPrefillsFromItem() {
-        var row = ParsedSaleRow(itemName: "Y", quantitySold: 2, pricePerUnit: 0)
+        var row = ParsedSaleRow(itemName: "Y", quantitySold: 2, pricePerUnit: 0, confidence: 0.95)
         let item = InventoryItem(name: "Y", sku: "6", currentQuantity: 2, unitCost: 4)
         item.lastPurchasePrice = 7
         SaleHelpers.applyFallbackPriceIfNeeded(&row, from: item)
         XCTAssertEqual(row.pricePerUnit, 7)
+    }
+
+    func testParsedSaleRowDTOPreservesClaudeConfidence() throws {
+        let json = #"[{"itemName":"Tea","quantitySold":2,"pricePerUnit":15,"notes":"","confidence":0.87}]"#
+        let dto = try XCTUnwrap(JSONDecoder().decode([ParsedSaleRowDTO].self, from: Data(json.utf8)).first)
+
+        XCTAssertEqual(dto.confidence, 0.87, accuracy: 0.0001)
+        XCTAssertEqual(dto.toParsedSaleRow().confidence, 0.87, accuracy: 0.0001)
+    }
+
+    func testParsedSaleRowDTORequiresConfidence() {
+        let json = #"[{"itemName":"Tea","quantitySold":2,"pricePerUnit":15,"notes":""}]"#
+        XCTAssertThrowsError(
+            try JSONDecoder().decode([ParsedSaleRowDTO].self, from: Data(json.utf8))
+        )
     }
 
     func testNegativeStockMessagesOnlyForNegativeItems() {
@@ -372,6 +387,269 @@ final class SmartInventoryTests: XCTestCase {
         let b = InventoryItem(name: "B", sku: "B1", currentQuantity: 3, unitCost: 4)
         storage.items = [a, b]
         XCTAssertEqual(storage.totalValue, 22, accuracy: 0.001)
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // MARK: - iOS-F8: AI entry chip visibility
+    // ──────────────────────────────────────────────────────────────────────
+
+    func testAIEntryChipHiddenAfterSessionDismiss() {
+        XCTAssertFalse(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartCount,
+                isPro: false,
+                dismissedThisSession: true,
+                hasSmartCountQuotaRemaining: true
+            )
+        )
+        XCTAssertFalse(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartSales,
+                isPro: true,
+                dismissedThisSession: true,
+                hasSmartCountQuotaRemaining: true
+            )
+        )
+    }
+
+    func testAIEntryChipHiddenForFreeUserWhenSmartCountQuotaExhausted() {
+        XCTAssertFalse(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartCount,
+                isPro: false,
+                dismissedThisSession: false,
+                hasSmartCountQuotaRemaining: false
+            )
+        )
+    }
+
+    func testAIEntryChipVisibleForFreeUserWithSmartCountQuota() {
+        XCTAssertTrue(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartCount,
+                isPro: false,
+                dismissedThisSession: false,
+                hasSmartCountQuotaRemaining: true
+            )
+        )
+    }
+
+    func testAIEntryChipSmartSalesAlwaysVisibleUnlessDismissed() {
+        XCTAssertTrue(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartSales,
+                isPro: false,
+                dismissedThisSession: false,
+                hasSmartCountQuotaRemaining: false
+            )
+        )
+        XCTAssertTrue(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartSales,
+                isPro: true,
+                dismissedThisSession: false,
+                hasSmartCountQuotaRemaining: false
+            )
+        )
+    }
+
+    func testAIEntryChipAlwaysVisibleForProOnSmartCount() {
+        XCTAssertTrue(
+            AIEntryChipPolicy.isVisible(
+                feature: .smartCount,
+                isPro: true,
+                dismissedThisSession: false,
+                hasSmartCountQuotaRemaining: false
+            )
+        )
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // MARK: - iOS-D1a: Barcode outcome analytics
+    // ──────────────────────────────────────────────────────────────────────
+
+    func testBarcodeScanResultIncludesCodeWhenACodeWasRead() {
+        let event = StoqlyEvent.barcodeScanResult(
+            outcome: "found",
+            provider: "off",
+            symbology: "EAN-13",
+            code: "8901030865477",
+            durationMs: 420,
+            reason: nil
+        )
+
+        XCTAssertEqual(event.name, "barcode_scan_result")
+        XCTAssertEqual(event.properties["outcome"] as? String, "found")
+        XCTAssertEqual(event.properties["provider"] as? String, "off")
+        XCTAssertEqual(event.properties["symbology"] as? String, "EAN-13")
+        XCTAssertEqual(event.properties["code"] as? String, "8901030865477")
+        XCTAssertEqual(event.properties["duration_ms"] as? Int, 420)
+        XCTAssertNil(event.properties["reason"])
+        XCTAssertNil(event.properties["found"])
+        XCTAssertNil(event.properties["enriched"])
+    }
+
+    func testBarcodeScanResultOmitsNilOptionalProperties() {
+        let event = StoqlyEvent.barcodeScanResult(
+            outcome: "scanner_cancelled",
+            provider: "none",
+            symbology: nil,
+            code: nil,
+            durationMs: 125,
+            reason: nil
+        )
+
+        XCTAssertNil(event.properties["symbology"])
+        XCTAssertNil(event.properties["code"])
+        XCTAssertNil(event.properties["reason"])
+        XCTAssertEqual(event.properties["duration_ms"] as? Int, 125)
+    }
+
+    func testAIRequestSucceededOmitsNilModeAndDoesNotLogPromptText() {
+        let event = StoqlyEvent.aiRequestSucceeded(
+            feature: "voice_count",
+            mode: nil,
+            itemCount: 3,
+            durationMs: 1200,
+            provider: "claude"
+        )
+        XCTAssertEqual(event.name, "ai_request_succeeded")
+        XCTAssertEqual(event.properties["feature"] as? String, "voice_count")
+        XCTAssertEqual(event.properties["item_count"] as? Int, 3)
+        XCTAssertEqual(event.properties["duration_ms"] as? Int, 1200)
+        XCTAssertEqual(event.properties["provider"] as? String, "claude")
+        XCTAssertNil(event.properties["mode"])
+        XCTAssertNil(event.properties["question"])
+        XCTAssertNil(event.properties["transcript"])
+    }
+
+    func testAIRequestFailedUsesExtendedShape() {
+        let event = StoqlyEvent.aiRequestFailed(
+            feature: "ask_ai_help",
+            mode: "help",
+            stage: "receive",
+            errorClass: "network",
+            reason: "The Internet connection appears to be offline.",
+            durationMs: 800
+        )
+        XCTAssertEqual(event.name, "ai_request_failed")
+        XCTAssertEqual(event.properties["feature"] as? String, "ask_ai_help")
+        XCTAssertEqual(event.properties["mode"] as? String, "help")
+        XCTAssertEqual(event.properties["stage"] as? String, "receive")
+        XCTAssertEqual(event.properties["error_class"] as? String, "network")
+        XCTAssertEqual(event.properties["duration_ms"] as? Int, 800)
+    }
+
+    func testAIRequestEmptyAndSmartSalesFailedNames() {
+        let empty = StoqlyEvent.aiRequestEmpty(
+            feature: "photo_count",
+            mode: "photo",
+            durationMs: 400,
+            reason: "no_items_returned"
+        )
+        XCTAssertEqual(empty.name, "ai_request_empty")
+        XCTAssertEqual(empty.properties["reason"] as? String, "no_items_returned")
+
+        let failed = StoqlyEvent.smartSalesFailed(mode: "voice", reason: "parse_error")
+        XCTAssertEqual(failed.name, "smart_sales_failed")
+        XCTAssertEqual(failed.properties["mode"] as? String, "voice")
+    }
+
+    func testSyncCompletedAndFailedShapes() {
+        let started = StoqlyEvent.syncStarted(context: "cold_launch")
+        XCTAssertEqual(started.name, "sync_started")
+        XCTAssertEqual(started.properties["context"] as? String, "cold_launch")
+
+        let completed = StoqlyEvent.syncCompleted(context: "foreground", docsUpdated: 12, durationMs: 900)
+        XCTAssertEqual(completed.name, "sync_completed")
+        XCTAssertEqual(completed.properties["docs_updated"] as? Int, 12)
+        XCTAssertEqual(completed.properties["duration_ms"] as? Int, 900)
+
+        let failed = StoqlyEvent.syncFailed(
+            context: "write",
+            errorClass: "network",
+            reason: "The Internet connection appears to be offline.",
+            durationMs: nil
+        )
+        XCTAssertEqual(failed.name, "sync_failed")
+        XCTAssertEqual(failed.properties["context"] as? String, "write")
+        XCTAssertEqual(failed.properties["error_class"] as? String, "network")
+        XCTAssertNil(failed.properties["duration_ms"])
+        XCTAssertNil(failed.properties["email"])
+    }
+
+    func testExportFailedAndReorderEmailFailedNames() {
+        let exportFailed = StoqlyEvent.exportFailed(format: "pdf", reason: "pdf_render_failed")
+        XCTAssertEqual(exportFailed.name, "export_failed")
+        XCTAssertEqual(exportFailed.properties["format"] as? String, "pdf")
+        XCTAssertEqual(exportFailed.properties["reason"] as? String, "pdf_render_failed")
+
+        let emailFailed = StoqlyEvent.reorderEmailFailed(reason: "cannot_open_mailto")
+        XCTAssertEqual(emailFailed.name, "reorder_email_failed")
+        XCTAssertEqual(emailFailed.properties["reason"] as? String, "cannot_open_mailto")
+        XCTAssertNil(emailFailed.properties["body"])
+    }
+
+    func testBarcodeBulkScanSessionEventShapes() {
+        let started = StoqlyEvent.barcodeBulkScanStarted(source: "storage_detail")
+        XCTAssertEqual(started.name, "barcode_bulk_scan_started")
+        XCTAssertEqual(started.properties["source"] as? String, "storage_detail")
+
+        let fromItems = StoqlyEvent.barcodeBulkScanStarted(source: "item_list")
+        XCTAssertEqual(fromItems.properties["source"] as? String, "item_list")
+
+        let completed = StoqlyEvent.barcodeBulkScanCompleted(
+            scannedCount: 12,
+            newCount: 4,
+            updatedCount: 8,
+            durationMs: 45_000
+        )
+        XCTAssertEqual(completed.name, "barcode_bulk_scan_completed")
+        XCTAssertEqual(completed.properties["scanned_count"] as? Int, 12)
+        XCTAssertEqual(completed.properties["new_count"] as? Int, 4)
+        XCTAssertEqual(completed.properties["updated_count"] as? Int, 8)
+        XCTAssertEqual(completed.properties["duration_ms"] as? Int, 45_000)
+        XCTAssertNil(completed.properties["code"])
+
+        let abandoned = StoqlyEvent.barcodeBulkScanAbandoned(
+            stage: "camera",
+            scannedCount: 3,
+            durationMs: 900
+        )
+        XCTAssertEqual(abandoned.name, "barcode_bulk_scan_abandoned")
+        XCTAssertEqual(abandoned.properties["stage"] as? String, "camera")
+        XCTAssertEqual(abandoned.properties["scanned_count"] as? Int, 3)
+    }
+
+    @MainActor
+    func testBulkBarcodeScanViewModelIncrementsExistingAndAddsNew() {
+        let vm = BulkBarcodeScanViewModel()
+        vm.cooldownSeconds = 0
+        let existingId = UUID()
+        vm.bind(catalog: [
+            .init(id: existingId, name: "Maggi", barcode: "8901030865477")
+        ])
+
+        XCTAssertTrue(vm.ingest(code: "8901030865477", symbology: "EAN-13"))
+        XCTAssertTrue(vm.ingest(code: "8901030865477", symbology: "EAN-13"))
+        XCTAssertTrue(vm.ingest(code: "  890123  ", symbology: "EAN-13"))
+
+        XCTAssertEqual(vm.rows.count, 2)
+        XCTAssertEqual(vm.rows[0].existingItemId, existingId)
+        XCTAssertEqual(vm.rows[0].quantity, 2, accuracy: 0.001)
+        XCTAssertTrue(vm.rows[0].isExisting)
+        XCTAssertEqual(vm.rows[1].code, "890123")
+        XCTAssertFalse(vm.rows[1].isExisting)
+        XCTAssertEqual(vm.rows[1].name, BulkBarcodeScanViewModel.defaultName(for: "890123"))
+    }
+
+    @MainActor
+    func testBulkBarcodeScanCooldownDropsRapidRepeat() {
+        let vm = BulkBarcodeScanViewModel()
+        vm.cooldownSeconds = 10
+        XCTAssertTrue(vm.ingest(code: "111", symbology: "EAN-13"))
+        XCTAssertFalse(vm.ingest(code: "111", symbology: "EAN-13"))
+        XCTAssertEqual(vm.rows.first?.quantity ?? 0, 1, accuracy: 0.001)
     }
 
     func testSaleEventRevenueUsesPriceTimesQty() {

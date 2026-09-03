@@ -14,6 +14,7 @@ struct InventoryAppView: View {
 
     @State private var selectedTab = 0
     @StateObject private var currencyManager = CurrencyManager()
+    @StateObject private var teamManager = TeamManager.shared
 
     // Onboarding: shown once on first ever launch (Maestro: launchApp arguments UITestResetOnboarding: true)
     @State private var showOnboarding = !UserDefaults.hasCompletedOnboarding
@@ -24,6 +25,11 @@ struct InventoryAppView: View {
     @State private var showLanguageOnboarding = false
     private static let postLoginOnboardingKey = "postLoginOnboardingShown"
 
+    // Versioned, cross-device business profile prompt for workspace owners.
+    @State private var showBusinessProfile = false
+    @State private var hasCheckedBusinessProfile = false
+    @State private var businessProfileAudience = "existing_user"
+
     // Paywall
     @State private var showPaywall = false
 
@@ -31,11 +37,16 @@ struct InventoryAppView: View {
     // Deliberately NOT persisted — after reinstall we always want a fresh pull.
     @State private var hasSyncedThisSession = false
 
+    /// One-time `lastCountedAt` migration for pre-1.5 installs. Persisted, so it
+    /// runs at most once per device.
+    @AppStorage("stoqly_didBackfillLastCountedAt") private var hasBackfilledLastCountedAt = false
+
     /// One-time Core Spotlight bulk index after the first non-empty items fetch.
     @AppStorage("spotlightIndexedOnce") private var spotlightIndexedOnce = false
 
     @State private var pendingInvites: [TeamManager.PendingInvite] = []
     @State private var showingInviteAlert = false
+    @State private var showingInviteAcceptError = false
 
     /// Maestro passes `UITestResetOnboarding: true` via launchApp arguments (see maestro/flows/01_onboarding.yaml).
     private static func shouldForceOnboardingForMaestroUITest() -> Bool {
@@ -72,6 +83,17 @@ struct InventoryAppView: View {
             OnboardingLanguageStepView(isPresented: $showLanguageOnboarding)
                 .environmentObject(LocalizationManager.shared)
         }
+        // Required once for owners. Phone remains optional; business type and
+        // State are the only fields that gate completion.
+        .fullScreenCover(isPresented: $showBusinessProfile) {
+            BusinessProfileView(
+                isPresented: $showBusinessProfile,
+                mode: .requiredPrompt(audience: businessProfileAudience)
+            ) { _ in
+                maybeShowPostLoginOnboarding()
+            }
+            .environmentObject(firestoreManager)
+        }
         // Paywall sheet
         .sheet(isPresented: $showPaywall) {
             PaywallView(source: "unknown")
@@ -90,7 +112,7 @@ struct InventoryAppView: View {
                 selectedTab = 0
                 runStartupSync()
                 maybeShowLanguageOnboardingIfNeeded()
-                maybeShowPostLoginOnboarding()
+                Task { await maybeShowBusinessProfile() }
                 Task { await checkPendingInvites() }
             } else {
                 // User signed out — clear all local data immediately.
@@ -98,6 +120,8 @@ struct InventoryAppView: View {
                 clearLocalData()
                 // Reset sync flag so the next sign-in triggers a fresh cloud pull.
                 hasSyncedThisSession = false
+                hasCheckedBusinessProfile = false
+                showBusinessProfile = false
                 spotlightIndexedOnce = false
                 TeamManager.shared.reset()
             }
@@ -105,12 +129,7 @@ struct InventoryAppView: View {
         .alert("Team Invitation", isPresented: $showingInviteAlert,
                presenting: pendingInvites.first) { invite in
             Button("Join as \(invite.role.capitalized)") {
-                Task {
-                    await TeamManager.shared.acceptInvite(invite, modelContext: modelContext)
-                    pendingInvites = []
-                    showingInviteAlert = false
-                    await firestoreManager.pullFromCloud(modelContext: modelContext)
-                }
+                Task { await handleAcceptInvite(invite) }
             }
             Button("Decline", role: .destructive) {
                 Task {
@@ -121,6 +140,15 @@ struct InventoryAppView: View {
             }
         } message: { invite in
             Text("\(invite.ownerName) has invited you to their Stoqly workspace as \(invite.role).")
+        }
+        .alert("Couldn't Join Workspace", isPresented: $showingInviteAcceptError) {
+            Button("Try Again") {
+                if !pendingInvites.isEmpty {
+                    showingInviteAlert = true
+                }
+            }
+        } message: {
+            Text("Couldn't join the workspace. Check your connection and try again.")
         }
         .onChange(of: items.count) { _, _ in
             guard !spotlightIndexedOnce, !items.isEmpty else { return }
@@ -139,7 +167,7 @@ struct InventoryAppView: View {
                 let throttleInterval: TimeInterval = 15 * 60
                 let lastSync = firestoreManager.lastSyncDate ?? .distantPast
                 if Date().timeIntervalSince(lastSync) > throttleInterval {
-                    await firestoreManager.pullFromCloud(modelContext: modelContext)
+                    await firestoreManager.pullFromCloud(modelContext: modelContext, context: "foreground")
                 }
             }
         }
@@ -172,9 +200,18 @@ struct InventoryAppView: View {
             if authManager.isAuthenticated {
                 runStartupSync()
                 maybeShowLanguageOnboardingIfNeeded()
-                maybeShowPostLoginOnboarding()
+                Task { await maybeShowBusinessProfile() }
                 Task { await checkPendingInvites() }
             }
+        }
+        .onChange(of: showOnboarding) { _, isShowing in
+            guard !isShowing, authManager.isAuthenticated else { return }
+            maybeShowLanguageOnboardingIfNeeded()
+            Task { await maybeShowBusinessProfile() }
+        }
+        .onChange(of: showLanguageOnboarding) { _, isShowing in
+            guard !isShowing, authManager.isAuthenticated else { return }
+            Task { await maybeShowBusinessProfile() }
         }
         .onReceive(NotificationCenter.default.publisher(
             for: NSNotification.Name("stoqly.showPaywall"))) { _ in
@@ -191,12 +228,106 @@ struct InventoryAppView: View {
         }
     }
 
+    /// Join and pull only after the remote invite+member batch commits.
+    /// On a true remote failure the invitation is preserved (and reloaded
+    /// when possible) so the user can retry.
+    private func handleAcceptInvite(_ invite: TeamManager.PendingInvite) async {
+        let result = await TeamManager.shared.acceptInvite(invite, modelContext: modelContext)
+        switch result {
+        case .success:
+            pendingInvites = []
+            showingInviteAlert = false
+            await firestoreManager.pullFromCloud(modelContext: modelContext, context: "manual")
+        case .failure:
+            showingInviteAlert = false
+            if TeamManager.shared.isInTeamWorkspace {
+                // Remote batch succeeded (we already joined). Local save may have
+                // failed; safeSave already posted the SwiftData banner. Do not
+                // show the join-failed alert — Try Again would be a no-op.
+                pendingInvites = []
+                await firestoreManager.pullFromCloud(modelContext: modelContext, context: "manual")
+            } else {
+                let reloaded = await TeamManager.shared.checkPendingInvites()
+                if !reloaded.isEmpty {
+                    pendingInvites = reloaded
+                } else if pendingInvites.isEmpty {
+                    pendingInvites = [invite]
+                }
+                showingInviteAcceptError = true
+            }
+        }
+    }
+
     private func maybeShowLanguageOnboardingIfNeeded() {
         guard authManager.isAuthenticated, !hasChosenLanguage else { return }
         showLanguageOnboarding = true
     }
 
     // MARK: - Post-login onboarding
+
+    /// Only a workspace owner is asked to describe the business.
+    private var isBusinessProfileOwnerAudience: Bool {
+        teamManager.isOwner && !teamManager.isInTeamWorkspace
+    }
+
+    /// Checks Firestore once per signed-in session. Missing or older profiles
+    /// receive the required prompt; completed profiles remain completed across devices.
+    private func maybeShowBusinessProfile() async {
+        guard !Self.shouldForceOnboardingForMaestroUITest(),
+              authManager.isAuthenticated,
+              !hasCheckedBusinessProfile,
+              !showOnboarding,
+              !showLanguageOnboarding else { return }
+
+        // Let auth settle and give TeamManager a chance to restore or join a
+        // workspace before we decide whether this person is an owner.
+        try? await Task.sleep(for: .milliseconds(800))
+        guard authManager.isAuthenticated,
+              !showOnboarding,
+              !showLanguageOnboarding,
+              !hasCheckedBusinessProfile else { return }
+
+        // Invited members should not be forced to describe a business they do
+        // not own. Their workspace owner supplies these details. Deliberately
+        // evaluated AFTER the settle delay: TeamManager.reset() clears the
+        // persisted workspace on sign-out, so at the instant of an auth change
+        // every member still looks like an owner.
+        guard isBusinessProfileOwnerAudience else {
+            hasCheckedBusinessProfile = true
+            maybeShowPostLoginOnboarding()
+            return
+        }
+
+        hasCheckedBusinessProfile = true
+        do {
+            if let profile = try await firestoreManager.fetchBusinessProfile(),
+               profile.schemaVersion >= BusinessProfile.currentSchemaVersion {
+                if let uid = authManager.currentUser?.uid {
+                    AnalyticsManager.shared.identifyBusinessProfile(userId: uid, profile: profile)
+                }
+                maybeShowPostLoginOnboarding()
+                return
+            }
+
+            // Re-check: the Firestore round trip above is another window in
+            // which a pending invite can be accepted.
+            guard isBusinessProfileOwnerAudience else {
+                maybeShowPostLoginOnboarding()
+                return
+            }
+
+            businessProfileAudience = storages.isEmpty ? "new_user" : "existing_user"
+            AnalyticsManager.shared.track(.businessProfilePromptShown(
+                audience: businessProfileAudience
+            ))
+            showBusinessProfile = true
+        } catch {
+            // A temporary connectivity problem must not lock the app. The check
+            // retries after the next authentication session or cold launch.
+            hasCheckedBusinessProfile = true
+            maybeShowPostLoginOnboarding()
+        }
+    }
 
     /// Trigger the post-login guided flow only on the user's very first signed-in
     /// session with no storages. After it runs once we persist the flag so it
@@ -214,8 +345,11 @@ struct InventoryAppView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             guard !alreadyShown,
                   authManager.isAuthenticated,
+                  hasCheckedBusinessProfile,
                   storages.isEmpty,
-                  !showOnboarding else { return }
+                  !showOnboarding,
+                  !showLanguageOnboarding,
+                  !showBusinessProfile else { return }
             UserDefaults.standard.set(true, forKey: Self.postLoginOnboardingKey)
             showPostLoginOnboarding = true
         }
@@ -268,7 +402,7 @@ struct InventoryAppView: View {
             //   • Normal login:   restores latest cloud data into local SwiftData.
             //   • After reinstall: SwiftData is empty, pull restores everything.
             //   • Brand-new user: cloud is empty, pull returns 0 — handled below.
-            let cloudCount = await firestoreManager.pullFromCloud(modelContext: modelContext)
+            let cloudCount = await firestoreManager.pullFromCloud(modelContext: modelContext, context: "cold_launch")
 
             // Step 2 — If cloud had nothing but local does, this is a first-time
             //           migration (user had data before cloud sync was introduced).
@@ -291,8 +425,77 @@ struct InventoryAppView: View {
             }
 
             let freshItems = (try? modelContext.fetch(FetchDescriptor<InventoryItem>())) ?? []
+            await backfillLastCountedAtIfNeeded(items: freshItems)
             NotificationManager.shared.refreshLocalDigestSchedule(items: freshItems)
         }
+    }
+
+    /// One-time migration to populate `lastCountedAt`.
+    ///
+    /// Runs in two passes because the history lives in two places and neither is
+    /// sufficient alone:
+    ///
+    /// 1. Local `InventoryCount` rows — free, but gone for anyone who has signed
+    ///    out or reinstalled, since sign-out wipes them and the pull never
+    ///    restored them.
+    /// 2. The Firestore counts subcollection — where that history has been
+    ///    accumulating all along, unread. One tiny query per unresolved item.
+    ///
+    /// Purely additive: it only fills a nil, never overwrites, never clears.
+    /// The completion flag is set only when nothing failed, so a partial run
+    /// retries on the next launch instead of stranding items forever.
+    private func backfillLastCountedAtIfNeeded(items: [InventoryItem]) async {
+        guard !hasBackfilledLastCountedAt else { return }
+
+        // Pass 1 — local history.
+        var migrated: [InventoryItem] = []
+        for item in items where item.lastCountedAt == nil {
+            guard let newest = item.countHistory.map(\.countDate).max() else { continue }
+            item.lastCountedAt = newest
+            migrated.append(item)
+        }
+
+        // Pass 2 — anything still unresolved, from the cloud. Identifiers are
+        // read here on the main actor so no SwiftData model crosses into the
+        // detached queries.
+        let unresolved = items.filter { $0.lastCountedAt == nil }
+        let identifiers: [(itemID: UUID, storageID: UUID)] = unresolved.compactMap { item in
+            guard let storageID = item.storage?.id else { return nil }
+            return (itemID: item.id, storageID: storageID)
+        }
+
+        var cloudFailures = 0
+        if !identifiers.isEmpty {
+            let result = await firestoreManager.latestCountDates(for: identifiers)
+            cloudFailures = result.failed
+            let byID = Dictionary(unresolved.map { ($0.id, $0) },
+                                  uniquingKeysWith: { first, _ in first })
+            for (itemID, date) in result.dates {
+                guard let item = byID[itemID] else { continue }
+                item.lastCountedAt = date
+                migrated.append(item)
+            }
+        }
+
+        // Complete on "no query failed", NOT on "everything got a date". An item
+        // that has genuinely never been counted returns an empty but successful
+        // query, and an item with no storage can never be looked up at all —
+        // gating on either would re-run the entire cloud pass every launch.
+        let isComplete = cloudFailures == 0
+
+        if migrated.isEmpty {
+            if isComplete { hasBackfilledLastCountedAt = true }
+            return
+        }
+        guard modelContext.safeSave(context: "backfillLastCountedAt") else { return }
+        if isComplete { hasBackfilledLastCountedAt = true }
+
+        // Push only what changed — syncItem debounces per item, so syncing
+        // untouched items would queue a task each for no reason.
+        for item in migrated {
+            firestoreManager.syncItem(item)
+        }
+        print("Migration: stamped lastCountedAt on \(migrated.count) item(s), \(cloudFailures) lookup failure(s)")
     }
 }
 
@@ -667,7 +870,7 @@ struct CountItemCard: View {
                 // Last counted
                 Text(lastCountedText(for: item))
                     .font(.caption2)
-                    .foregroundColor(item.countHistory.isEmpty ? .red.opacity(0.8) : .secondary)
+                    .foregroundColor(item.hasNeverBeenCounted ? .red.opacity(0.8) : .secondary)
             }
 
             Spacer()
@@ -698,10 +901,10 @@ struct CountItemCard: View {
     }
 
     private func lastCountedText(for item: InventoryItem) -> String {
-        guard let latest = item.countHistory.sorted(by: { $0.countDate > $1.countDate }).first else {
+        guard let latest = item.effectiveLastCountedAt else {
             return L("Never counted", "Never counted")
         }
-        let days = Calendar.current.dateComponents([.day], from: latest.countDate, to: Date()).day ?? 0
+        let days = Calendar.current.dateComponents([.day], from: latest, to: Date()).day ?? 0
         if days == 0 {
             return L("Counted today", "Counted today")
         }

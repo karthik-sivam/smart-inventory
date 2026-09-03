@@ -4,7 +4,7 @@ import Speech
 import AVFoundation
 
 struct SmartSalesVoiceView: View {
-    var onCompleted: (() -> Void)? = nil
+    var onCompleted: ((Int) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var currencyManager: CurrencyManager
@@ -29,7 +29,7 @@ struct SmartSalesVoiceView: View {
                 case .review:
                     SaleEntryReviewView(
                         rows: $parsedRows,
-                        onConfirm: { onCompleted?() ?? dismiss() },
+                        onConfirm: { count in onCompleted?(count) ?? dismiss() },
                         onCancel: { step = .record }
                     )
                     .environmentObject(currencyManager)
@@ -205,14 +205,22 @@ struct SmartSalesVoiceView: View {
     private func analyzeTranscript() {
         step = .analyzing
         Task {
+            let clock = AIRequestClock(
+                feature: "voice_sales",
+                mode: "voice",
+                inputBytes: transcript.utf8.count
+            )
             do {
                 parsedRows = try await AIInventoryService.shared.parseSalesTranscript(
                     transcript: transcript,
                     knownItemNames: allItems.map(\.name)
                 )
+                clock.finish(itemCount: parsedRows.count)
                 AnalyticsManager.shared.track(.smartSalesModeSelected(mode: "voice"))
                 step = .review
             } catch {
+                clock.finish(error: error, stage: "parse")
+                AnalyticsManager.shared.track(.smartSalesFailed(mode: "voice", reason: error.localizedDescription))
                 errorMessage = error.localizedDescription
                 step = .record
             }
