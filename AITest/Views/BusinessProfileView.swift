@@ -135,14 +135,22 @@ struct BusinessProfileView: View {
             )
         }
         .sheet(isPresented: $showCountryPicker) {
-            CountrySelectionSheet(selectedCountry: $selectedCountry)
-        }
-        .onChange(of: selectedCountry) { oldValue, newValue in
-            // An Indian State is meaningless once the country changes, and a
-            // free-typed province is meaningless once it becomes India.
-            guard oldValue != newValue else { return }
-            selectedState = ""
-            if focusedField == .state { focusedField = nil }
+            // The subdivision is cleared HERE, on the user's own selection —
+            // deliberately not in an `.onChange(of: selectedCountry)`.
+            // `.onChange` also fires for programmatic assignment, and it runs on
+            // the next view update rather than at the assignment. Loading an
+            // existing profile sets country then state, so the handler ran after
+            // both and wiped the freshly loaded State every time the stored
+            // country differed from the device default — which is exactly the
+            // case for profiles saved before the country field existed, since
+            // those read back as "IN". A boolean "am I loading" guard cannot fix
+            // that: it would already be reset by the time the handler ran.
+            CountrySelectionSheet(selectedCountry: selectedCountry) { newCode in
+                guard newCode != selectedCountry else { return }
+                selectedCountry = newCode
+                selectedState = ""
+                if focusedField == .state { focusedField = nil }
+            }
         }
         .task { await loadExistingProfileIfNeeded() }
         .onChange(of: selectedBusinessType) { _, newValue in
@@ -845,7 +853,8 @@ private struct SubdivisionSelectionSheet: View {
 /// Searchable ISO country picker. Same shape as the State sheet — ~250 entries
 /// makes a menu unusable.
 private struct CountrySelectionSheet: View {
-    @Binding var selectedCountry: String
+    let selectedCountry: String
+    let onSelect: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
 
@@ -863,7 +872,7 @@ private struct CountrySelectionSheet: View {
             List {
                 ForEach(matches, id: \.code) { entry in
                     Button {
-                        selectedCountry = entry.code
+                        onSelect(entry.code)
                         dismiss()
                     } label: {
                         HStack {
