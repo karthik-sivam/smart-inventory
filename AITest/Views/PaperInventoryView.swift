@@ -486,6 +486,7 @@ struct PaperInventoryView: View {
             case .existing(let existing):
                 let count = InventoryCount(previousQuantity: existing.currentQuantity, countedQuantity: qty, notes: "Sheet inventory")
                 existing.countHistory.append(count)
+existing.lastCountedAt = count.countDate
                 existing.currentQuantity = qty
                 existing.applyCapturedFields(from: editable)
                 appliedCount += 1

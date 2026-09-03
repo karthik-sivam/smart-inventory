@@ -316,6 +316,7 @@ struct BulkBarcodeScanFlowView: View {
                     item: existing
                 )
                 existing.countHistory.append(count)
+existing.lastCountedAt = count.countDate
                 existing.currentQuantity = next
                 existing.updatedAt = Date()
                 let event = ActivityEvent(

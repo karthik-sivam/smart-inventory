@@ -904,6 +904,7 @@ struct VoiceInventoryView: View {
                 let qty = editable.quantity ?? existing.currentQuantity
                 let count = InventoryCount(previousQuantity: existing.currentQuantity, countedQuantity: qty, notes: "Voice inventory")
                 existing.countHistory.append(count)
+existing.lastCountedAt = count.countDate
                 existing.currentQuantity = qty
                 existing.applyCapturedFields(from: editable)
                 let event = ActivityEvent(

@@ -928,6 +928,7 @@ struct ImageInventoryView: View {
         if let existing = matchedExistingItem {
             let count = InventoryCount(previousQuantity: existing.currentQuantity, countedQuantity: qty, notes: "Photo inventory")
             existing.countHistory.append(count)
+            existing.lastCountedAt = count.countDate
             existing.currentQuantity = qty
             if let parsed = parsedItem {
                 existing.applyCapturedFields(from: parsed)
@@ -1012,6 +1013,7 @@ struct ImageInventoryView: View {
                     notes: "Photo shelf scan"
                 )
                 existing.countHistory.append(count)
+            existing.lastCountedAt = count.countDate
                 existing.currentQuantity = qty
                 existing.applyCapturedFields(from: editable)
                 let event = ActivityEvent(

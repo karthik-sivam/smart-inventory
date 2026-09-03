@@ -726,6 +726,7 @@ struct SmartCountCSVView: View {
                 item: item
             )
             item.countHistory.append(count)
+item.lastCountedAt = count.countDate
             item.currentQuantity = row.quantity
             item.updatedAt = Date()
             savedCount += 1

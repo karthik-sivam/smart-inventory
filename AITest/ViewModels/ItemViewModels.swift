@@ -483,6 +483,7 @@ final class CountItemViewModel: ObservableObject {
         // Explicitly append to countHistory so the inverse relationship is
         // always populated regardless of SwiftData's auto-linking behavior.
         item.countHistory.append(count)
+item.lastCountedAt = count.countDate
         item.currentQuantity = newQuantity
         item.updatedAt       = Date()
         modelContext.insert(count)

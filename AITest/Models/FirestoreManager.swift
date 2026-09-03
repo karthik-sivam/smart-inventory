@@ -429,56 +429,6 @@ class FirestoreManager: ObservableObject {
         }
     }
 
-    /// Mirrors an active StoreKit free trial into `manualProUntil` (iOS-F1).
-    ///
-    /// `manualProUntil` is deliberately reused rather than adding a trial-specific
-    /// field: it is already the one field every client reads as "grant Pro until",
-    /// and the Firestore schema rule for this project is additive-only.
-    ///
-    /// Writes only when it would *extend* the grant, so a longer support-issued comp
-    /// is never shortened by a 7-day trial starting underneath it.
-    func setManualProUntil(_ date: Date) async {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
-        let ref = db.collection("users").document(uid)
-        do {
-            let existing = (try? await ref.getDocument())?
-                .data()?["manualProUntil"] as? Timestamp
-            if let existing, existing.dateValue() >= date {
-                // An existing grant already runs at least as long — leave it alone.
-                return
-            }
-            try await ref.setData(
-                ["manualProUntil": Timestamp(date: date)],
-                merge: true
-            )
-        } catch {
-            print("[Firestore] Failed to write manualProUntil: \(error.localizedDescription)")
-        }
-    }
-
-    /// Rolls back a trial's `manualProUntil` when the trial ends, converts, or is refunded.
-    ///
-    /// Clears only when the stored value still matches what the trial wrote. If support
-    /// extended the grant in the meantime, or a different device wrote a longer window,
-    /// the stored value differs and we leave it untouched — a trial ending must never
-    /// revoke a comp somebody deliberately granted.
-    func clearManualProUntil(ifMatching written: Date) async {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
-        let ref = db.collection("users").document(uid)
-        do {
-            guard let stored = (try await ref.getDocument())
-                .data()?["manualProUntil"] as? Timestamp else { return }
-            // Second granularity is enough; Firestore round-trips ms.
-            guard abs(stored.dateValue().timeIntervalSince(written)) < 1 else {
-                print("[Firestore] manualProUntil differs from the trial value — leaving it.")
-                return
-            }
-            try await ref.updateData(["manualProUntil": FieldValue.delete()])
-        } catch {
-            print("[Firestore] Failed to clear manualProUntil: \(error.localizedDescription)")
-        }
-    }
-
     /// Fetches manualProUntil from Firestore. Returns true if a valid future date exists.
     func fetchManualProGrant() async -> Bool {
         guard let uid = Auth.auth().currentUser?.uid else { return false }
@@ -663,6 +613,13 @@ class FirestoreManager: ObservableObject {
             "updatedAt": Timestamp(date: item.updatedAt),
             "isDeleted": false
         ]
+        // The counts subcollection is written but never read back, so this date
+        // is what survives a reinstall or a new device. Only ever written, never
+        // cleared to null: a client that has not yet backfilled must not wipe a
+        // value another device already established.
+        if let counted = item.effectiveLastCountedAt {
+            data["lastCountedAt"] = Timestamp(date: counted)
+        }
         if let exp = item.expiryDate {
             data["expiryDate"] = Timestamp(date: exp)
         } else {
@@ -751,6 +708,64 @@ class FirestoreManager: ObservableObject {
                 .collection("counts").document(count.id.uuidString)
             try? await countRef.setData(data, merge: true)
         }
+    }
+
+    /// Newest `countDate` per item, read straight from the counts subcollection.
+    ///
+    /// One-time recovery for the `lastCountedAt` migration. Counts have always
+    /// been pushed to Firestore but never pulled back, so any user who signed
+    /// out or reinstalled has cloud history that the device cannot see. This
+    /// reads only the single newest row per item — enough to answer "when was
+    /// this last counted" without rehydrating thousands of records.
+    ///
+    /// Returns only the items it could resolve. A thrown query is skipped rather
+    /// than defaulted, so the caller can tell a partial run from a complete one
+    /// and avoid marking an incomplete migration as done.
+    ///
+    /// - Parameter identifiers: `(itemID, storageID)` pairs, read on the caller's
+    ///   actor so no SwiftData model crosses a task boundary.
+    func latestCountDates(
+        for identifiers: [(itemID: UUID, storageID: UUID)]
+    ) async -> (dates: [UUID: Date], failed: Int) {
+        guard let userDocument = try? userRef(), !identifiers.isEmpty else {
+            return ([:], identifiers.count)
+        }
+
+        var resolved: [UUID: Date] = [:]
+        var failed = 0
+
+        // Bounded concurrency: fast enough for a few hundred items without
+        // opening hundreds of simultaneous connections on a shop's mobile data.
+        let batchSize = 8
+        for chunk in stride(from: 0, to: identifiers.count, by: batchSize).map({
+            Array(identifiers[$0..<min($0 + batchSize, identifiers.count)])
+        }) {
+            await withTaskGroup(of: (UUID, Date?, Bool).self) { group in
+                for entry in chunk {
+                    group.addTask {
+                        let query = userDocument
+                            .collection("storages").document(entry.storageID.uuidString)
+                            .collection("items").document(entry.itemID.uuidString)
+                            .collection("counts")
+                            .order(by: "countDate", descending: true)
+                            .limit(to: 1)
+                        do {
+                            let snapshot = try await query.getDocuments()
+                            let date = (snapshot.documents.first?
+                                .data()["countDate"] as? Timestamp)?.dateValue()
+                            return (entry.itemID, date, false)
+                        } catch {
+                            return (entry.itemID, nil, true)
+                        }
+                    }
+                }
+                for await (itemID, date, didFail) in group {
+                    if didFail { failed += 1 }
+                    else if let date { resolved[itemID] = date }
+                }
+            }
+        }
+        return (resolved, failed)
     }
 
     func syncActivity(_ event: ActivityEvent) {
@@ -1340,6 +1355,16 @@ class FirestoreManager: ObservableObject {
                 if let tidString = data["createdFromTemplateId"] as? String {
                     found.createdFromTemplateId = UUID(uuidString: tidString)
                 }
+                if let ts = data["lastCountedAt"] as? Timestamp {
+                    // Never move the date backwards: a local count that has not
+                    // been pushed yet is newer than whatever the cloud holds.
+                    let cloudCounted = ts.dateValue()
+                    if let current = found.lastCountedAt {
+                        found.lastCountedAt = max(current, cloudCounted)
+                    } else {
+                        found.lastCountedAt = cloudCounted
+                    }
+                }
                 // isOutOfStock from Firestore is ignored — derived from currentQuantity locally
                 found.updatedAt = cloudUpdated
             }
@@ -1358,6 +1383,9 @@ class FirestoreManager: ObservableObject {
                 storage: storage
             )
             newItem.id = id
+            if let ts = data["lastCountedAt"] as? Timestamp {
+                newItem.lastCountedAt = ts.dateValue()
+            }
             newItem.uom = resolveUOM(
                 symbol: (data["uomSymbol"] as? String) ?? (data["uom"] as? String),
                 name: data["uomName"] as? String,

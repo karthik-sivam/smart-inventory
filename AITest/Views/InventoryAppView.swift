@@ -37,6 +37,10 @@ struct InventoryAppView: View {
     // Deliberately NOT persisted — after reinstall we always want a fresh pull.
     @State private var hasSyncedThisSession = false
 
+    /// One-time `lastCountedAt` migration for pre-1.5 installs. Persisted, so it
+    /// runs at most once per device.
+    @AppStorage("stoqly_didBackfillLastCountedAt") private var hasBackfilledLastCountedAt = false
+
     /// One-time Core Spotlight bulk index after the first non-empty items fetch.
     @AppStorage("spotlightIndexedOnce") private var spotlightIndexedOnce = false
 
@@ -421,8 +425,77 @@ struct InventoryAppView: View {
             }
 
             let freshItems = (try? modelContext.fetch(FetchDescriptor<InventoryItem>())) ?? []
+            await backfillLastCountedAtIfNeeded(items: freshItems)
             NotificationManager.shared.refreshLocalDigestSchedule(items: freshItems)
         }
+    }
+
+    /// One-time migration to populate `lastCountedAt`.
+    ///
+    /// Runs in two passes because the history lives in two places and neither is
+    /// sufficient alone:
+    ///
+    /// 1. Local `InventoryCount` rows — free, but gone for anyone who has signed
+    ///    out or reinstalled, since sign-out wipes them and the pull never
+    ///    restored them.
+    /// 2. The Firestore counts subcollection — where that history has been
+    ///    accumulating all along, unread. One tiny query per unresolved item.
+    ///
+    /// Purely additive: it only fills a nil, never overwrites, never clears.
+    /// The completion flag is set only when nothing failed, so a partial run
+    /// retries on the next launch instead of stranding items forever.
+    private func backfillLastCountedAtIfNeeded(items: [InventoryItem]) async {
+        guard !hasBackfilledLastCountedAt else { return }
+
+        // Pass 1 — local history.
+        var migrated: [InventoryItem] = []
+        for item in items where item.lastCountedAt == nil {
+            guard let newest = item.countHistory.map(\.countDate).max() else { continue }
+            item.lastCountedAt = newest
+            migrated.append(item)
+        }
+
+        // Pass 2 — anything still unresolved, from the cloud. Identifiers are
+        // read here on the main actor so no SwiftData model crosses into the
+        // detached queries.
+        let unresolved = items.filter { $0.lastCountedAt == nil }
+        let identifiers: [(itemID: UUID, storageID: UUID)] = unresolved.compactMap { item in
+            guard let storageID = item.storage?.id else { return nil }
+            return (itemID: item.id, storageID: storageID)
+        }
+
+        var cloudFailures = 0
+        if !identifiers.isEmpty {
+            let result = await firestoreManager.latestCountDates(for: identifiers)
+            cloudFailures = result.failed
+            let byID = Dictionary(unresolved.map { ($0.id, $0) },
+                                  uniquingKeysWith: { first, _ in first })
+            for (itemID, date) in result.dates {
+                guard let item = byID[itemID] else { continue }
+                item.lastCountedAt = date
+                migrated.append(item)
+            }
+        }
+
+        // Complete on "no query failed", NOT on "everything got a date". An item
+        // that has genuinely never been counted returns an empty but successful
+        // query, and an item with no storage can never be looked up at all —
+        // gating on either would re-run the entire cloud pass every launch.
+        let isComplete = cloudFailures == 0
+
+        if migrated.isEmpty {
+            if isComplete { hasBackfilledLastCountedAt = true }
+            return
+        }
+        guard modelContext.safeSave(context: "backfillLastCountedAt") else { return }
+        if isComplete { hasBackfilledLastCountedAt = true }
+
+        // Push only what changed — syncItem debounces per item, so syncing
+        // untouched items would queue a task each for no reason.
+        for item in migrated {
+            firestoreManager.syncItem(item)
+        }
+        print("Migration: stamped lastCountedAt on \(migrated.count) item(s), \(cloudFailures) lookup failure(s)")
     }
 }
 
@@ -797,7 +870,7 @@ struct CountItemCard: View {
                 // Last counted
                 Text(lastCountedText(for: item))
                     .font(.caption2)
-                    .foregroundColor(item.countHistory.isEmpty ? .red.opacity(0.8) : .secondary)
+                    .foregroundColor(item.hasNeverBeenCounted ? .red.opacity(0.8) : .secondary)
             }
 
             Spacer()
@@ -828,10 +901,10 @@ struct CountItemCard: View {
     }
 
     private func lastCountedText(for item: InventoryItem) -> String {
-        guard let latest = item.countHistory.sorted(by: { $0.countDate > $1.countDate }).first else {
+        guard let latest = item.effectiveLastCountedAt else {
             return L("Never counted", "Never counted")
         }
-        let days = Calendar.current.dateComponents([.day], from: latest.countDate, to: Date()).day ?? 0
+        let days = Calendar.current.dateComponents([.day], from: latest, to: Date()).day ?? 0
         if days == 0 {
             return L("Counted today", "Counted today")
         }
