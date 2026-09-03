@@ -16,7 +16,7 @@ import SwiftData
 // │  • PDF export                                                   │
 // │  • Push notifications (low stock alerts)                        │
 // ├─────────────────────────────────────────────────────────────────┤
-// │  PRO  — 7-day free trial, then the localized StoreKit price     │
+// │  PRO  — the localized StoreKit price. No free trial.            │
 // │  Everything in Free, plus:                                      │
 // │  • Unlimited storage areas                                      │
 // │  • Unlimited items per storage                                  │
@@ -40,15 +40,14 @@ import SwiftData
 // SETUP REQUIRED in App Store Connect:
 //   Subscription Group: "Stoqly Pro"
 //     Products:
-//       com.vishuddhi.stoqly.pro.monthly   (7-day free trial introductory offer)
-//       com.vishuddhi.stoqly.pro.annual    (7-day free trial introductory offer)
+//       com.vishuddhi.stoqly.pro.monthly
+//       com.vishuddhi.stoqly.pro.annual
 //
 //   Non-Consumable IAP:
 //       com.vishuddhi.stoqly.removeads     (one-time)
 //
-//   Both subscriptions MUST have a 7-day Free Trial introductory offer
-//   configured in App Store Connect. The local SmartInventory.storekit mirrors
-//   this for simulator testing.
+//   Stoqly deliberately offers NO free trial. Do not configure an introductory
+//   offer in App Store Connect, and do not reintroduce trial copy anywhere.
 //
 //   In Xcode: Target → Signing & Capabilities → + → In-App Purchase
 //   For local testing: assign SmartInventory.storekit to your Run scheme.
@@ -76,27 +75,14 @@ class SubscriptionManager: ObservableObject {
     @Published var products: [Product] = []
     @Published var purchaseState: PurchaseState = .idle
     @Published var isLoading = false
-    /// Expiration of the active Pro entitlement (subscription renewal date or trial end).
+    /// Expiration of the active Pro entitlement (subscription renewal date).
     @Published private(set) var proSubscriptionExpirationDate: Date?
-    /// True when the active Pro entitlement is the 7-day introductory free trial.
-    /// Trial users ARE Pro — `isPro` stays the single entitlement source of truth.
-    @Published private(set) var isTrialActive: Bool = false
-    /// True when StoreKit reports this customer may still redeem the intro offer.
-    /// Drives whether the paywall is allowed to merchandise the free trial at all;
-    /// advertising a trial to an ineligible customer is a false claim.
-    @Published private(set) var isEligibleForTrial: Bool = false
-
-    /// When the active free trial ends. `nil` whenever no trial is running.
-    /// Distinct from `proSubscriptionExpirationDate`, which is the expiry of *any*
-    /// Pro entitlement (paid renewal date included).
-    var trialEndsAt: Date? { isTrialActive ? proSubscriptionExpirationDate : nil }
-
     /// Plan label ("monthly" / "annual") of the currently-entitled subscription.
-    /// Used to stamp the trial_* analytics events.
+    /// Used to stamp subscription analytics events.
     private(set) var currentPlanLabel: String?
 
     /// The standalone Remove Ads purchase, held separately from `hasRemovedAds`
-    /// (which also folds in Pro) so ad state can be re-resolved after a trial ends
+    /// (which also folds in Pro) so ad state can be re-resolved after Pro lapses
     /// without rescanning every entitlement.
     private var hasStandaloneRemoveAds = false
 
@@ -175,7 +161,6 @@ class SubscriptionManager: ObservableObject {
 
     func purchase(_ product: Product) async {
         purchaseState = .purchasing
-        let trialPlan = isEligibleForTrial ? Self.planLabel(forProductID: product.id) : nil
         do {
             let result = try await product.purchase()
             switch result {
@@ -210,50 +195,14 @@ class SubscriptionManager: ObservableObject {
 
             case .userCancelled:
                 purchaseState = .cancelled
-                if let trialPlan {
-                    AnalyticsManager.shared.track(
-                        .trialStartFailed(
-                            plan: trialPlan,
-                            errorClass: "user_cancelled",
-                            reason: "user_cancelled"
-                        )
-                    )
-                }
 
             @unknown default:
                 purchaseState = .idle
-                if let trialPlan {
-                    AnalyticsManager.shared.track(
-                        .trialStartFailed(
-                            plan: trialPlan,
-                            errorClass: "unknown",
-                            reason: "unknown_purchase_result"
-                        )
-                    )
-                }
             }
         } catch StoreKitError.userCancelled {
             purchaseState = .cancelled
-            if let trialPlan {
-                AnalyticsManager.shared.track(
-                    .trialStartFailed(
-                        plan: trialPlan,
-                        errorClass: "user_cancelled",
-                        reason: "user_cancelled"
-                    )
-                )
-            }
         } catch {
             purchaseState = .failed(error.localizedDescription)
-            if let trialPlan {
-                AnalyticsManager.shared.track(
-                    .trialStartFailed(
-                        plan: trialPlan,
-                        errorClass: trialStartErrorClass(for: error),
-                        reason: error.localizedDescription
-                    )
-                )
-            }
             print("StoreKit ❌ Purchase failed: \(error.localizedDescription)")
         }
     }
@@ -308,40 +257,11 @@ class SubscriptionManager: ObservableObject {
         return count
     }
 
-    private func trialStartErrorClass(for error: Error) -> String {
-        if let urlError = error as? URLError {
-            return urlError.code == .cancelled ? "user_cancelled" : "network"
-        }
-        if let storeKitError = error as? StoreKitError {
-            switch storeKitError {
-            case .userCancelled: return "user_cancelled"
-            case .networkError: return "network"
-            case .notEntitled: return "ineligible"
-            default: return "storekit_error"
-            }
-        }
-        if let purchaseError = error as? Product.PurchaseError {
-            switch purchaseError {
-            case .ineligibleForOffer: return "ineligible"
-            default: return "storekit_error"
-            }
-        }
-        let nsError = error as NSError
-        if nsError.domain == NSURLErrorDomain { return "network" }
-        let message = error.localizedDescription.lowercased()
-        if message.contains("eligible") || message.contains("introductory") { return "ineligible" }
-        if nsError.domain.lowercased().contains("storekit") ||
-            nsError.domain.lowercased().contains("asd") {
-            return "storekit_error"
-        }
-        return "unknown"
-    }
-
     // MARK: - Status Refresh
 
-    /// Days until the Pro trial ends; `nil` when not on a trial or expiry is unknown.
-    var trialDaysRemaining: Int? {
-        guard let expiry = trialEndsAt else { return nil }
+    /// Days until the Pro entitlement lapses; `nil` when not Pro or expiry unknown.
+    var proDaysRemaining: Int? {
+        guard isPro, let expiry = proSubscriptionExpirationDate else { return nil }
         let days = Calendar.current.dateComponents([.day], from: Date(), to: expiry).day ?? 0
         return max(0, days)
     }
@@ -354,7 +274,6 @@ class SubscriptionManager: ObservableObject {
         var hasPro = false
         var hasNoAds = false
         var proExpiry: Date?
-        var onTrial = false
         var planLabel: String?
 
         for await result in StoreKit.Transaction.currentEntitlements {
@@ -372,9 +291,6 @@ class SubscriptionManager: ObservableObject {
                         proExpiry = expiry
                     }
                 }
-                if transaction.offer?.type == .introductory {
-                    onTrial = true
-                }
                 planLabel = Self.planLabel(forProductID: transaction.productID)
             case ProductID.removeAds.rawValue:
                 hasNoAds = true
@@ -385,7 +301,6 @@ class SubscriptionManager: ObservableObject {
 
         isPro = hasPro || manualProGrantActive
         proSubscriptionExpirationDate = proExpiry
-        isTrialActive = onTrial
         currentPlanLabel = planLabel
         // Pro includes ad removal
         hasStandaloneRemoveAds = hasNoAds
@@ -399,14 +314,11 @@ class SubscriptionManager: ObservableObject {
             AdManager.shared.disableAds()
         }
 
-        await refreshTrialEligibility()
         // Runs last: it reads the entitlement state resolved above to decide which
-        // trial_* event to emit and whether manualProUntil needs writing or clearing.
-        await reconcileTrialLifecycle(hasPaidEntitlement: hasPro)
     }
 
     /// Maps a subscription product ID to the analytics plan label.
-    /// The trial_* taxonomy uses "monthly" / "yearly" (agreed with data-analyst);
+    /// The subscription taxonomy uses "monthly" / "yearly" (agreed with data-analyst);
     /// note `subscription_started` predates this and uses "annual" — left untouched.
     private static func planLabel(forProductID id: String) -> String? {
         switch id {
@@ -418,164 +330,10 @@ class SubscriptionManager: ObservableObject {
 
     /// Asks StoreKit whether this customer can still redeem the introductory offer.
     /// Eligibility is per subscription *group*, so either product answers for both.
-    private func refreshTrialEligibility() async {
-        guard let subscription = (proMonthlyProduct ?? proAnnualProduct)?.subscription else {
-            isEligibleForTrial = false
-            return
-        }
-        // Only merchandise a trial that actually exists on the product.
-        guard subscription.introductoryOffer?.paymentMode == .freeTrial else {
-            isEligibleForTrial = false
-            return
-        }
-        isEligibleForTrial = await subscription.isEligibleForIntroOffer
-    }
-
     /// Applies a manual Pro grant from Firestore (manualProUntil field in Firebase console).
     /// Recomputes StoreKit + grant entitlements so revoked/expired grants clear Pro access.
     func applyManualProGrantIfNeeded() async {
         await refreshPurchaseStatus()
-    }
-
-    // MARK: - Trial Lifecycle
-    //
-    // The 7-day free trial is an App Store introductory offer, so StoreKit owns the
-    // truth and we only observe it. This reconciler turns those observations into
-    // (a) the trial_* analytics events and (b) the Firestore `manualProUntil` mirror.
-    //
-    // It is edge-triggered: it compares the StoreKit state resolved by
-    // refreshPurchaseStatus() against the last state we persisted locally, and acts
-    // only on a transition. That keeps every event exactly-once even though
-    // refreshPurchaseStatus() runs on launch, on foreground, and on every
-    // Transaction.updates delivery.
-
-    private enum TrialDefaultsKey {
-        /// Plan label of the trial we are currently tracking; nil when none.
-        static let plan            = "trial.tracked.plan"
-        /// When we first observed the trial — the base for days_used.
-        static let startedAt       = "trial.tracked.startedAt"
-        /// Observed trial end date.
-        static let endsAt          = "trial.tracked.endsAt"
-        /// True once trial_cancelled has been reported for this trial.
-        static let cancelReported  = "trial.tracked.cancelReported"
-        /// The manualProUntil value THIS device wrote for the trial. Presence of this
-        /// marker is what makes the rollback safe — see clearTrialProGrant().
-        static let grantWritten    = "trial.tracked.grantWritten"
-    }
-
-    private var defaults: UserDefaults { .standard }
-
-    /// Whole days elapsed since the trial began, floored at 0.
-    private func daysUsed(since start: Date) -> Int {
-        max(0, Calendar.current.dateComponents([.day], from: start, to: Date()).day ?? 0)
-    }
-
-    private func reconcileTrialLifecycle(hasPaidEntitlement: Bool) async {
-        let trackedPlan = defaults.string(forKey: TrialDefaultsKey.plan)
-
-        if isTrialActive, let endsAt = trialEndsAt {
-            let plan = currentPlanLabel ?? trackedPlan ?? "monthly"
-
-            if trackedPlan == nil {
-                // ── Transition: no trial → trial running. ──────────────────────
-                defaults.set(plan,     forKey: TrialDefaultsKey.plan)
-                defaults.set(Date(),   forKey: TrialDefaultsKey.startedAt)
-                defaults.set(endsAt,   forKey: TrialDefaultsKey.endsAt)
-                defaults.set(false,    forKey: TrialDefaultsKey.cancelReported)
-
-                AnalyticsManager.shared.track(
-                    .trialStarted(plan: plan, endsAt: endsAt, source: "paywall")
-                )
-                await writeTrialProGrant(endsAt: endsAt)
-            } else {
-                // Trial still running — keep the observed end date fresh (a sandbox
-                // or storefront change can move it) and watch for a cancellation.
-                defaults.set(endsAt, forKey: TrialDefaultsKey.endsAt)
-                await detectTrialCancellation(plan: plan)
-            }
-            return
-        }
-
-        // Not on a trial. Only act if we were tracking one — otherwise this is an
-        // ordinary non-trial user and there is nothing to reconcile.
-        guard let plan = trackedPlan else { return }
-
-        let startedAt = defaults.object(forKey: TrialDefaultsKey.startedAt) as? Date ?? Date()
-        let used = daysUsed(since: startedAt)
-
-        if hasPaidEntitlement {
-            // ── Transition: trial → paid subscription. ─────────────────────────
-            // The paid period supersedes the trial grant, so drop our manual mirror
-            // and let normal StoreKit entitlement carry isPro from here.
-            AnalyticsManager.shared.track(.trialConverted(plan: plan, daysUsed: used))
-        } else {
-            // ── Transition: trial ended with no paid entitlement. ──────────────
-            AnalyticsManager.shared.track(.trialExpired(plan: plan))
-        }
-
-        await clearTrialProGrant(hasPaidEntitlement: hasPaidEntitlement)
-        clearTrackedTrial()
-    }
-
-    /// Fires `trial_cancelled` the moment auto-renew is switched off during an active
-    /// trial. This is a distinct signal from `trial_expired`: cancellation is the
-    /// user's *intent* (available days before the window closes and the only point at
-    /// which a save-offer could work), expiry is the outcome. A cancelled trial emits
-    /// both — one at cancel time, one when the window actually ends.
-    private func detectTrialCancellation(plan: String) async {
-        guard !defaults.bool(forKey: TrialDefaultsKey.cancelReported) else { return }
-        guard let subscription = (proMonthlyProduct ?? proAnnualProduct)?.subscription else { return }
-
-        guard let statuses = try? await subscription.status else { return }
-        for status in statuses {
-            guard case .verified(let renewalInfo) = status.renewalInfo else { continue }
-            guard !renewalInfo.willAutoRenew else { continue }
-
-            defaults.set(true, forKey: TrialDefaultsKey.cancelReported)
-            let startedAt = defaults.object(forKey: TrialDefaultsKey.startedAt) as? Date ?? Date()
-            AnalyticsManager.shared.track(
-                .trialCancelled(plan: plan, daysUsed: daysUsed(since: startedAt))
-            )
-            return
-        }
-    }
-
-    private func clearTrackedTrial() {
-        [TrialDefaultsKey.plan,
-         TrialDefaultsKey.startedAt,
-         TrialDefaultsKey.endsAt,
-         TrialDefaultsKey.cancelReported].forEach(defaults.removeObject(forKey:))
-    }
-
-    /// Mirrors the trial window into the user doc's `manualProUntil` (reused per spec —
-    /// no new Firestore field). We record what we wrote so the rollback can tell our
-    /// value apart from a longer support-granted comp.
-    private func writeTrialProGrant(endsAt: Date) async {
-        defaults.set(endsAt, forKey: TrialDefaultsKey.grantWritten)
-        await FirestoreManager.shared.setManualProUntil(endsAt)
-    }
-
-    /// Rolls back the trial's `manualProUntil`.
-    ///
-    /// Guarded on purpose: `manualProUntil` is also the support/admin comp field. If a
-    /// human granted this account Pro until a date beyond our trial, that grant must
-    /// survive — clearing it here would silently revoke a paid-for or promised
-    /// entitlement. So we only clear when the stored value is the one we wrote.
-    private func clearTrialProGrant(hasPaidEntitlement: Bool) async {
-        guard let written = defaults.object(forKey: TrialDefaultsKey.grantWritten) as? Date else {
-            return
-        }
-        defaults.removeObject(forKey: TrialDefaultsKey.grantWritten)
-        await FirestoreManager.shared.clearManualProUntil(ifMatching: written)
-
-        // Re-resolve entitlement from its two real sources so the flip is visible
-        // immediately rather than at the next refresh. A converted user keeps Pro
-        // via `hasPaidEntitlement`; an expired trial correctly drops to false.
-        manualProGrantActive = await FirestoreManager.shared.fetchManualProGrant()
-        isPro = hasPaidEntitlement || manualProGrantActive
-        hasRemovedAds = hasStandaloneRemoveAds || isPro
-        FirestoreManager.shared.writeProStatus(isPro)
-        FCMTopicManager.syncProTopics(isPro: isPro)
     }
 
     // MARK: - Transaction Listener
@@ -630,17 +388,13 @@ class SubscriptionManager: ObservableObject {
             if let expiry = transaction.expirationDate {
                 proSubscriptionExpirationDate = expiry
             }
-            if transaction.offer?.type == .introductory {
-                isTrialActive = true
-            }
             currentPlanLabel = Self.planLabel(forProductID: transaction.productID)
             AdManager.shared.disableAds()
             // Mirror immediately — do not wait for a later refreshPurchaseStatus().
             FirestoreManager.shared.writeProStatus(isPro)
             FCMTopicManager.syncProTopics(isPro: isPro)
             // The optimistic writes above unblock the UI; this resolves the full
-            // entitlement picture and runs the trial reconciler, which is what
-            // actually emits trial_started and mirrors manualProUntil.
+            // entitlement picture.
             await refreshPurchaseStatus()
         case ProductID.removeAds.rawValue:
             hasRemovedAds = true
@@ -886,13 +640,6 @@ struct PaywallView: View {
                     } else {
                         VStack(spacing: 12) {
                             if selectedTab == .pro {
-                                // Trial banner sits ABOVE the plan buttons. Shown only
-                                // when StoreKit says this customer can still redeem the
-                                // intro offer — advertising a trial to someone who
-                                // already used it would be a false claim.
-                                if sub.isEligibleForTrial {
-                                    TrialHeaderBanner()
-                                }
                                 // Annual (best value, shown first)
                                 if let annual = sub.proAnnualProduct {
                                     ProductCard(product: annual, badge: sub.annualSavingsText)
@@ -900,15 +647,13 @@ struct PaywallView: View {
                                 if let monthly = sub.proMonthlyProduct {
                                     ProductCard(product: monthly, badge: nil)
                                 }
-                                if sub.isEligibleForTrial {
-                                    Text(L("paywall.trial.legal",
-                                           "Renews automatically. Cancel any time in App Store settings."))
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                        .multilineTextAlignment(.center)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.top, 2)
-                                }
+                                Text(L("paywall.renewalLegal",
+                                       "Renews automatically. Cancel any time in App Store settings."))
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.top, 2)
                             } else {
                                 if let removeAds = sub.removeAdsProduct {
                                     ProductCard(
@@ -1039,31 +784,6 @@ private struct RemoveAdsFeatureList: View {
     }
 }
 
-/// "7-day free trial — cancel anytime", shown directly above the plan buttons.
-/// Carries no price: the amount lives on the plan buttons and comes from StoreKit.
-private struct TrialHeaderBanner: View {
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "gift.fill")
-                .foregroundColor(.white)
-            Text(L("paywall.trial.header", "7-day free trial — cancel anytime"))
-                .font(.subheadline)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-                .multilineTextAlignment(.leading)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity)
-        .background(
-            LinearGradient(colors: [.blue, .purple],
-                           startPoint: .leading, endPoint: .trailing)
-        )
-        .cornerRadius(14)
-    }
-}
-
 private struct FreeIncludedBanner: View {
     var body: some View {
         HStack(spacing: 10) {
@@ -1165,23 +885,6 @@ struct ProductCard: View {
         return "remove_ads"
     }
 
-    /// "Then <localized price>/month" — the post-trial charge, shown only while the
-    /// customer is still trial-eligible. The price is always `product.displayPrice`,
-    /// which StoreKit renders in the storefront's own currency and format; never
-    /// build this string from a hardcoded amount or currency symbol.
-    private var trialSubtitle: String? {
-        guard sub.isEligibleForTrial else { return nil }
-        switch product.subscription?.subscriptionPeriod.unit {
-        case .month:
-            return String(format: L("paywall.trial.subtitle_monthly", "Then %@/month"),
-                          product.displayPrice)
-        case .year:
-            return String(format: L("paywall.trial.subtitle_yearly", "Then %@/year"),
-                          product.displayPrice)
-        default:
-            return nil
-        }
-    }
 
     var body: some View {
         Button {
@@ -1205,13 +908,6 @@ struct ProductCard: View {
                                 .background(Color.green)
                                 .cornerRadius(8)
                         }
-                    }
-
-                    if let trialSubtitle {
-                        Text(trialSubtitle)
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.blue)
                     }
 
                     if !displayDescription.isEmpty {

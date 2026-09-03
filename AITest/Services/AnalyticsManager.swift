@@ -226,13 +226,8 @@ enum StoqlyEvent {
     case removeAdsPurchased
     case restorePurchaseTapped
 
-    // ── Free trial lifecycle (iOS-F1) ────────────────────────────────────────────
     // plan is "monthly" | "yearly". These sit ALONGSIDE paywall_shown /
     // paywall_cta_tapped / subscription_started — none of those changed.
-    case trialStarted(plan: String, endsAt: Date, source: String)
-    case trialConverted(plan: String, daysUsed: Int)      // trial rolled into paid
-    case trialCancelled(plan: String, daysUsed: Int)      // auto-renew off before expiry
-    case trialExpired(plan: String)                       // window closed, no conversion
 
     // ── Key Screens ──────────────────────────────────────────────────────────────
     case dashboardViewed
@@ -295,7 +290,6 @@ enum StoqlyEvent {
     case purchaseEntryCompleted(mode: String, itemCount: Int, durationMs: Int)
     case purchaseEntryAbandoned(mode: String, stage: String)
     case restorePurchaseResult(outcome: String, restoredCount: Int, reason: String?)
-    case trialStartFailed(plan: String, errorClass: String, reason: String)
 
     // ── Onboarding funnel (S24) ──────────────────────────────────────────────────
     case onboardingStarted
@@ -391,10 +385,6 @@ enum StoqlyEvent {
         case .removeAdsPurchased:        return "remove_ads_purchased"
         case .restorePurchaseTapped:     return "restore_purchase_tapped"
 
-        case .trialStarted:              return "trial_started"
-        case .trialConverted:            return "trial_converted"
-        case .trialCancelled:            return "trial_cancelled"
-        case .trialExpired:              return "trial_expired"
 
         case .dashboardViewed:           return "dashboard_viewed"
         case .reorderListViewed:         return "reorder_list_viewed"
@@ -443,7 +433,6 @@ enum StoqlyEvent {
         case .purchaseEntryCompleted:    return "purchase_entry_completed"
         case .purchaseEntryAbandoned:    return "purchase_entry_abandoned"
         case .restorePurchaseResult:     return "restore_purchase_result"
-        case .trialStartFailed:          return "trial_start_failed"
 
         case .onboardingStarted:         return "onboarding_started"
         case .onboardingStepViewed:       return "onboarding_step_viewed"
@@ -609,18 +598,6 @@ enum StoqlyEvent {
             var props: [String: Any] = ["source": src]
             if let trigger, !trigger.isEmpty { props["trigger"] = trigger }
             return props
-        case .trialStarted(let plan, let endsAt, let source):
-            return [
-                "plan": plan,
-                "ends_at": ISO8601DateFormatter().string(from: endsAt),
-                "source": source
-            ]
-        case .trialConverted(let plan, let daysUsed):
-            return ["plan": plan, "days_used": daysUsed]
-        case .trialCancelled(let plan, let daysUsed):
-            return ["plan": plan, "days_used": daysUsed]
-        case .trialExpired(let plan):
-            return ["plan": plan]
 
         case .subscriptionStarted(let plan):  return ["plan": plan]
         case .subscriptionCancelled:          return [:]
@@ -715,8 +692,6 @@ enum StoqlyEvent {
             var props: [String: Any] = ["outcome": outcome, "restored_count": restoredCount]
             if let reason, !reason.isEmpty { props["reason"] = reason }
             return props
-        case .trialStartFailed(let plan, let errorClass, let reason):
-            return ["plan": plan, "error_class": errorClass, "reason": reason]
 
         case .onboardingStarted:              return [:]
         case .onboardingStepViewed(let step, let name):

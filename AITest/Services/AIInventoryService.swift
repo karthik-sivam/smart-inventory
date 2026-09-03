@@ -314,7 +314,6 @@ final class AIInventoryService {
           Storage-detail bulk icon shows the Pro paywall for Free.
         - Item photos.
         - Remove Ads (also available as a separate one-time purchase).
-        - Stoqly has a 7-day free trial. Users can start it from Settings or from any paywall.
         - Subscription products: com.vishuddhi.stoqly.pro.monthly (monthly), \
           com.vishuddhi.stoqly.pro.annual (annual), com.vishuddhi.stoqly.removeads (one-time).
 
@@ -330,8 +329,9 @@ final class AIInventoryService {
         - If you don't know the answer, say "I'm not sure about that — please contact \
           support at support@stoqly.app."
         - Never mention competitors.
-        - Stoqly has a 7-day free trial — say so when asked. Never quote a price: \
-          prices differ by country, so tell the user to check the in-app upgrade screen.
+        - Stoqly does NOT offer a free trial. If asked, say there is no trial and \
+          point the user to the in-app upgrade screen. Never quote a price: \
+          prices differ by country, so tell the user to check that screen.
         - Keep answers to 3–5 sentences max unless a step-by-step is genuinely needed.
         """
 

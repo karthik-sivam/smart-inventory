@@ -55,7 +55,7 @@ All Phase 3 sub-items are shipped. See `automation_results.rtf` for per-item det
 | 3.6 | Batch Expiry Tracking — `InventoryBatch` model, FIFO display, QuickCount "Track as new batch" | ✅ COMPLETED 2026-05-13 |
 | 3.7 | Deletion Confirmation Toast — `ToastView` wired in ItemListView, StorageDetailView, StorageListView | ✅ COMPLETED |
 | 3.8a | Search & Spotlight — search history chips, `SpotlightManager`, deep-link handler | ✅ COMPLETED |
-| 3.8b | Monetisation Polish — storage cap indicator, contextual paywall, trial expiry banner | ✅ COMPLETED |
+| 3.8b | Monetisation Polish — storage cap indicator, contextual paywall, Pro expiry banner | ✅ COMPLETED |
 | 3.9 | Performance & Sync — write debounce (1.5s), background flush, foreground pull throttle (15min), concurrent Firestore writes (`withTaskGroup`), search debounce (250ms) | ✅ COMPLETED |
 | 3.10 | Phase 3 Maestro — flows 34–36, branding sweep | ✅ COMPLETED WITH ISSUES (known flow failures are pre-existing, spec items pass) |
 

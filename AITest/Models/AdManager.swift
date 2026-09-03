@@ -14,7 +14,7 @@ import GoogleMobileAds
  - CSV export
  - Basic dashboard
 
- Pro Tier (7-day free trial, then the StoreKit localized price):
+ Pro Tier (StoreKit localized price, no free trial):
  1. Cloud Sync & Backup       — Firestore real-time sync, multi-device
  2. Unlimited Storages        — Remove 5-storage free limit
  3. Advanced Analytics        — Trend charts, detailed reports
