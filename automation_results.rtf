@@ -790,4 +790,39 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 [COMPLETED]\par
 \bullet CEO approved merge of PR #23 into master_scope_v1 as 8507b77. Handoff for the next session: docs/handoff-2026-09-01.md. CEO console work remains docs/ceo-manual-work.md (T1/T2 listing/T3/T4, Amplitude barcode_bulk_scan_* officialize).\par
 \par
+========================================\par
+{\b Task: D1e Pro tracking from listenForTransactions + .pending UI}\par
+Branch: sprint-2/D1e-pro-tracking-pending\par
+Base: c00199afc3ddd3031e3dc7a8a8a6c4a287985fb0\par
+Status: [COMPLETED WITH ISSUES]\par
+----------------------------------------\par
+Summary:\par
+\bullet F052: updateEntitlements(for:) now fires subscription_started \{ source: "transaction_updates" \} + identify(is_pro: true) on a first-time Pro grant. Guard: a local wasProBeforeThisTransaction (captured before the optimistic writes; a local let, not a stored var, so overlapping async calls cannot clobber it) OR a recent (14-day) original purchase (id == originalID) to beat the launch-time refresh race. A persisted transaction-ID claim list (UserDefaults, last 50) guarantees purchase() and Transaction.updates never both fire for one purchase. Renewals (new id, old originalID, already Pro) do not fire.\par
+\bullet purchase() success still fires subscription_started (now via shared trackSubscriptionStarted helper) with source: "purchase_success"; plan keeps "annual"/"monthly".\par
+\bullet F053: .pending branch sets new PurchaseState.awaitingBankConfirmation and fires purchase_pending \{ plan, product_id, device_locale \}.\par
+\bullet New PendingPaymentBanner.swift: inline amber banner with a close icon, adaptive label colors, no payment action. Shown in PaywallView above product cards (4-line call site). Auto-dismisses when the pending purchase lands (state -> .success, paywall closes) or on close tap.\par
+\bullet PaywallView lives INSIDE SubscriptionManager.swift (owned file); AITest/Views/PaywallView.swift does not exist. No read-only file touched.\par
+\bullet Conventions: no SwiftData writes, no ActivityEvent changes, no isPro hardcode, no NavigationStack added, no pay-now/UPI button.\par
+\par
+Analytics events shipped: purchase_pending; purchase_pending_banner_dismissed \{ reason: user_closed | auto_resolved \}; subscription_started \{ source \}\par
+Files owned & modified: AITest/Models/SubscriptionManager.swift (incl. PaywallView call site), AITest/Views/PendingPaymentBanner.swift (new)\par
+Files appended-only: AITest/Services/AnalyticsManager.swift (purchasePending + purchasePendingBannerDismissed cases; subscriptionStarted gains source:), AITest/Localizable.xcstrings (pack_D1e_pending_title/body/dismiss; en translated, 14 locales needs_review)\par
+project.pbxproj: NOT modified -- objectVersion 77 file-system-synchronized groups pick up the new file automatically.\par
+Files read-only (unchanged): AITest/Models/FirestoreManager.swift, AITest/Models/AuthManager.swift\par
+\par
+Build: xcodebuild SmartInventory iPhone 17 Pro -> exit 0, BUILD SUCCEEDED. No warnings in touched files (pre-existing FBSDK/ExportManager/FeedbackView/MetaAppEvents deprecation warnings unchanged).\par
+Maestro: 01, 03, 04, 17, 18, 86, 90 -> NOT RUN by this session. 03/04/86/90 sign up / sign in against production Firebase; CEO to run.\par
+Amplitude live-view sandbox check (transaction_updates fires once, is_pro set): NOT DONE -- needs Xcode StoreKit Transaction Manager (Ask-to-Buy approve) or a sandbox device. CEO to run.\par
+\par
+Conflicts / issues to flag to integrator:\par
+\bullet Tracking plan 832993 (checked 2026-10-08): purchase_pending, purchase_pending_banner_dismissed and subscription_started.source are NOT yet entered -- README pre-flight item still open.\par
+\bullet purchase_pending_banner_dismissed is NOT in the pack header's events-added or README shared vocabulary; the pack's implementation notes asked for it. Data-analyst to confirm or drop.\par
+\bullet AnalyticsManager.swift: subscriptionStarted signature changed to (plan:source:) -- any other pack calling .subscriptionStarted(plan:) will fail to compile (only caller today is SubscriptionManager).\par
+\bullet Localizable.xcstrings: pack_D1e_* keys inserted before "Par Levels (Min/Max Qty)".\par
+\par
+SSOT rows this closes:\par
+\bullet F052 -> implemented-not-live\par
+\bullet F053 -> implemented-not-live\par
+========================================\par
+\par
 }

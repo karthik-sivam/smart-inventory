@@ -221,10 +221,13 @@ enum StoqlyEvent {
 
     // ── Monetisation ─────────────────────────────────────────────────────────────
     case paywallShown(source: String, trigger: String?)              // source: limit/feature; trigger: optional detail
-    case subscriptionStarted(plan: String)                 // plan: "monthly" | "annual"
+    case subscriptionStarted(plan: String, source: String) // plan: "monthly" | "annual"; source: "purchase_success" | "transaction_updates"
     case subscriptionCancelled
     case removeAdsPurchased
     case restorePurchaseTapped
+    // D1e — StoreKit returned `.pending` (bank 2FA / Ask-to-Buy). plan: "monthly" | "annual" | "remove_ads"
+    case purchasePending(plan: String, productId: String, deviceLocale: String)
+    case purchasePendingBannerDismissed(reason: String)    // reason: "user_closed" | "auto_resolved"
 
     // plan is "monthly" | "yearly". These sit ALONGSIDE paywall_shown /
     // paywall_cta_tapped / subscription_started — none of those changed.
@@ -384,6 +387,8 @@ enum StoqlyEvent {
         case .subscriptionCancelled:     return "subscription_cancelled"
         case .removeAdsPurchased:        return "remove_ads_purchased"
         case .restorePurchaseTapped:     return "restore_purchase_tapped"
+        case .purchasePending:           return "purchase_pending"
+        case .purchasePendingBannerDismissed: return "purchase_pending_banner_dismissed"
 
 
         case .dashboardViewed:           return "dashboard_viewed"
@@ -599,10 +604,15 @@ enum StoqlyEvent {
             if let trigger, !trigger.isEmpty { props["trigger"] = trigger }
             return props
 
-        case .subscriptionStarted(let plan):  return ["plan": plan]
+        case .subscriptionStarted(let plan, let source):
+            return ["plan": plan, "source": source]
         case .subscriptionCancelled:          return [:]
         case .removeAdsPurchased:             return [:]
         case .restorePurchaseTapped:          return [:]
+        case .purchasePending(let plan, let productId, let deviceLocale):
+            return ["plan": plan, "product_id": productId, "device_locale": deviceLocale]
+        case .purchasePendingBannerDismissed(let reason):
+            return ["reason": reason]
 
         case .dashboardViewed:                return [:]
         case .reorderListViewed(let n):       return ["item_count": n]

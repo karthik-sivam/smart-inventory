@@ -69479,6 +69479,294 @@
         }
       }
     },
+    "pack_D1e_pending_body" : {
+      "comment" : "Paywall banner body while a purchase awaits bank confirmation. Non-blocking; no payment action.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "بانتظار تأكيد البنك للدفع. سنحدّث الحالة فور اكتماله — يمكنك متابعة استخدام Stoqly."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Wir warten auf die Bestätigung deiner Bank. Wir aktualisieren alles, sobald sie da ist – du kannst Stoqly weiter nutzen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for your bank to confirm the payment. We'll update once it's done — you can keep using Stoqly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esperando a que tu banco confirme el pago. Lo actualizaremos en cuanto termine; puedes seguir usando Stoqly."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En attente de la confirmation de votre banque. Nous mettrons à jour dès que ce sera fait — vous pouvez continuer à utiliser Stoqly."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "आपके बैंक से भुगतान की पुष्टि का इंतज़ार है। पूरा होते ही हम अपडेट कर देंगे — आप Stoqly का इस्तेमाल जारी रख सकते हैं।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Menunggu bank Anda mengonfirmasi pembayaran. Kami akan memperbarui setelah selesai — Anda tetap bisa menggunakan Stoqly."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "銀行による支払いの確認を待っています。完了しだい更新します。Stoqly はそのままご利用いただけます。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ನಿಮ್ಮ ಬ್ಯಾಂಕ್ ಪಾವತಿಯನ್ನು ದೃಢೀಕರಿಸಲು ಕಾಯಲಾಗುತ್ತಿದೆ. ಪೂರ್ಣಗೊಂಡ ತಕ್ಷಣ ನಾವು ಅಪ್‌ಡೇಟ್ ಮಾಡುತ್ತೇವೆ — ನೀವು Stoqly ಬಳಸುವುದನ್ನು ಮುಂದುವರಿಸಬಹುದು."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "നിങ്ങളുടെ ബാങ്ക് പേയ്‌മെന്റ് സ്ഥിരീകരിക്കുന്നതിനായി കാത്തിരിക്കുന്നു. പൂർത്തിയായാലുടൻ ഞങ്ങൾ അപ്ഡേറ്റ് ചെയ്യും — നിങ്ങൾക്ക് Stoqly ഉപയോഗിക്കുന്നത് തുടരാം."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aguardando seu banco confirmar o pagamento. Vamos atualizar assim que terminar — você pode continuar usando o Stoqly."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ждём подтверждения платежа от вашего банка. Мы обновим статус, как только всё будет готово — можете продолжать пользоваться Stoqly."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "உங்கள் வங்கி பணம் செலுத்துதலை உறுதிப்படுத்தக் காத்திருக்கிறோம். முடிந்ததும் புதுப்பிப்போம் — நீங்கள் Stoqly-ஐத் தொடர்ந்து பயன்படுத்தலாம்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "మీ బ్యాంక్ చెల్లింపును నిర్ధారించడం కోసం వేచి ఉన్నాం. పూర్తయిన వెంటనే అప్‌డేట్ చేస్తాం — మీరు Stoqlyని ఉపయోగించడం కొనసాగించవచ్చు."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "正在等待银行确认付款。完成后我们会立即更新——你可以继续使用 Stoqly。"
+          }
+        }
+      }
+    },
+    "pack_D1e_pending_dismiss" : {
+      "comment" : "Accessibility label for the close icon on the pending-payment banner.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "إغلاق"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Schließen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dismiss"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cerrar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fermer"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "बंद करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tutup"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "閉じる"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಮುಚ್ಚಿ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "അടയ്ക്കുക"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fechar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Закрыть"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "மூடு"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "మూసివేయి"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "关闭"
+          }
+        }
+      }
+    },
+    "pack_D1e_pending_title" : {
+      "comment" : "Paywall banner title while StoreKit reports the purchase as pending (bank 2FA / Ask-to-Buy).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "جارٍ معالجة الدفع"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zahlung wird verarbeitet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Payment processing"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Procesando el pago"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Paiement en cours"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "भुगतान प्रोसेस हो रहा है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pembayaran sedang diproses"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "お支払いを処理中"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ಪಾವತಿ ಪ್ರಕ್ರಿಯೆಯಲ್ಲಿದೆ"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "പേയ്‌മെന്റ് പ്രോസസ്സ് ചെയ്യുന്നു"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Processando pagamento"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Платёж обрабатывается"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "பணம் செலுத்துதல் செயலாக்கப்படுகிறது"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "చెల్లింపు ప్రాసెస్ అవుతోంది"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "付款处理中"
+          }
+        }
+      }
+    },
     "Par Levels (Min/Max Qty)" : {
       "extractionState" : "manual",
       "localizations" : {

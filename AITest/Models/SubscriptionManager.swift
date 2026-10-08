@@ -108,10 +108,14 @@ class SubscriptionManager: ObservableObject {
         case success(String)
         case failed(String)
         case cancelled
+        /// StoreKit returned `.pending` (bank 2FA, Ask-to-Buy). The purchase resolves
+        /// later via `Transaction.updates`; the paywall shows `PendingPaymentBanner`.
+        case awaitingBankConfirmation
 
         static func == (lhs: PurchaseState, rhs: PurchaseState) -> Bool {
             switch (lhs, rhs) {
-            case (.idle, .idle), (.purchasing, .purchasing), (.cancelled, .cancelled):
+            case (.idle, .idle), (.purchasing, .purchasing), (.cancelled, .cancelled),
+                 (.awaitingBankConfirmation, .awaitingBankConfirmation):
                 return true
             case (.success(let a), .success(let b)): return a == b
             case (.failed(let a), .failed(let b)):   return a == b
@@ -166,6 +170,9 @@ class SubscriptionManager: ObservableObject {
             switch result {
             case .success(let verification):
                 let transaction = try checkVerified(verification)
+                // Claim this transaction for the purchase_success path so
+                // updateEntitlements() does not also report it as transaction_updates.
+                _ = claimSubscriptionStartReport(for: transaction.id)
                 await updateEntitlements(for: transaction)
                 await transaction.finish()
                 purchaseState = .success(product.displayName)
@@ -176,22 +183,22 @@ class SubscriptionManager: ObservableObject {
                     AnalyticsManager.shared.track(.removeAdsPurchased)
                     logMetaPurchase(for: product)
                 case ProductID.proMonthly.rawValue, ProductID.proAnnual.rawValue:
-                    let plan = product.id.contains("annual") ? "annual" : "monthly"
-                    AnalyticsManager.shared.track(.subscriptionStarted(plan: plan))
-                    AnalyticsManager.shared.identify(
-                        userId: AuthManager.shared.currentUser?.uid ?? "",
-                        email: AuthManager.shared.currentUser?.email,
-                        isPro: true,
-                        signupMethod: UserDefaults.standard.string(forKey: "signupMethod") ?? "unknown"
-                    )
+                    trackSubscriptionStarted(productID: product.id, source: "purchase_success")
                     logMetaPurchase(for: product)
                 default:
                     break
                 }
 
             case .pending:
-                purchaseState = .idle
-                print("StoreKit ⏳ Purchase pending parental approval.")
+                // Bank 2FA (common for Indian cards) or Ask-to-Buy. Resolution arrives
+                // via Transaction.updates → updateEntitlements(for:).
+                purchaseState = .awaitingBankConfirmation
+                AnalyticsManager.shared.track(.purchasePending(
+                    plan: Self.pendingPlanLabel(forProductID: product.id),
+                    productId: product.id,
+                    deviceLocale: Locale.current.identifier
+                ))
+                print("StoreKit ⏳ Purchase pending bank / parental approval.")
 
             case .userCancelled:
                 purchaseState = .cancelled
@@ -381,6 +388,10 @@ class SubscriptionManager: ObservableObject {
             return
         }
 
+        // Captured before the optimistic writes below so a renewal re-delivery
+        // (already Pro) does not re-fire subscription_started.
+        let wasProBeforeThisTransaction = isPro
+
         switch transaction.productID {
         case ProductID.proMonthly.rawValue, ProductID.proAnnual.rawValue:
             isPro = true
@@ -396,12 +407,81 @@ class SubscriptionManager: ObservableObject {
             // The optimistic writes above unblock the UI; this resolves the full
             // entitlement picture.
             await refreshPurchaseStatus()
+
+            // F052: purchases resolved outside purchase() (bank 2FA, Ask-to-Buy,
+            // Family Sharing, .pending) were invisible to analytics. A recent
+            // original purchase also counts when isPro was already true, so a
+            // launch-time refresh racing this listener cannot swallow the event.
+            // Renewals carry a new id with an older originalID. The recency window
+            // keeps a re-delivered old transaction (reported on iOS 26) from firing.
+            let isRecentOriginalPurchase = transaction.id == transaction.originalID
+                && transaction.purchaseDate > Date().addingTimeInterval(-14 * 24 * 60 * 60)
+            let isFirstTimeGrant = !wasProBeforeThisTransaction || isRecentOriginalPurchase
+            if isPro, isFirstTimeGrant, claimSubscriptionStartReport(for: transaction.id) {
+                trackSubscriptionStarted(productID: transaction.productID, source: "transaction_updates")
+            }
+            resolvePendingPurchaseIfNeeded(
+                displayName: ProductID(rawValue: transaction.productID)?.displayName ?? ""
+            )
         case ProductID.removeAds.rawValue:
             hasRemovedAds = true
             AdManager.shared.disableAds()
+            resolvePendingPurchaseIfNeeded(displayName: ProductID.removeAds.displayName)
         default:
             break
         }
+    }
+
+    // MARK: - Subscription start reporting (D1e)
+
+    private static let reportedSubscriptionStartIDsKey = "D1e.reportedSubscriptionStartTransactionIDs"
+
+    /// Records `transactionID` as reported. Returns false when it already was, so the
+    /// purchase() and Transaction.updates paths can never both fire for one purchase.
+    private func claimSubscriptionStartReport(for transactionID: UInt64) -> Bool {
+        let defaults = UserDefaults.standard
+        var ids = defaults.stringArray(forKey: Self.reportedSubscriptionStartIDsKey) ?? []
+        let id = String(transactionID)
+        guard !ids.contains(id) else { return false }
+        ids.append(id)
+        defaults.set(Array(ids.suffix(50)), forKey: Self.reportedSubscriptionStartIDsKey)
+        return true
+    }
+
+    private func trackSubscriptionStarted(productID: String, source: String) {
+        // subscription_started keeps its original "annual" label (see planLabel(forProductID:)).
+        let plan = productID == ProductID.proAnnual.rawValue ? "annual" : "monthly"
+        AnalyticsManager.shared.track(.subscriptionStarted(plan: plan, source: source))
+        AnalyticsManager.shared.identify(
+            userId: AuthManager.shared.currentUser?.uid ?? "",
+            email: AuthManager.shared.currentUser?.email,
+            isPro: true,
+            signupMethod: UserDefaults.standard.string(forKey: "signupMethod") ?? "unknown"
+        )
+    }
+
+    /// Same vocabulary as paywall_cta_tapped.
+    private static func pendingPlanLabel(forProductID id: String) -> String {
+        switch id {
+        case ProductID.proAnnual.rawValue:  return "annual"
+        case ProductID.proMonthly.rawValue: return "monthly"
+        default:                            return "remove_ads"
+        }
+    }
+
+    /// A pending purchase landed: auto-dismiss the banner and let the paywall close.
+    private func resolvePendingPurchaseIfNeeded(displayName: String) {
+        guard purchaseState == .awaitingBankConfirmation else { return }
+        AnalyticsManager.shared.track(.purchasePendingBannerDismissed(reason: "auto_resolved"))
+        purchaseState = .success(displayName)
+    }
+
+    /// Close icon on `PendingPaymentBanner`. The purchase itself stays pending with
+    /// StoreKit and still resolves through Transaction.updates.
+    func dismissPendingPaymentBanner() {
+        guard purchaseState == .awaitingBankConfirmation else { return }
+        AnalyticsManager.shared.track(.purchasePendingBannerDismissed(reason: "user_closed"))
+        purchaseState = .idle
     }
 
     // MARK: - Feature Gates
@@ -618,6 +698,11 @@ struct PaywallView: View {
                         ProFeatureList()
                     } else {
                         RemoveAdsFeatureList()
+                    }
+
+                    // D1e: StoreKit .pending — non-blocking, replaces the spinner state.
+                    if sub.purchaseState == .awaitingBankConfirmation {
+                        PendingPaymentBanner { sub.dismissPendingPaymentBanner() }
                     }
 
                     // Product cards
