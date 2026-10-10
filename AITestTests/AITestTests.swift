@@ -590,6 +590,22 @@ final class SmartInventoryTests: XCTestCase {
         XCTAssertNil(emailFailed.properties["body"])
     }
 
+    func testCurrencyChangedEventShape() {
+        let manual = StoqlyEvent.currencyChanged(fromCode: "USD", toCode: "INR", method: "manual")
+        XCTAssertEqual(manual.name, "currency_changed")
+        XCTAssertEqual(manual.properties["from_code"] as? String, "USD")
+        XCTAssertEqual(manual.properties["to_code"] as? String, "INR")
+        XCTAssertEqual(manual.properties["method"] as? String, "manual")
+
+        let localePrompt = StoqlyEvent.currencyChanged(fromCode: "USD", toCode: "EUR", method: "locale_prompt")
+        XCTAssertEqual(localePrompt.properties["method"] as? String, "locale_prompt")
+
+        let autoDetect = StoqlyEvent.currencyChanged(fromCode: "none", toCode: "GBP", method: "auto_detect")
+        XCTAssertEqual(autoDetect.properties["from_code"] as? String, "none")
+        XCTAssertEqual(autoDetect.properties["to_code"] as? String, "GBP")
+        XCTAssertEqual(autoDetect.properties["method"] as? String, "auto_detect")
+    }
+
     func testBarcodeBulkScanSessionEventShapes() {
         let started = StoqlyEvent.barcodeBulkScanStarted(source: "storage_detail")
         XCTAssertEqual(started.name, "barcode_bulk_scan_started")

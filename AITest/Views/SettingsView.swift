@@ -186,8 +186,17 @@ struct SettingsView: View {
                     }
                     .pickerStyle(NavigationLinkPickerStyle())
                     .accessibilityIdentifier("settingsCurrencyPicker")
-                    .onChange(of: currencyManager.selectedCurrency) { _, _ in
+                    .onChange(of: currencyManager.selectedCurrency) { oldValue, newValue in
+                        // Picker mutates selectedCurrency via binding; mark + track here.
                         currencyManager.markAsManuallySet()
+                        guard oldValue.code != newValue.code else { return }
+                        AnalyticsManager.shared.track(
+                            .currencyChanged(
+                                fromCode: oldValue.code,
+                                toCode: newValue.code,
+                                method: "manual"
+                            )
+                        )
                     }
                 }
 
