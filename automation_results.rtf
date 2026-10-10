@@ -790,4 +790,11 @@ iOS-A5: SmartCount + SmartSales review UX repaired. Auto-accept threshold 0.85. 
 [COMPLETED]\par
 \bullet CEO approved merge of PR #23 into master_scope_v1 as 8507b77. Handoff for the next session: docs/handoff-2026-09-01.md. CEO console work remains docs/ceo-manual-work.md (T1/T2 listing/T3/T4, Amplitude barcode_bulk_scan_* officialize).\par
 \par
+{\b Task: D1f \emdash currency_changed missing analytics event}\par
+[COMPLETED WITH ISSUES]\par
+\bullet Task markdown at tasks/sprint-2/task-D1f-currency-missing-event.md was not in the cloud workspace or GitHub; implemented from phase7-prd.md analytics spec: currency_changed \{ from_code, to_code, method: auto_detect|manual|locale_prompt \}.\par
+\bullet StoqlyEvent.currencyChanged added in AnalyticsManager.swift. Wired: CurrencyManager init auto_detect (first launch, from_code=none); Settings currency picker method=manual; Dashboard locale banner Switch via applyCurrency method=locale_prompt.\par
+\bullet Unit test: testCurrencyChangedEventShape. Files: AnalyticsManager.swift, Currency.swift, SettingsView.swift, DashboardView.swift, AITestTests.swift, automation_results.rtf.\par
+\bullet Branch: cursor/d1f-currency-missing-event-48cc off master_scope_v1. xcodebuild not available in this Linux cloud VM \emdash build/Live View owed on Mac. Amplitude tracking-plan officialize still owed.\par
+\par
 }

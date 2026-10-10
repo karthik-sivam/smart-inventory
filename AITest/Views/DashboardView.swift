@@ -191,8 +191,7 @@ struct DashboardView: View {
                         }
                         Spacer()
                         Button("Switch") {
-                            currencyManager.selectedCurrency = newCurrency
-                            currencyManager.markAsManuallySet()
+                            currencyManager.applyCurrency(newCurrency, method: "locale_prompt")
                             localeChangeCurrency = nil
                         }
                         .font(.caption)

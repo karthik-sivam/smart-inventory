@@ -305,6 +305,8 @@ enum StoqlyEvent {
     case searchPerformed(scope: String, resultCount: Int)
     case filterApplied(screen: String, filter: String)
     case languageChanged(toLanguage: String)
+    /// method: "auto_detect" | "manual" | "locale_prompt" (Phase 7 PRD / D1f)
+    case currencyChanged(fromCode: String, toCode: String, method: String)
     case aiHelpQuestionAsked(question: String)
     case reorderEmailSent(supplierCount: Int, itemCount: Int)
     case reorderEmailFailed(reason: String)                // iOS-D1d; pair with reorderEmailSent
@@ -445,6 +447,7 @@ enum StoqlyEvent {
         case .searchPerformed:           return "search_performed"
         case .filterApplied:             return "filter_applied"
         case .languageChanged:           return "language_changed"
+        case .currencyChanged:           return "currency_changed"
         case .languageChosenAtOnboarding: return "language_chosen_at_onboarding"
         case .aiHelpQuestionAsked:        return "ai_help_question_asked"
         case .reorderEmailSent:           return "reorder_email_sent"
@@ -709,6 +712,8 @@ enum StoqlyEvent {
             return ["screen": screen, "filter": filter]
         case .languageChanged(let toLanguage):
             return ["to_language": toLanguage]
+        case .currencyChanged(let fromCode, let toCode, let method):
+            return ["from_code": fromCode, "to_code": toCode, "method": method]
         case .aiHelpQuestionAsked(let q):
             let text = q.trimmingCharacters(in: .whitespacesAndNewlines)
             return ["question": String(text.prefix(500)), "question_length": text.count]

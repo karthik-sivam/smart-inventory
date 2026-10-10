@@ -54,7 +54,28 @@ class CurrencyManager: ObservableObject {
             } else {
                 selectedCurrency = Currency.currencies.first(where: { $0.code == "USD" }) ?? Currency.currencies[0]
             }
+            // First launch: no saved preference — locale (or USD fallback) was auto-detected.
+            // AppDelegate configures Amplitude before SwiftUI StateObject init, so this is safe.
+            AnalyticsManager.shared.track(
+                .currencyChanged(fromCode: "none", toCode: selectedCurrency.code, method: "auto_detect")
+            )
         }
+    }
+
+    /// Sets currency, marks manual override when appropriate, and emits `currency_changed`.
+    /// - Parameter method: `"manual"` | `"locale_prompt"` (not used for restore/auto_detect).
+    func applyCurrency(_ currency: Currency, method: String) {
+        let fromCode = selectedCurrency.code
+        if fromCode != currency.code {
+            selectedCurrency = currency
+        }
+        if method == "manual" || method == "locale_prompt" {
+            markAsManuallySet()
+        }
+        guard fromCode != currency.code else { return }
+        AnalyticsManager.shared.track(
+            .currencyChanged(fromCode: fromCode, toCode: currency.code, method: method)
+        )
     }
     
     private func saveCurrency() {
